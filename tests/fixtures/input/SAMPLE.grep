@@ -1,0 +1,3 @@
+tests/fixtures/java/Constants.java:9:    public static final String SAMPLE_CODE = "SAMPLE";
+tests/fixtures/java/Constants.java:13:        if (value.equals(SAMPLE_CODE)) {
+tests/fixtures/java/Constants.java:19:        return SAMPLE_CODE;

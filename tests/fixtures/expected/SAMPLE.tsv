@@ -1,0 +1,4 @@
+文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+SAMPLE	直接	定数定義	tests/fixtures/java/Constants.java	9	public static final String SAMPLE_CODE = "SAMPLE";
+SAMPLE	直接	条件判定	tests/fixtures/java/Constants.java	13	if (value.equals(SAMPLE_CODE)) {
+SAMPLE	直接	return文	tests/fixtures/java/Constants.java	19	return SAMPLE_CODE;

@@ -1,0 +1,21 @@
+com/example/domain/Order.java:13:    private String orderStatus = null;
+Binary file target/classes/com/example/domain/Order.class matches
+com/example/domain/Order.java:38:    public String getOrderStatus() {
+com/example/domain/Order.java:39:        return orderStatus;
+com/example/domain/Order.java:43:    public String fetchStatus() {
+com/example/domain/Order.java:44:        return orderStatus;
+com/example/domain/Order.java:49:    public String retrieveCurrentStatus() {
+com/example/domain/Order.java:50:        return orderStatus;
+com/example/domain/Order.java:67:    public void setOrderStatus(String orderStatus) {
+com/example/domain/Order.java:68:        this.orderStatus = orderStatus;
+com/example/domain/Order.java:77:        return AppConstants.STATUS_CANCELLED.equals(orderStatus);
+
+com/example/service/OrderService.java:53:        order.setOrderStatus(AppConstants.STATUS_CONFIRMED);
+com/example/service/OrderService.java:59:        order.setOrderStatus(AppConstants.STATUS_CANCELLED);
+com/example/service/OrderService.java:65:        order.setOrderStatus(AppConstants.STATUS_SHIPPED);
+com/example/service/OrderService.java:71:        String currentStatus = order.fetchStatus();
+com/example/service/OrderService.java:73:        order.setOrderStatus(AppConstants.STATUS_CONFIRMED);
+com/example/service/OrderService.java:89:        String status = order.retrieveCurrentStatus();
+com/example/service/OrderService.java:91:        if (AppConstants.STATUS_CANCELLED.equals(status)
+com/example/service/ValidationService.java:52:        String status = order.getOrderStatus();
+Binary file target/classes/com/example/service/OrderService.class matches

@@ -1,0 +1,20 @@
+com/example/constants/AppConstants.java:12:    public static final String ORDER_TYPE_NORMAL       = "01";
+Binary file target/classes/com/example/constants/AppConstants.class matches
+com/example/domain/Order.java:74:        return AppConstants.ORDER_TYPE_NORMAL.equals(orderType);
+com/example/domain/OrderItem.java:47:        return AppConstants.ORDER_TYPE_NORMAL.equals(this.orderType);
+
+com/example/service/OrderService.java:33:        if (AppConstants.ORDER_TYPE_NORMAL.equals(order.getOrderType())) {
+com/example/service/OrderService.java:76:        if (AppConstants.ORDER_TYPE_NORMAL.equals(orderType)) {
+com/example/service/ValidationService.java:19:        if (!AppConstants.ORDER_TYPE_NORMAL.equals(orderType)
+com/example/service/NotificationService.java:35:        if (AppConstants.ORDER_TYPE_NORMAL.equals(orderType)) {
+com/example/repository/OrderRepository.java:52:        return findByOrderType(AppConstants.ORDER_TYPE_NORMAL);
+com/example/util/CodeConverter.java:17:        String normalType  = AppConstants.ORDER_TYPE_NORMAL;
+com/example/util/CodeConverter.java:21:        if (normalType.equals(code)) {
+com/example/util/CodeConverter.java:61:            AppConstants.ORDER_TYPE_NORMAL,
+Binary file target/classes/com/example/service/OrderService.class matches
+
+com/example/service/ValidationService.java:28:                && !AppConstants.ORDER_TYPE_NORMAL.equals(orderType)) {
+Binary file target/test-classes/com/example/OrderServiceTest.class matches
+com/example/util/CodeConverter.java:82:        for (String type : validTypes) {
+com/example/config/AppConfig.java:8:@ConditionalOnExpression("'${order.default.type}'.equals('" + AppConstants.ORDER_TYPE_NORMAL + "')")
+com/example/service/OrderService.java:44:        notificationService.sendAlert(AppConstants.ORDER_TYPE_NORMAL);
