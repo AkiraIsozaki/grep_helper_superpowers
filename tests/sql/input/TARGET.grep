@@ -1,0 +1,1 @@
+tests/sql/src/sample.sql:3:  v_code VARCHAR2(10) := 'TARGET';

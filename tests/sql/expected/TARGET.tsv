@@ -1,0 +1,4 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	直接	定数・変数定義	tests/sql/src/sample.sql	3	v_code VARCHAR2(10) := 'TARGET';			
+TARGET	間接	その他	sample.sql	5	IF v_code = 'check' THEN	v_code	tests/sql/src/sample.sql	3
+TARGET	間接	その他	sample.sql	6	DBMS_OUTPUT.PUT_LINE(v_code);	v_code	tests/sql/src/sample.sql	3
