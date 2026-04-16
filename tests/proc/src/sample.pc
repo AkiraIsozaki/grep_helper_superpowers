@@ -1,0 +1,10 @@
+/* sample.pc - Pro*C E2E test fixture */
+#define TCODE "TARGET"
+
+void test_proc() {
+    char hv[32];
+    EXEC SQL SELECT col INTO :hv WHERE code = 'data';
+    if (strcmp(hv, TCODE) == 0) {
+        strcpy(hv, TCODE);
+    }
+}
