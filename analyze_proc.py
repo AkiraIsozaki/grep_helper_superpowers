@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from analyze_common import GrepRecord, ProcessStats, RefType, parse_grep_line, write_tsv
+from analyze_c import classify_usage_c
 
 # ---------------------------------------------------------------------------
 # 使用タイプ分類パターン（優先度順）
@@ -70,6 +71,14 @@ def classify_usage_proc(code: str) -> str:
         if pattern.search(stripped):
             return usage_type
     return "その他"
+
+
+def _classify_for_filepath(code: str, filepath: str) -> str:
+    """ファイルパスの拡張子に基づいて適切な分類関数を呼び出す。"""
+    ext = Path(filepath).suffix.lower()
+    if ext in ('.c', '.h'):
+        return classify_usage_c(code)
+    return classify_usage_proc(code)
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +223,7 @@ def process_grep_file(
             records.append(GrepRecord(
                 keyword=keyword,
                 ref_type=RefType.DIRECT.value,
-                usage_type=classify_usage_proc(parsed["code"]),
+                usage_type=_classify_for_filepath(parsed["code"], parsed["filepath"]),
                 filepath=parsed["filepath"],
                 lineno=parsed["lineno"],
                 code=parsed["code"],

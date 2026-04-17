@@ -270,5 +270,29 @@ class TestE2EProc(unittest.TestCase):
             )
 
 
+class TestDispatch(unittest.TestCase):
+    """拡張子ベースのディスパッチテスト"""
+
+    def test_c_file_exec_sql_not_classified_as_exec_sql(self):
+        """.c ファイルでは EXEC SQL が 'EXEC SQL文' に分類されない（その他になる）"""
+        result = ap._classify_for_filepath('EXEC SQL SELECT * FROM t;', 'src/main.c')
+        self.assertEqual(result, "その他")
+
+    def test_pc_file_exec_sql_classified(self):
+        """.pc ファイルでは EXEC SQL が 'EXEC SQL文' に分類される"""
+        result = ap._classify_for_filepath('EXEC SQL SELECT * FROM t;', 'src/main.pc')
+        self.assertEqual(result, "EXEC SQL文")
+
+    def test_h_file_uses_c_classifier(self):
+        """.h ファイルは C 分類を使う（その他になる）"""
+        result = ap._classify_for_filepath('EXEC SQL SELECT * FROM t;', 'include/config.h')
+        self.assertEqual(result, "その他")
+
+    def test_unknown_ext_defaults_to_proc(self):
+        """未知拡張子はデフォルトで Pro*C 分類（後方互換）"""
+        result = ap._classify_for_filepath('EXEC SQL SELECT * FROM t;', 'src/main.xyz')
+        self.assertEqual(result, "EXEC SQL文")
+
+
 if __name__ == "__main__":
     unittest.main()
