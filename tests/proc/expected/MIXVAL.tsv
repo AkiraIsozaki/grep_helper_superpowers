@@ -1,0 +1,5 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+MIXVAL	間接	条件判定	mixed.pc	4	if (strcmp(hv, MK_CODE) != 0) {	MK_CODE	tests/proc/src/sample_c.c	2
+MIXVAL	間接	条件判定	sample_c.c	5	if (strcmp(code, MK_CODE) == 0) {	MK_CODE	tests/proc/src/sample_c.c	2
+MIXVAL	直接	EXEC SQL文	tests/proc/src/mixed.pc	3	EXEC SQL SELECT col INTO :hv WHERE code = 'MIXVAL';			
+MIXVAL	直接	#define定数定義	tests/proc/src/sample_c.c	2	"#define MK_CODE ""MIXVAL"""			

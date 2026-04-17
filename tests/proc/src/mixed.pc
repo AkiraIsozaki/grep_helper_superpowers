@@ -1,0 +1,7 @@
+/* mixed.pc - mixed E2E fixture (Pro*C) */
+void process_pc() {
+    EXEC SQL SELECT col INTO :hv WHERE code = 'MIXVAL';
+    if (strcmp(hv, MK_CODE) != 0) {
+        return;
+    }
+}

@@ -133,12 +133,14 @@ def track_define(
     record: GrepRecord,
     stats: ProcessStats,
 ) -> list[GrepRecord]:
-    """#define マクロ名の使用箇所を src_dir 配下の全 .pc/.h ファイルでスキャンする。"""
+    """#define マクロ名の使用箇所を src_dir 配下の全 .pc/.c/.h ファイルでスキャンする。"""
     results: list[GrepRecord] = []
     pattern = re.compile(r'\b' + re.escape(var_name) + r'\b')
     def_file = _resolve_source_file(record.filepath, src_dir)
 
-    pc_files = sorted(src_dir.rglob("*.pc")) + sorted(src_dir.rglob("*.h"))
+    pc_files = (sorted(src_dir.rglob("*.pc"))
+                + sorted(src_dir.rglob("*.c"))
+                + sorted(src_dir.rglob("*.h")))
     for pc_file in pc_files:
         try:
             filepath_str = str(pc_file.relative_to(src_dir))
@@ -155,7 +157,7 @@ def track_define(
                 results.append(GrepRecord(
                     keyword=record.keyword,
                     ref_type=RefType.INDIRECT.value,
-                    usage_type=classify_usage_proc(line.strip()),
+                    usage_type=_classify_for_filepath(line.strip(), str(pc_file)),
                     filepath=filepath_str,
                     lineno=str(i),
                     code=line.strip(),

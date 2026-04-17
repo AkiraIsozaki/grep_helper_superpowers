@@ -1,0 +1,2 @@
+tests/proc/src/sample_c.c:2:#define MK_CODE "MIXVAL"
+tests/proc/src/mixed.pc:3:    EXEC SQL SELECT col INTO :hv WHERE code = 'MIXVAL';
