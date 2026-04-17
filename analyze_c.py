@@ -38,6 +38,7 @@ def _get_cached_lines(filepath: str | Path, stats: ProcessStats | None = None) -
 
 
 def _resolve_source_file(filepath: str, src_dir: Path) -> Path | None:
+    """ファイルパスを解決する。CWD相対→src_dir相対の順で試みる。"""
     candidate = Path(filepath)
     if candidate.is_absolute():
         return candidate if candidate.exists() else None
@@ -56,6 +57,7 @@ def classify_usage_c(code: str) -> str:
     return "その他"
 
 
+# Pro*C SQL 型（SQLCHAR, SQLINT, VARCHAR）は純C対象外のため除外
 _C_TYPES_PAT = re.compile(
     r'\b(?:char|int|short|long|float|double|unsigned|signed|struct|void)\b\s*\**\s*(\w+)'
 )
@@ -220,6 +222,8 @@ def main() -> None:
                     if var_name:
                         all_records.extend(track_define(var_name, source_dir, record, stats))
                 elif record.usage_type == "変数代入":
+                    # 純Cでは strcpy/sprintf は「関数引数」に分類されるため
+                    # Pro*C の extract_host_var_name 相当のフォールバックは不要
                     var_name = extract_variable_name_c(record.code)
                     if var_name:
                         candidate = _resolve_source_file(record.filepath, source_dir)
