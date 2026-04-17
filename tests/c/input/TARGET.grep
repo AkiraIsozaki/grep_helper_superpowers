@@ -1,0 +1,1 @@
+tests/c/src/sample.c:2:#define STATUS "TARGET"

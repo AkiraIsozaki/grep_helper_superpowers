@@ -68,5 +68,59 @@ class TestExtractVariableNameC(unittest.TestCase):
         self.assertIsNone(ac.extract_variable_name_c('if (x == 1)'))
 
 
+class TestE2EC(unittest.TestCase):
+    """E2E統合テスト: sample.c でツールを実行し、期待TSVと比較する"""
+
+    TESTS_DIR = Path(__file__).parent / "c"
+
+    def test_e2e_target(self):
+        src_dir       = self.TESTS_DIR / "src"
+        input_dir     = self.TESTS_DIR / "input"
+        expected_path = self.TESTS_DIR / "expected" / "TARGET.tsv"
+
+        self.assertTrue(src_dir.exists(), f"src_dir が存在しない: {src_dir}")
+        self.assertTrue(expected_path.exists(), f"expected TSV が存在しない: {expected_path}")
+
+        ac._file_cache.clear()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            stats = ac.ProcessStats()
+            keyword = "TARGET"
+            grep_path = input_dir / "TARGET.grep"
+
+            direct_records = ac.process_grep_file(grep_path, keyword, src_dir, stats)
+            all_records = list(direct_records)
+
+            for record in direct_records:
+                if record.usage_type == "#define定数定義":
+                    var_name = ac.extract_define_name(record.code)
+                    if var_name:
+                        all_records.extend(ac.track_define(var_name, src_dir, record, stats))
+                elif record.usage_type == "変数代入":
+                    var_name = ac.extract_variable_name_c(record.code)
+                    if var_name:
+                        candidate = Path(record.filepath)
+                        if not candidate.is_absolute():
+                            candidate = src_dir / record.filepath
+                        if candidate.exists():
+                            all_records.extend(
+                                ac.track_variable(var_name, candidate,
+                                                  int(record.lineno), src_dir, record, stats)
+                            )
+
+            output_path = output_dir / "TARGET.tsv"
+            ac.write_tsv(all_records, output_path)
+
+            actual_lines   = output_path.read_text(encoding="utf-8-sig").splitlines()
+            expected_lines = expected_path.read_text(encoding="utf-8-sig").splitlines()
+
+            self.assertEqual(
+                actual_lines, expected_lines,
+                f"出力TSVが期待値と一致しない\n"
+                f"実際行数: {len(actual_lines)}, 期待行数: {len(expected_lines)}"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
