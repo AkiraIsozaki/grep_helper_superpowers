@@ -1,5 +1,5 @@
 ﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
-TARGET	直接	変数代入	tests/sh/src/sample.sh	3	"MY_CODE=""TARGET"""			
 TARGET	間接	条件判定	sample.sh	5	"if [ ""$MY_CODE"" = ""check"" ]; then"	MY_CODE	tests/sh/src/sample.sh	3
 TARGET	間接	echo/print出力	sample.sh	6	"echo ""$MY_CODE"""	MY_CODE	tests/sh/src/sample.sh	3
 TARGET	間接	コマンド引数	sample.sh	8	"grep ""$MY_CODE"" data.txt"	MY_CODE	tests/sh/src/sample.sh	3
+TARGET	直接	変数代入	tests/sh/src/sample.sh	3	"MY_CODE=""TARGET"""			

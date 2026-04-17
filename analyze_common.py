@@ -75,17 +75,11 @@ def write_tsv(records: list[GrepRecord], output_path: Path) -> None:
 
     def _sort_key(r: GrepRecord) -> tuple:
         lineno_int = int(r.lineno) if r.lineno.isdigit() else 0
-        if r.ref_type == RefType.DIRECT.value:
-            return (r.keyword, r.filepath, lineno_int, 0, "", 0)
-        src_lineno_int = int(r.src_lineno) if r.src_lineno.isdigit() else 0
-        return (r.keyword, r.src_file, src_lineno_int, 1, r.filepath, lineno_int)
+        return (r.keyword, r.filepath, lineno_int)
 
     def _row_sort_key(row: list[str]) -> tuple:
         lineno_int = int(row[4]) if row[4].isdigit() else 0
-        if row[1] == RefType.DIRECT.value:
-            return (row[0], row[3], lineno_int, 0, "", 0)
-        src_int = int(row[8]) if row[8].isdigit() else 0
-        return (row[0], row[7], src_int, 1, row[3], lineno_int)
+        return (row[0], row[3], lineno_int)
 
     if len(records) < _EXTERNAL_SORT_THRESHOLD:
         records.sort(key=_sort_key)
