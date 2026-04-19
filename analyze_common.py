@@ -14,6 +14,12 @@ from enum import Enum
 from pathlib import Path
 from typing import NamedTuple
 
+try:
+    import chardet as _chardet
+    _CHARDET_AVAILABLE = True
+except ImportError:
+    _CHARDET_AVAILABLE = False
+
 
 class RefType(Enum):
     DIRECT   = "直接"
@@ -51,6 +57,22 @@ _TSV_HEADERS = [
 ]
 
 _EXTERNAL_SORT_THRESHOLD = 1_000_000
+
+
+def detect_encoding(path: Path, override: str | None = None) -> str:
+    """ファイルの文字コードを検出する。overrideがあればそのまま返す。"""
+    if override is not None:
+        return override
+    try:
+        raw = path.read_bytes()[:4096]
+    except OSError:
+        return "cp932"
+    if not _CHARDET_AVAILABLE:
+        return "cp932"
+    result = _chardet.detect(raw)
+    if result and result.get("confidence", 0) >= 0.6 and result.get("encoding"):
+        return result["encoding"]
+    return "cp932"
 
 
 def parse_grep_line(line: str) -> dict | None:
