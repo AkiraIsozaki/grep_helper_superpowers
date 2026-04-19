@@ -218,7 +218,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 |----------|------|----|
 | const定数定義 | `const NAME = "値"` の定数宣言 | `const CODE = "TARGET"` |
 | 変数代入(let/var) | `let` / `var` による変数への代入 | `let type = "TARGET"` |
-| 条件判定 | `if/else if/while` の条件、`===`/`!==`/`==` 比較 | `if (x === "TARGET")` |
+| 条件判定 | `if`、`switch`、`===`、`!==`、`==`、`!=` | `if (x === "TARGET")` |
 | return文 | `return "値"` または `return 変数` | `return CODE;` |
 | デコレータ | `@Decorator("値")` またはデコレータ引数 | `@Component("TARGET")` |
 | 関数引数 | 関数・メソッド呼び出しの引数として渡している | `process(CODE)` |
@@ -229,7 +229,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 | 使用タイプ | 内容 | 例 |
 |----------|------|----|
 | 変数代入 | 変数への代入 | `code = "TARGET"` |
-| 条件判定 | `if/elif/while` の条件、`==`/`!=`/`in` 比較 | `if x == "TARGET":` |
+| 条件判定 | `if`、`elif`、`==`、`!=`、`in` | `if x == "TARGET":` |
 | return文 | `return "値"` または `return 変数` | `return CODE` |
 | デコレータ | `@decorator("値")` またはデコレータ引数 | `@route("TARGET")` |
 | 関数引数 | 関数・メソッド呼び出しの引数として渡している | `process(CODE)` |
@@ -241,7 +241,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 |----------|------|----|
 | use constant定義 | `use constant NAME => "値"` の定数宣言 | `use constant CODE => "TARGET"` |
 | 変数代入 | スカラー/配列/ハッシュへの代入 | `$type = "TARGET"` |
-| 条件判定 | `if/elsif/unless/while` の条件、`eq`/`ne` 比較 | `if ($x eq "TARGET")` |
+| 条件判定 | `if`、`unless`、`==`、`ne`、`eq` | `if ($x eq "TARGET")` |
 | print/say出力 | `print` / `say` の引数として渡している | `print "TARGET\n"` |
 | 関数引数 | サブルーチン呼び出しの引数として渡している | `process(CODE)` |
 | その他 | 上記に当てはまらないもの（コメント行など） | `# TARGET はここで使う` |
@@ -252,7 +252,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 |----------|------|----|
 | 定数定義(Const/readonly) | `const` または `static readonly` による定数宣言 | `const string CODE = "TARGET"` |
 | 変数代入 | 変数・フィールドへの代入 | `string type = "TARGET"` |
-| 条件判定 | `if/else if/while` の条件、`==`/`!=`/`.Equals()` 比較 | `if (x == "TARGET")` |
+| 条件判定 | `if`（C#）、`If`（VB）、`==`、`!=`、`<>`、`.Equals()` | `if (x == "TARGET")` |
 | return文 | `return "値"` または `return 変数` | `return CODE;` |
 | 属性(Attribute) | `[Attribute("値")]` またはアトリビュート引数 | `[Route("TARGET")]` |
 | メソッド引数 | メソッド呼び出しの引数として渡している | `Process(CODE)` |
@@ -264,7 +264,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 |----------|------|----|
 | static final定数定義 | `static final TYPE NAME = "値"` の定数宣言 | `static final String CODE = "TARGET"` |
 | 変数代入 | 変数・フィールドへの代入 | `def type = "TARGET"` |
-| 条件判定 | `if/else if/while` の条件、`==`/`!=`/`.equals()` 比較 | `if (x == "TARGET")` |
+| 条件判定 | `if`、`switch`、`==`、`!=`、`.equals()` | `if (x == "TARGET")` |
 | return文 | `return "値"` または `return 変数` | `return CODE` |
 | アノテーション | `@Annotation("値")` またはアノテーション引数 | `@RequestMapping("TARGET")` |
 | メソッド引数 | メソッド呼び出しの引数として渡している | `process(CODE)` |

@@ -14,9 +14,9 @@
 ├── analyze_plsql.py     # PL/SQLアナライザー（直接参照のみ）
 ├── analyze_proc.py      # Pro*Cアナライザー（.pc/.c拡張子ベースのディスパッチ）
 ├── analyze_python.py    # Pythonアナライザー（直接参照のみ）
-├── analyze_ts.py        # TypeScript/JavaScriptアナライザー（直接参照のみ）
 ├── analyze_sh.py        # Shellスクリプトアナライザー（BASH/CSH/TCSH）
 ├── analyze_sql.py       # Oracle SQLアナライザー
+├── analyze_ts.py        # TypeScript/JavaScriptアナライザー（直接参照のみ）
 ├── test_analyze.py      # Javaアナライザーのユニットテスト・統合テスト
 ├── test_analyze_proc.py # Pro*Cアナライザーのユニットテスト・統合テスト
 ├── tests/test_dotnet_analyzer.py  # C#/VB.NETアナライザーのユニットテスト・統合テスト
