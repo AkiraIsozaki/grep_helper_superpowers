@@ -4,7 +4,7 @@
 
 このドキュメントは、grep_analyzer プロジェクトで使用される用語の定義を管理します。
 
-**更新日**: 2026-04-18
+**更新日**: 2026-04-19
 
 ---
 
@@ -180,6 +180,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 | `直接` | 文言リテラルが直接コードに出現している |
 | `間接` | 変数/定数経由で値が使われている |
 | `間接（getter経由）` | getterメソッド経由で値が外部に渡されている |
+| `間接（setter経由）` | setterメソッド経由で値が設定されている（`RefType.SETTER`、将来拡張用） |
 
 ---
 
@@ -206,6 +207,10 @@ someService.process(obj.getType());        // ← Handler.java:55
 **Oracle SQL（`analyze_sql.py`）— 7種**: 例外・エラー処理・定数・変数定義・WHERE条件・比較・DECODE・INSERT/UPDATE値・SELECT/INTO・その他
 
 **Shell（`analyze_sh.py`）— 6種**: 環境変数エクスポート・変数代入・条件判定・echo/print出力・コマンド引数・その他
+
+**Kotlin（`analyze_kotlin.py`）— 7種**: const定数定義・変数代入・条件判定・return文・アノテーション・関数引数・その他
+
+**PL/SQL（`analyze_plsql.py`）— 7種**: 定数/変数宣言・EXCEPTION処理・条件判定・カーソル定義・INSERT/UPDATE値・WHERE条件・その他
 
 **注意**: どの言語でも分類できないものは「その他」として出力する（もれなく優先）
 
@@ -251,6 +256,19 @@ public String fetchOrderType() { return type; }
 ---
 
 ## 技術用語
+
+### chardet
+
+**定義**: ファイルの文字コードを自動検出するPythonライブラリ（オプション依存）
+
+**本プロジェクトでの用途**:
+`analyze_common.detect_encoding()` 内でオプション使用。`pip install chardet` でインストール可能。
+インストールされている場合、ファイル先頭4096バイトを読んで confidence ≥ 0.6 の場合に検出された文字コードを採用する。
+未インストール時は `cp932` にフォールバックする。Kotlin/PL/SQL 等の新言語アナライザーが利用する。
+
+**関連ドキュメント**: [アーキテクチャ設計書](./architecture.md)
+
+---
 
 ### javalang
 
@@ -317,6 +335,7 @@ AST解析より精度は低いが、処理を中断せずに継続できる。
 - `GrepRecord`（NamedTuple）、`ProcessStats`（dataclass）、`RefType`（Enum）: データモデル
 - `parse_grep_line()`: grep行パーサー（全言語共通）
 - `write_tsv()`: UTF-8 BOM付きTSV出力（100万件超は外部マージソート）
+- `detect_encoding()`: ファイルの文字コード検出（chardetオプション使用。未インストール時は cp932 フォールバック）
 
 **関連用語**: [GrepRecord](#greprecord), [TSV](#tsvtab-separated-values)
 

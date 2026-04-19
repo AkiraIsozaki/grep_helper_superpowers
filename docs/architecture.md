@@ -14,8 +14,9 @@
 
 | 技術 | バージョン | 用途 | 選定理由 |
 |------|-----------|------|----------|
-| javalang | >=0.13.0,<1.0.0 | Java AST解析（`analyze.py` のみ） | Java 7以上のソースをPythonからAST解析できる唯一の実績あるライブラリ。C/SQL/Shell は正規表現のみで不要 |
-| re | 標準ライブラリ | grep行パース・全言語の正規表現分類 | 外部依存不要。C/SQL/Shell/Shell はこれのみで分類完結 |
+| javalang | >=0.13.0,<1.0.0 | Java AST解析（`analyze.py` のみ） | Java 7以上のソースをPythonからAST解析できる唯一の実績あるライブラリ。C/SQL/Shell/Kotlin/PL/SQL は正規表現のみで不要 |
+| chardet | 任意（pip install chardet） | 文字コード自動検出（`analyze_common.detect_encoding`） | Kotlin/PL/SQL等の新言語アナライザーで利用。未インストール時は cp932 フォールバック |
+| re | 標準ライブラリ | grep行パース・全言語の正規表現分類 | 外部依存不要。C/SQL/Shell/Kotlin/PL/SQL はこれのみで分類完結 |
 | csv | 標準ライブラリ | UTF-8 BOM付きTSV出力（`analyze_common.py`） | `encoding='utf-8-sig'` でBOM付き出力をネイティブサポート |
 | heapq | 標準ライブラリ | 大規模TSVの外部マージソート（`analyze_common.py`） | 100万件超のレコードをメモリ効率よくソートするためにチャンク分割+ヒープマージを使用 |
 | tempfile | 標準ライブラリ | 外部ソート用一時ファイル管理（`analyze_common.py`） | チャンクファイルを一時ディレクトリに書き出し、マージ後に削除 |
@@ -43,8 +44,8 @@
 ├─────────────────────────┤
 │   分析レイヤー           │ ← 言語ごとに異なる（analyze.py / analyze_c.py / ...）
 │   (言語別分類・追跡)    │   Java: 3段階（直接→間接→getter）
-│                         │   C/Pro*C: 2段階（直接 + #define/変数経由の間接）
-│                         │   SQL/Shell: 1段階（直接のみ）
+│                         │   C/Pro*C/Kotlin: 2段階（直接 + #define/const定数経由の間接）
+│                         │   SQL/Shell/PL/SQL: 1段階（直接のみ）
 ├─────────────────────────┤
 │   出力レイヤー           │ ← write_tsv（analyze_common）
 │   (TSV出力・レポート)   │   結果をTSVに書き出しレポート表示
@@ -62,6 +63,8 @@
 - **C（`analyze_c.py`）**: 正規表現による分類、#define定数の間接追跡
 - **Pro*C（`analyze_proc.py`）**: 拡張子ベースのディスパッチ、#define定数 + ホスト変数の間接追跡
 - **SQL/Shell（`analyze_sql.py`, `analyze_sh.py`）**: 正規表現による直接参照のみ分類
+- **Kotlin（`analyze_kotlin.py`）**: 正規表現による分類、const val定数のプロジェクト全体追跡
+- **PL/SQL（`analyze_plsql.py`）**: 正規表現による直接参照のみ分類
 
 #### 出力レイヤー（全言語共通: `analyze_common.py`）
 - **責務**: 全レコードのソート、UTF-8 BOM付きTSV出力、処理サマリの標準出力表示
@@ -164,12 +167,12 @@
 
 ### ユニットテスト
 - **フレームワーク**: unittest（Python標準ライブラリ）
-- **対象ファイル**: `test_analyze.py`（Java）, `test_analyze_proc.py`（Pro*C）, `tests/test_*.py`（C/SQL/Shell/共通）
+- **対象ファイル**: `test_analyze.py`（Java）, `test_analyze_proc.py`（Pro*C）, `tests/test_*.py`（C/SQL/Shell/Kotlin/PL/SQL/共通）
 - **カバレッジ目標**: 80%以上（推奨。マージのブロック条件ではない。詳細は `development-guidelines.md` 参照）
 
 ### 統合テスト（E2Eテスト）
 - **方法**: 言語別のサンプルソース + サンプルgrep結果を使ったE2Eフロー
-- **フィクスチャ**: `tests/[言語]/` 以下に言語別に配置（Java: `tests/fixtures/`, C: `tests/c/`, etc.）
+- **フィクスチャ**: `tests/[言語]/` 以下に言語別に配置（Java: `tests/fixtures/`, C: `tests/c/`, Kotlin: `tests/kotlin/`, PL/SQL: `tests/plsql/`, etc.）
 - **対象**: 直接参照・間接参照（対応言語のみ）・各言語固有のパターンが期待TSVと一致すること
 - **注意（Javaのみ）**: フォールバック率が高い環境ではjavalangのAST解析が多くのファイルでパースエラーを起こすため、統合テストでフォールバック発生件数も確認すること
 
@@ -203,6 +206,7 @@
 | ライブラリ | 用途 | バージョン管理方針 |
 |-----------|------|-------------------|
 | javalang | Java AST解析（`analyze.py` のみ） | `>=0.13.0,<1.0.0`（バグ修正のみ自動適用） |
+| chardet | 文字コード自動検出（任意） | 任意インストール（`pip install chardet`）。未インストール時は cp932 にフォールバック |
 
 **`requirements.txt`**:
 ```
@@ -210,6 +214,7 @@ javalang>=0.13.0,<1.0.0
 ```
 
 **方針**:
-- 外部依存は `javalang` 1本のみを維持する（C/SQL/Shell は標準ライブラリのみで完結）
+- 必須外部依存は `javalang` 1本のみを維持する（C/SQL/Shell/Kotlin/PL/SQL は標準ライブラリのみで完結）
+- `chardet` はオプション依存。インストール時のみ文字コード自動検出が有効になる
 - `setup.sh` / `setup.bat` で venv を作成し `pip install -r requirements.txt` を実行
 - `pip list --outdated` で定期的に確認

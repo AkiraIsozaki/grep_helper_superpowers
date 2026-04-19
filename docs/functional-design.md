@@ -402,6 +402,8 @@ _MAX_FILE_CACHE = 800  # LRU風（超過時に先頭エントリを削除）
 | Pro*C | `analyze_proc.py` | EXEC SQL文・#define定数定義・条件判定・return文・変数代入・関数引数・その他（7種） |
 | Oracle SQL | `analyze_sql.py` | 例外・エラー処理・定数・変数定義・WHERE条件・比較・DECODE・INSERT/UPDATE値・SELECT/INTO・その他（7種） |
 | Shell | `analyze_sh.py` | 環境変数エクスポート・変数代入・条件判定・echo/print出力・コマンド引数・その他（6種） |
+| Kotlin | `analyze_kotlin.py` | const定数定義・変数代入・条件判定・return文・アノテーション・関数引数・その他（7種） |
+| PL/SQL | `analyze_plsql.py` | 定数/変数宣言・EXCEPTION処理・条件判定・カーソル定義・INSERT/UPDATE値・WHERE条件・その他（7種） |
 
 **Pro*C 固有機能（拡張子ベースのディスパッチ）**:
 ```python
@@ -412,9 +414,10 @@ def _classify_for_filepath(code: str, filepath: str) -> str:
     return classify_usage_proc(code)    # .pc ファイル向け
 ```
 
-**間接参照追跡（C/Pro*C のみ）**:
-- `#define定数定義` → プロジェクト全体の `.c`/`.h`/`.pc` ファイルを追跡（`track_define()`）
-- `変数代入` → 同一ファイル内を追跡（`track_variable()`）
+**間接参照追跡（C/Pro*C/Kotlin）**:
+- C/Pro*C: `#define定数定義` → プロジェクト全体の `.c`/`.h`/`.pc` ファイルを追跡（`track_define()`）
+- C/Pro*C: `変数代入` → 同一ファイル内を追跡（`track_variable()`）
+- Kotlin: `const定数定義` → プロジェクト全体の `.kt`/`.kts` ファイルを追跡（`track_const()`）
 
 ## ユースケース図
 
@@ -562,10 +565,19 @@ python analyze_sql.py --source-dir /path/to/sql/src
 # Shell
 python analyze_sh.py --source-dir /path/to/shell/src
 
+# Kotlin
+python analyze_kotlin.py --source-dir /path/to/kotlin/src
+
+# PL/SQL
+python analyze_plsql.py --source-dir /path/to/plsql/src
+
 # オプション指定（全言語共通）
 python analyze_proc.py --source-dir /path/to/src \
        --input-dir /custom/input \
        --output-dir /custom/output
+
+# 文字コード強制指定（Kotlin/PL/SQL等の新言語アナライザー）
+python analyze_kotlin.py --source-dir /path/to/src --encoding utf-8
 ```
 
 **argparse定義（全言語共通パターン）**:
@@ -642,6 +654,8 @@ TARGET	直接	条件判定	Validator.java	80	if (x.equals("TARGET")) {
 | `tests/test_c_analyzer.py` | `analyze_c.py` | C E2Eフロー（直接参照 + #define間接参照） |
 | `tests/test_sh_analyzer.py` | `analyze_sh.py` | Shell E2Eフロー |
 | `tests/test_sql_analyzer.py` | `analyze_sql.py` | SQL E2Eフロー |
+| `tests/test_kotlin_analyzer.py` | `analyze_kotlin.py` | Kotlin E2Eフロー（直接参照 + const val間接参照） |
+| `tests/test_plsql_analyzer.py` | `analyze_plsql.py` | PL/SQL E2Eフロー（直接参照） |
 
 ### 統合テスト（E2Eテスト）
 

@@ -54,6 +54,8 @@ analyze_common.py
 # 言語別アナライザー: analyze_[言語].py
 analyze.py       # Java（言語名を省略）
 analyze_c.py     # C
+analyze_kotlin.py  # Kotlin
+analyze_plsql.py   # PL/SQL
 analyze_proc.py  # Pro*C
 analyze_sh.py    # Shell
 analyze_sql.py   # SQL
@@ -63,6 +65,8 @@ test_analyze.py         # Java（ルートに配置）
 test_analyze_proc.py    # Pro*C（ルートに配置）
 tests/test_common.py    # 共通インフラ
 tests/test_c_analyzer.py
+tests/test_kotlin_analyzer.py
+tests/test_plsql_analyzer.py
 tests/test_sh_analyzer.py
 tests/test_sql_analyzer.py
 
