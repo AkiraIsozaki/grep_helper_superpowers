@@ -1,0 +1,6 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	間接	定数定義(Const/readonly)	sample.cs	4	public static readonly string ALIAS = STATUS;	STATUS	tests/dotnet/src/sample.cs	3
+TARGET	間接	条件判定	sample.cs	8	if (code == StatusCodes.STATUS) {	STATUS	tests/dotnet/src/sample.cs	3
+TARGET	間接	定数定義(Const/readonly)	sample.vb	3	"Const STATUS As String = ""TARGET"""	STATUS	tests/dotnet/src/sample.cs	3
+TARGET	間接	変数代入	sample.vb	4	Dim alias As String = STATUS	STATUS	tests/dotnet/src/sample.cs	3
+TARGET	直接	定数定義(Const/readonly)	tests/dotnet/src/sample.cs	3	"public const string STATUS = ""TARGET"";"			
