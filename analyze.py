@@ -782,6 +782,87 @@ def find_getter_names(field_name: str, class_file: Path) -> list[str]:
     return list(set(candidates))
 
 
+def find_setter_names(field_name: str, class_file: Path) -> list[str]:
+    """クラスファイルからsetterメソッド名の候補リストを返す。
+
+    2方式を併用:
+    1. 命名規則: field_name="type" → "setType"
+    2. AST解析: `this.field_name = 引数` しているメソッドを全て検出（非標準命名も対象）
+    """
+    candidates: list[str] = []
+
+    # 方式1: 命名規則
+    setter_by_convention = "set" + field_name[0].upper() + field_name[1:]
+    candidates.append(setter_by_convention)
+
+    # 方式2: ASTから this.field = 代入を解析
+    if _JAVALANG_AVAILABLE:
+        cache_key = str(class_file)
+        if cache_key not in _ast_cache:
+            try:
+                source = class_file.read_text(encoding=detect_encoding(class_file, _encoding_override), errors="replace")
+                _ast_cache[cache_key] = javalang.parse.parse(source)
+            except Exception:
+                _ast_cache[cache_key] = None
+
+        tree = _ast_cache[cache_key]
+        if tree is not None:
+            try:
+                for _, method_decl in tree.filter(javalang.tree.MethodDeclaration):
+                    for _, stmt in method_decl.filter(javalang.tree.StatementExpression):
+                        expr = stmt.expression
+                        if (expr is not None
+                                and hasattr(expr, 'expressionl')
+                                and hasattr(expr.expressionl, 'member')
+                                and expr.expressionl.member == field_name):
+                            candidates.append(method_decl.name)
+            except Exception:
+                pass
+
+    return list(set(candidates))
+
+
+def track_setter_calls(
+    setter_name: str,
+    source_dir: Path,
+    origin: GrepRecord,
+    stats: ProcessStats,
+) -> list[GrepRecord]:
+    """プロジェクト全体でsetter呼び出し箇所を検索・AST分類する。"""
+    pattern = re.compile(r'\b' + re.escape(setter_name) + r'\s*\(')
+    records: list[GrepRecord] = []
+
+    for java_file in _get_java_files(source_dir):
+        filepath_abs = str(java_file)
+        lines = _cached_read_lines(filepath_abs, stats)
+        for i, line in enumerate(lines, 1):
+            if not pattern.search(line):
+                continue
+            usage_type = classify_usage(
+                code=line,
+                filepath=filepath_abs,
+                lineno=i,
+                source_dir=source_dir,
+                stats=stats,
+            )
+            try:
+                filepath_str = str(java_file.relative_to(source_dir))
+            except ValueError:
+                filepath_str = filepath_abs
+            records.append(GrepRecord(
+                keyword=origin.keyword,
+                ref_type=RefType.SETTER.value,
+                usage_type=usage_type,
+                filepath=filepath_str,
+                lineno=str(i),
+                code=line.strip(),
+                src_var=origin.src_var or setter_name,
+                src_file=origin.filepath,
+                src_lineno=origin.lineno,
+            ))
+    return records
+
+
 def track_getter_calls(
     getter_name: str,
     source_dir: Path,
