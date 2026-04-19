@@ -1,0 +1,2 @@
+tests/python/src/sample.py:2:STATUS = "TARGET"
+tests/python/src/sample.py:3:if code == STATUS:

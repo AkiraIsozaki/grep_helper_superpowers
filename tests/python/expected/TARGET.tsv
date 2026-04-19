@@ -1,0 +1,3 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	直接	変数代入	tests/python/src/sample.py	2	"STATUS = ""TARGET"""			
+TARGET	直接	条件判定	tests/python/src/sample.py	3	if code == STATUS:			
