@@ -25,6 +25,7 @@ class RefType(Enum):
     DIRECT   = "直接"
     INDIRECT = "間接"
     GETTER   = "間接（getter経由）"
+    SETTER   = "間接（setter経由）"
 
 
 class GrepRecord(NamedTuple):
