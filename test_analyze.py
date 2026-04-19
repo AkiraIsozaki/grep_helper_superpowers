@@ -17,6 +17,8 @@ from analyze import (
     RefType,
     UsageType,
     _ast_cache,
+    _batch_track_setters,
+    _file_lines_cache,
     _get_method_scope,
     _resolve_java_file,
     _search_in_lines,
@@ -1675,6 +1677,38 @@ class TestIntenseE2E(unittest.TestCase):
         # stdout に両ファイルの処理件数が出力されること
         self.assertIn("ORDER_TYPE_NORMAL.grep", out)
         self.assertIn("orderStatus.grep", out)
+
+
+# ---------------------------------------------------------------------------
+# TestBatchTrackSetters
+# ---------------------------------------------------------------------------
+
+class TestBatchTrackSetters(unittest.TestCase):
+    """Java-4: _batch_track_setters() のテスト。"""
+
+    def test_finds_setter_calls(self):
+        """setter呼び出しを検出できること。"""
+        with tempfile.TemporaryDirectory() as d:
+            src_dir = Path(d)
+            (src_dir / "Model.java").write_text(
+                "class Model { private String type; }\n"
+            )
+            (src_dir / "Service.java").write_text(
+                'class Service { void m(Model m) { m.setType("TARGET"); } }\n'
+            )
+            origin = GrepRecord(
+                keyword="TARGET",
+                ref_type=RefType.DIRECT.value,
+                usage_type="変数宣言",
+                filepath="Model.java",
+                lineno="1",
+                code='private String type = "TARGET";',
+            )
+            stats = ProcessStats()
+            _file_lines_cache.clear()
+            results = _batch_track_setters({"setType": [origin]}, src_dir, stats)
+            self.assertTrue(any("Service.java" in r.filepath for r in results))
+            self.assertTrue(all(r.ref_type == RefType.SETTER.value for r in results))
 
 
 if __name__ == "__main__":
