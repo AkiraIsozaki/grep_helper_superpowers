@@ -1048,6 +1048,61 @@ def _batch_track_getters(
     return records
 
 
+def _batch_track_setters(
+    tasks: dict[str, list[GrepRecord]],
+    source_dir: Path,
+    stats: ProcessStats,
+) -> list[GrepRecord]:
+    """複数のsetterをプロジェクト全体で一括追跡する（getterバッチと同じ方式）。"""
+    if not tasks:
+        return []
+
+    combined = re.compile(
+        r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\s*\("
+    )
+    records: list[GrepRecord] = []
+
+    for java_file in _get_java_files(source_dir):
+        filepath_abs = str(java_file)
+        try:
+            filepath_str = str(java_file.relative_to(source_dir))
+        except ValueError:
+            filepath_str = filepath_abs
+        lines = _cached_read_lines(filepath_abs, stats)
+        if not lines:
+            continue
+
+        for i, line in enumerate(lines, start=1):
+            for m in combined.finditer(line):
+                setter_name = m.group(1)
+                origins = tasks.get(setter_name)
+                if not origins:
+                    continue
+
+                code = line.strip()
+                usage_type = classify_usage(
+                    code=code,
+                    filepath=filepath_str,
+                    lineno=i,
+                    source_dir=source_dir,
+                    stats=stats,
+                )
+                for origin in origins:
+                    records.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.SETTER.value,
+                        usage_type=usage_type,
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=setter_name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+
+    return records
+
+
 # ---------------------------------------------------------------------------
 # F-06: Reporter
 # ---------------------------------------------------------------------------
@@ -1159,6 +1214,7 @@ def main() -> None:
             # プロジェクト全体スキャンはバッチ化して1パスに削減
             project_scope_tasks: dict[str, list[GrepRecord]] = {}
             getter_tasks: dict[str, list[GrepRecord]] = {}
+            setter_tasks: dict[str, list[GrepRecord]] = {}
 
             for record in direct_records:
                 if record.usage_type not in (
@@ -1186,9 +1242,11 @@ def main() -> None:
                         indirect = track_field(var_name, class_file, record, source_dir, stats)
                         all_records.extend(indirect)
 
-                        # getter名を収集してバッチ追跡リストに積む
+                        # getter/setter名を収集してバッチ追跡リストに積む
                         for getter_name in find_getter_names(var_name, class_file):
                             getter_tasks.setdefault(getter_name, []).append(record)
+                        for setter_name in find_setter_names(var_name, class_file):
+                            setter_tasks.setdefault(setter_name, []).append(record)
 
                 elif scope == "method":
                     # 第2段階: ローカル変数を同一メソッド内で追跡
@@ -1200,7 +1258,7 @@ def main() -> None:
                             track_local(var_name, method_scope, record, source_dir, stats)
                         )
 
-            # 定数・getter をプロジェクト全体に対して各1パスで一括スキャン
+            # 定数・getter・setter をプロジェクト全体に対して各1パスで一括スキャン
             if project_scope_tasks:
                 all_records.extend(
                     _batch_track_constants(project_scope_tasks, source_dir, stats)
@@ -1208,6 +1266,10 @@ def main() -> None:
             if getter_tasks:
                 all_records.extend(
                     _batch_track_getters(getter_tasks, source_dir, stats)
+                )
+            if setter_tasks:
+                all_records.extend(
+                    _batch_track_setters(setter_tasks, source_dir, stats)
                 )
 
             # 出力

@@ -26,6 +26,7 @@ from analyze import (
     determine_scope,
     extract_variable_name,
     find_getter_names,
+    find_setter_names,
     parse_grep_line,
     print_report,
     process_grep_file,
@@ -997,6 +998,43 @@ class TestFindGetterNames(unittest.TestCase):
         """存在しないファイルでも命名規則のgetter候補は返ること。"""
         getters = find_getter_names("name", Path("/nonexistent/Foo.java"))
         self.assertIn("getName", getters)
+
+
+# ---------------------------------------------------------------------------
+# TestFindSetterNames
+# ---------------------------------------------------------------------------
+
+class TestFindSetterNames(unittest.TestCase):
+    """Java-4: find_setter_names() のテスト。"""
+
+    INTENSE_DIR = Path(__file__).parent / "tests" / "fixtures" / "intense" / "java"
+
+    def setUp(self):
+        _ast_cache.clear()
+
+    def tearDown(self):
+        _ast_cache.clear()
+
+    def test_convention_based_setter(self):
+        """命名規則によるsetter候補が含まれること。"""
+        order_file = self.INTENSE_DIR / "com/example/domain/Order.java"
+        if not order_file.exists():
+            self.skipTest("Order.java フィクスチャが存在しません。")
+        setters = find_setter_names("orderStatus", order_file)
+        self.assertIn("setOrderStatus", setters)
+
+    def test_no_duplicates_in_result(self):
+        """重複したsetter名が含まれないこと。"""
+        order_file = self.INTENSE_DIR / "com/example/domain/Order.java"
+        if not order_file.exists():
+            self.skipTest("Order.java フィクスチャが存在しません。")
+        setters = find_setter_names("orderStatus", order_file)
+        self.assertEqual(len(setters), len(set(setters)))
+
+    def test_nonexistent_file_returns_convention(self):
+        """存在しないファイルでも命名規則のsetter候補は返ること。"""
+        setters = find_setter_names("name", Path("/nonexistent/Foo.java"))
+        self.assertIn("setName", setters)
 
 
 # ---------------------------------------------------------------------------
