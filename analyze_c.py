@@ -74,12 +74,54 @@ def extract_variable_name_c(code: str) -> str | None:
 
 
 _DEFINE_PAT = re.compile(r'#\s*define\s+(\w+)\s+')
+_DEFINE_ALIAS_PAT = re.compile(r'#\s*define\s+(\w+)\s+(\w+)\s*$')
 
 
 def extract_define_name(code: str) -> str | None:
     """#define からマクロ名を抽出する。値のない #define は None を返す。"""
     m = _DEFINE_PAT.match(code)
     return m.group(1) if m else None
+
+
+def _build_define_map(
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding_override: str | None = None,
+) -> dict[str, str]:
+    """src_dir配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。"""
+    define_map: dict[str, str] = {}
+    src_files = (sorted(src_dir.rglob("*.c"))
+                 + sorted(src_dir.rglob("*.h"))
+                 + sorted(src_dir.rglob("*.pc")))
+    for src_file in src_files:
+        for line in _get_cached_lines(src_file, stats, encoding_override):
+            m = _DEFINE_ALIAS_PAT.match(line.strip())
+            if m:
+                define_map[m.group(1)] = m.group(2)
+    return define_map
+
+
+def _collect_define_aliases(
+    var_name: str,
+    define_map: dict[str, str],
+    max_depth: int = 10,
+) -> list[str]:
+    """var_nameを直接・間接的に参照する#define名のリストをBFSで返す。"""
+    aliases: list[str] = []
+    to_visit = [var_name]
+    seen: set[str] = {var_name}
+    for _ in range(max_depth):
+        next_level: list[str] = []
+        for name in to_visit:
+            for k, v in define_map.items():
+                if v == name and k not in seen:
+                    aliases.append(k)
+                    next_level.append(k)
+                    seen.add(k)
+        if not next_level:
+            break
+        to_visit = next_level
+    return aliases
 
 
 def track_define(
@@ -89,38 +131,46 @@ def track_define(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> list[GrepRecord]:
-    """#define マクロ名の使用箇所を src_dir 配下の .c/.h/.pc ファイルでスキャンする。"""
+    """#define マクロ名の使用箇所を src_dir 配下の .c/.h/.pc ファイルでスキャンする（多段解決）。"""
     results: list[GrepRecord] = []
-    pattern = re.compile(r'\b' + re.escape(var_name) + r'\b')
     def_file = _resolve_source_file(record.filepath, src_dir)
 
     src_files = (sorted(src_dir.rglob("*.c"))
                  + sorted(src_dir.rglob("*.h"))
                  + sorted(src_dir.rglob("*.pc")))
-    for src_file in src_files:
-        try:
-            filepath_str = str(src_file.relative_to(src_dir))
-        except ValueError:
-            filepath_str = str(src_file)
 
-        lines = _get_cached_lines(src_file, stats, encoding_override)
-        for i, line in enumerate(lines, 1):
-            if (def_file is not None
-                    and src_file.resolve() == def_file.resolve()
-                    and i == int(record.lineno)):
-                continue
-            if pattern.search(line):
-                results.append(GrepRecord(
-                    keyword=record.keyword,
-                    ref_type=RefType.INDIRECT.value,
-                    usage_type=classify_usage_c(line.strip()),
-                    filepath=filepath_str,
-                    lineno=str(i),
-                    code=line.strip(),
-                    src_var=var_name,
-                    src_file=record.filepath,
-                    src_lineno=record.lineno,
-                ))
+    # 多段 #define チェーンのエイリアスを収集
+    define_map = _build_define_map(src_dir, stats, encoding_override)
+    aliases = _collect_define_aliases(var_name, define_map)
+    scan_names = [var_name] + aliases
+
+    for scan_name in scan_names:
+        pattern = re.compile(r'\b' + re.escape(scan_name) + r'\b')
+        for src_file in src_files:
+            try:
+                filepath_str = str(src_file.relative_to(src_dir))
+            except ValueError:
+                filepath_str = str(src_file)
+
+            lines = _get_cached_lines(src_file, stats, encoding_override)
+            for i, line in enumerate(lines, 1):
+                if (scan_name == var_name
+                        and def_file is not None
+                        and src_file.resolve() == def_file.resolve()
+                        and i == int(record.lineno)):
+                    continue
+                if pattern.search(line):
+                    results.append(GrepRecord(
+                        keyword=record.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_c(line.strip()),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=line.strip(),
+                        src_var=scan_name,
+                        src_file=record.filepath,
+                        src_lineno=record.lineno,
+                    ))
     return results
 
 

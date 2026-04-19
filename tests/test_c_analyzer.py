@@ -68,6 +68,42 @@ class TestExtractVariableNameC(unittest.TestCase):
         self.assertIsNone(ac.extract_variable_name_c('if (x == 1)'))
 
 
+class TestBuildDefineMap(unittest.TestCase):
+    def test_single_define_alias(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "a.c").write_text('#define ALIAS TARGET\n')
+            stats = ac.ProcessStats()
+            dm = ac._build_define_map(src, stats)
+            self.assertEqual(dm.get("ALIAS"), "TARGET")
+
+    def test_ignores_string_literal(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "a.c").write_text('#define STATUS "value"\n')
+            stats = ac.ProcessStats()
+            dm = ac._build_define_map(src, stats)
+            self.assertNotIn("STATUS", dm)
+
+
+class TestCollectDefineAliases(unittest.TestCase):
+    def test_two_level_chain(self):
+        define_map = {"B": "A", "C": "B"}
+        aliases = ac._collect_define_aliases("A", define_map)
+        self.assertIn("B", aliases)
+        self.assertIn("C", aliases)
+
+    def test_circular_reference_guard(self):
+        define_map = {"B": "A", "A": "B"}
+        aliases = ac._collect_define_aliases("A", define_map)
+        self.assertLessEqual(len(aliases), 10)
+
+    def test_no_aliases(self):
+        define_map = {"X": "Y"}
+        aliases = ac._collect_define_aliases("A", define_map)
+        self.assertEqual(aliases, [])
+
+
 class TestE2EC(unittest.TestCase):
     """E2E統合テスト: sample.c でツールを実行し、期待TSVと比較する"""
 
