@@ -22,6 +22,26 @@ _file_cache: dict[str, list[str]] = {}
 _MAX_FILE_CACHE = 800
 
 
+def _get_cached_lines(
+    filepath: str | Path,
+    stats: ProcessStats | None = None,
+    encoding_override: str | None = None,
+) -> list[str]:
+    path = Path(filepath)
+    enc = detect_encoding(path, encoding_override)
+    key = str(filepath)
+    if key not in _file_cache:
+        if len(_file_cache) >= _MAX_FILE_CACHE:
+            _file_cache.pop(next(iter(_file_cache)))
+        try:
+            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
+        except Exception:
+            if stats is not None:
+                stats.encoding_errors.add(key)
+            _file_cache[key] = []
+    return _file_cache[key]
+
+
 def classify_usage_ts(code: str) -> str:
     """TypeScript/JavaScriptコード行の使用タイプを分類する（7種）。"""
     stripped = code.strip()
@@ -38,6 +58,7 @@ def process_grep_file(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> list[GrepRecord]:
+    """grepファイル全行を処理し、直接参照レコードを返す。"""
     records: list[GrepRecord] = []
     enc = detect_encoding(path, encoding_override)
     with open(path, encoding=enc, errors="replace") as f:
@@ -61,10 +82,10 @@ def process_grep_file(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="TypeScript/JavaScript grep結果 自動分類・使用箇所洗い出しツール")
-    parser.add_argument("--source-dir", required=True)
+    parser.add_argument("--source-dir", required=True, help="TypeScript/JavaScriptソースのルートディレクトリ")
     parser.add_argument("--input-dir",  default="input")
     parser.add_argument("--output-dir", default="output")
-    parser.add_argument("--encoding",   default=None)
+    parser.add_argument("--encoding",   default=None, help="文字コード強制指定（省略時は自動検出）")
     return parser
 
 
