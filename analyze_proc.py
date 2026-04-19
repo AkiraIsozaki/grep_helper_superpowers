@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, parse_grep_line, write_tsv
-from analyze_c import classify_usage_c
+from analyze_c import classify_usage_c, _collect_define_aliases
 
 # ---------------------------------------------------------------------------
 # 使用タイプ分類パターン（優先度順）
@@ -102,6 +102,25 @@ def extract_variable_name_proc(code: str) -> str | None:
 
 
 _DEFINE_PAT = re.compile(r'#\s*define\s+(\w+)\s+')
+_DEFINE_ALIAS_PAT = re.compile(r'#\s*define\s+(\w+)\s+(\w+)\s*$')
+
+
+def _build_define_map(
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding_override: str | None = None,
+) -> dict[str, str]:
+    """src_dir配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。"""
+    define_map: dict[str, str] = {}
+    pc_files = (sorted(src_dir.rglob("*.pc"))
+                + sorted(src_dir.rglob("*.c"))
+                + sorted(src_dir.rglob("*.h")))
+    for pc_file in pc_files:
+        for line in _get_cached_lines(pc_file, stats, encoding_override):
+            m = _DEFINE_ALIAS_PAT.match(line.strip())
+            if m:
+                define_map[m.group(1)] = m.group(2)
+    return define_map
 
 
 def extract_define_name(code: str) -> str | None:
@@ -138,38 +157,45 @@ def track_define(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> list[GrepRecord]:
-    """#define マクロ名の使用箇所を src_dir 配下の全 .pc/.c/.h ファイルでスキャンする。"""
+    """#define マクロ名の使用箇所を src_dir 配下の全 .pc/.c/.h ファイルでスキャンする（多段解決）。"""
     results: list[GrepRecord] = []
-    pattern = re.compile(r'\b' + re.escape(var_name) + r'\b')
     def_file = _resolve_source_file(record.filepath, src_dir)
 
     pc_files = (sorted(src_dir.rglob("*.pc"))
                 + sorted(src_dir.rglob("*.c"))
                 + sorted(src_dir.rglob("*.h")))
-    for pc_file in pc_files:
-        try:
-            filepath_str = str(pc_file.relative_to(src_dir))
-        except ValueError:
-            filepath_str = str(pc_file)
 
-        lines = _get_cached_lines(pc_file, stats, encoding_override)
-        for i, line in enumerate(lines, 1):
-            if (def_file is not None
-                    and pc_file.resolve() == def_file.resolve()
-                    and i == int(record.lineno)):
-                continue
-            if pattern.search(line):
-                results.append(GrepRecord(
-                    keyword=record.keyword,
-                    ref_type=RefType.INDIRECT.value,
-                    usage_type=_classify_for_filepath(line.strip(), str(pc_file)),
-                    filepath=filepath_str,
-                    lineno=str(i),
-                    code=line.strip(),
-                    src_var=var_name,
-                    src_file=record.filepath,
-                    src_lineno=record.lineno,
-                ))
+    define_map = _build_define_map(src_dir, stats, encoding_override)
+    aliases = _collect_define_aliases(var_name, define_map)
+    scan_names = [var_name] + aliases
+
+    for scan_name in scan_names:
+        pattern = re.compile(r'\b' + re.escape(scan_name) + r'\b')
+        for pc_file in pc_files:
+            try:
+                filepath_str = str(pc_file.relative_to(src_dir))
+            except ValueError:
+                filepath_str = str(pc_file)
+
+            lines = _get_cached_lines(pc_file, stats, encoding_override)
+            for i, line in enumerate(lines, 1):
+                if (scan_name == var_name
+                        and def_file is not None
+                        and pc_file.resolve() == def_file.resolve()
+                        and i == int(record.lineno)):
+                    continue
+                if pattern.search(line):
+                    results.append(GrepRecord(
+                        keyword=record.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=_classify_for_filepath(line.strip(), str(pc_file)),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=line.strip(),
+                        src_var=scan_name,
+                        src_file=record.filepath,
+                        src_lineno=record.lineno,
+                    ))
     return results
 
 
