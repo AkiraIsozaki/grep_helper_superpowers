@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from analyze_common import GrepRecord, ProcessStats, RefType, parse_grep_line, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, parse_grep_line, write_tsv
 
 _SH_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bexport\b|\bsetenv\b'), "環境変数エクスポート"),
@@ -22,15 +22,19 @@ _file_cache: dict[str, list[str]] = {}
 _MAX_FILE_CACHE = 800
 
 
-def _get_cached_lines(filepath: str | Path, stats: ProcessStats | None = None) -> list[str]:
+def _get_cached_lines(
+    filepath: str | Path,
+    stats: ProcessStats | None = None,
+    encoding_override: str | None = None,
+) -> list[str]:
+    path = Path(filepath)
+    enc = detect_encoding(path, encoding_override)
     key = str(filepath)
     if key not in _file_cache:
         if len(_file_cache) >= _MAX_FILE_CACHE:
             _file_cache.pop(next(iter(_file_cache)))
         try:
-            _file_cache[key] = Path(filepath).read_text(
-                encoding="cp932", errors="replace"
-            ).splitlines()
+            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
         except Exception:
             if stats is not None:
                 stats.encoding_errors.add(key)
@@ -80,6 +84,7 @@ def track_sh_variable(
     src_dir: Path,
     record: GrepRecord,
     stats: ProcessStats,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """シェル変数名の使用箇所を同一ファイル内でスキャンする（$VAR / ${VAR}）。"""
     results: list[GrepRecord] = []
@@ -90,7 +95,7 @@ def track_sh_variable(
     except ValueError:
         filepath_str = str(filepath)
 
-    lines = _get_cached_lines(filepath, stats)
+    lines = _get_cached_lines(filepath, stats, encoding_override)
     for i, line in enumerate(lines, 1):
         if i == def_lineno:
             continue
@@ -114,9 +119,11 @@ def process_grep_file(
     keyword: str,
     source_dir: Path,
     stats: ProcessStats,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     records: list[GrepRecord] = []
-    with open(path, encoding="cp932", errors="replace") as f:
+    enc = detect_encoding(path, encoding_override)
+    with open(path, encoding=enc, errors="replace") as f:
         for line in f:
             stats.total_lines += 1
             parsed = parse_grep_line(line)
@@ -140,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-dir", required=True)
     parser.add_argument("--input-dir",  default="input")
     parser.add_argument("--output-dir", default="output")
+    parser.add_argument("--encoding",   default=None, help="文字コード強制指定（省略時は自動検出）")
     return parser
 
 
@@ -167,7 +175,7 @@ def main() -> None:
     try:
         for grep_path in grep_files:
             keyword = grep_path.stem
-            direct_records = process_grep_file(grep_path, keyword, source_dir, stats)
+            direct_records = process_grep_file(grep_path, keyword, source_dir, stats, args.encoding)
             all_records: list[GrepRecord] = list(direct_records)
 
             for record in direct_records:
@@ -178,7 +186,7 @@ def main() -> None:
                         if resolved:
                             all_records.extend(
                                 track_sh_variable(var_name, resolved,
-                                                  int(record.lineno), source_dir, record, stats)
+                                                  int(record.lineno), source_dir, record, stats, args.encoding)
                             )
 
             output_path = output_dir / f"{keyword}.tsv"
