@@ -1,0 +1,4 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	間接	const定数定義	Constants.kt	4	const val ALIAS = STATUS	STATUS	tests/kotlin/src/Constants.kt	3
+TARGET	間接	条件判定	Service.kt	4	if (code == Constants.STATUS) {	STATUS	tests/kotlin/src/Constants.kt	3
+TARGET	直接	const定数定義	tests/kotlin/src/Constants.kt	3	"const val STATUS = ""TARGET"""			
