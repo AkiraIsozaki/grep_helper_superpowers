@@ -21,9 +21,13 @@ from analyze_common import (
     GrepRecord,
     ProcessStats,
     RefType,
+    detect_encoding,
     parse_grep_line,
     write_tsv,
 )
+
+# 文字コードオーバーライド（--encoding CLIオプションで設定される）
+_encoding_override: str | None = None
 
 # ---------------------------------------------------------------------------
 # Java専用定数
@@ -105,7 +109,7 @@ def process_grep_file(
     records: list[GrepRecord] = []
     _PROGRESS_INTERVAL = 100_000  # 10万行ごとに進捗表示
 
-    with open(path, encoding="cp932", errors="replace") as f:
+    with open(path, encoding=detect_encoding(path, _encoding_override), errors="replace") as f:
         for line in f:
             stats.total_lines += 1
 
@@ -181,7 +185,7 @@ def get_ast(filepath: str, source_dir: Path) -> object | None:
         return None
 
     try:
-        source = candidate.read_text(encoding="shift_jis", errors="replace")
+        source = candidate.read_text(encoding=detect_encoding(candidate, _encoding_override), errors="replace")
         tree = javalang.parse.parse(source)
         _ast_cache[cache_key] = tree
     except Exception:
@@ -199,8 +203,9 @@ def _cached_read_lines(filepath: str | Path, stats: "ProcessStats | None" = None
         if len(_file_lines_cache) >= _MAX_FILE_CACHE_SIZE:
             _file_lines_cache.pop(next(iter(_file_lines_cache)))
         try:
-            _file_lines_cache[key] = Path(filepath).read_text(
-                encoding="shift_jis", errors="replace"
+            fp = Path(filepath)
+            _file_lines_cache[key] = fp.read_text(
+                encoding=detect_encoding(fp, _encoding_override), errors="replace"
             ).splitlines()
         except Exception:
             if stats is not None:
@@ -752,7 +757,7 @@ def find_getter_names(field_name: str, class_file: Path) -> list[str]:
         # in 演算子でキー存在確認（.get() はNone値と未設定の区別ができないため）
         if cache_key not in _ast_cache:
             try:
-                source = class_file.read_text(encoding="shift_jis", errors="replace")
+                source = class_file.read_text(encoding=detect_encoding(class_file, _encoding_override), errors="replace")
                 _ast_cache[cache_key] = javalang.parse.parse(source)
             except Exception:
                 _ast_cache[cache_key] = None
@@ -1014,13 +1019,21 @@ def build_parser() -> argparse.ArgumentParser:
         default="output",
         help="TSV出力先ディレクトリ（デフォルト: output/）",
     )
+    parser.add_argument(
+        "--encoding",
+        default=None,
+        help="文字コード強制指定（省略時は自動検出）",
+    )
     return parser
 
 
 def main() -> None:
     """エントリーポイント。argparse でオプションを解析し、全処理を統括する。"""
+    global _encoding_override
     parser = build_parser()
     args = parser.parse_args()
+
+    _encoding_override = args.encoding
 
     source_dir = Path(args.source_dir)
     input_dir = Path(args.input_dir)
