@@ -1,0 +1,1 @@
+tests/groovy/src/sample.groovy:3:    static final String STATUS = "TARGET"

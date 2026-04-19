@@ -1,0 +1,6 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	間接	変数代入	sample.groovy	4	private String type = STATUS	STATUS	tests/groovy/src/sample.groovy	3
+TARGET	間接	条件判定	sample.groovy	15	if (code == STATUS) {	STATUS	tests/groovy/src/sample.groovy	3
+TARGET	間接	メソッド引数	sample.groovy	23	sc.setType(StatusCodes.STATUS)	STATUS	tests/groovy/src/sample.groovy	3
+TARGET	間接	条件判定	sample.groovy	24	if (sc.getType() == StatusCodes.STATUS) {	STATUS	tests/groovy/src/sample.groovy	3
+TARGET	直接	static final定数定義	tests/groovy/src/sample.groovy	3	"static final String STATUS = ""TARGET"""			
