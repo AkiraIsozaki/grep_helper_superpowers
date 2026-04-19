@@ -1,0 +1,3 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	直接	関数引数	tests/ts/src/sample.js	3	process(STATUS);			
+TARGET	直接	const定数定義	tests/ts/src/sample.ts	2	"const STATUS = ""TARGET"";"			

@@ -1,0 +1,2 @@
+tests/ts/src/sample.ts:2:const STATUS = "TARGET";
+tests/ts/src/sample.js:3:    process(STATUS);
