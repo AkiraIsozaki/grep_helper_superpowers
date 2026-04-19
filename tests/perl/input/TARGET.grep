@@ -1,0 +1,3 @@
+tests/perl/src/sample.pl:2:use constant STATUS => "TARGET";
+tests/perl/src/sample.pl:3:my $code = STATUS;
+tests/perl/src/sample.pl:5:    print STATUS;

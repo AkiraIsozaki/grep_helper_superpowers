@@ -1,0 +1,4 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	直接	use constant定義	tests/perl/src/sample.pl	2	"use constant STATUS => ""TARGET"";"			
+TARGET	直接	変数代入	tests/perl/src/sample.pl	3	my $code = STATUS;			
+TARGET	直接	print/say出力	tests/perl/src/sample.pl	5	print STATUS;			
