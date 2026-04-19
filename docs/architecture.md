@@ -65,6 +65,11 @@
 - **SQL/Shell（`analyze_sql.py`, `analyze_sh.py`）**: 正規表現による直接参照のみ分類
 - **Kotlin（`analyze_kotlin.py`）**: 正規表現による分類、const val定数のプロジェクト全体追跡
 - **PL/SQL（`analyze_plsql.py`）**: 正規表現による直接参照のみ分類
+- **TypeScript/JavaScript（`analyze_ts.py`）**: 正規表現による直接参照のみ分類（`.ts`/`.tsx`/`.js`/`.jsx`）
+- **Python（`analyze_python.py`）**: 正規表現による直接参照のみ分類（`.py`）
+- **Perl（`analyze_perl.py`）**: 正規表現による直接参照のみ分類（`.pl`/`.pm`）
+- **C#/VB.NET（`analyze_dotnet.py`）**: 正規表現による分類、const/static readonly定数のプロジェクト全体追跡（`.cs`/`.vb`）
+- **Groovy（`analyze_groovy.py`）**: 正規表現による分類、static final定数・フィールドのプロジェクト全体追跡、setter追跡（`.groovy`/`.gvy`）
 
 #### 出力レイヤー（全言語共通: `analyze_common.py`）
 - **責務**: 全レコードのソート、UTF-8 BOM付きTSV出力、処理サマリの標準出力表示
@@ -167,12 +172,12 @@
 
 ### ユニットテスト
 - **フレームワーク**: unittest（Python標準ライブラリ）
-- **対象ファイル**: `test_analyze.py`（Java）, `test_analyze_proc.py`（Pro*C）, `tests/test_*.py`（C/SQL/Shell/Kotlin/PL/SQL/共通）
+- **対象ファイル**: `test_analyze.py`（Java）, `test_analyze_proc.py`（Pro*C）, `tests/test_*.py`（C/SQL/Shell/Kotlin/PL/SQL/TypeScript・JS/Python/Perl/C#・VB.NET/Groovy/共通）
 - **カバレッジ目標**: 80%以上（推奨。マージのブロック条件ではない。詳細は `development-guidelines.md` 参照）
 
 ### 統合テスト（E2Eテスト）
 - **方法**: 言語別のサンプルソース + サンプルgrep結果を使ったE2Eフロー
-- **フィクスチャ**: `tests/[言語]/` 以下に言語別に配置（Java: `tests/fixtures/`, C: `tests/c/`, Kotlin: `tests/kotlin/`, PL/SQL: `tests/plsql/`, etc.）
+- **フィクスチャ**: `tests/[言語]/` 以下に言語別に配置（Java: `tests/fixtures/`, C: `tests/c/`, Kotlin: `tests/kotlin/`, PL/SQL: `tests/plsql/`, TypeScript・JS: `tests/ts/`, Python: `tests/python/`, Perl: `tests/perl/`, C#・VB.NET: `tests/dotnet/`, Groovy: `tests/groovy/`, etc.）
 - **対象**: 直接参照・間接参照（対応言語のみ）・各言語固有のパターンが期待TSVと一致すること
 - **注意（Javaのみ）**: フォールバック率が高い環境ではjavalangのAST解析が多くのファイルでパースエラーを起こすため、統合テストでフォールバック発生件数も確認すること
 
@@ -214,7 +219,7 @@ javalang>=0.13.0,<1.0.0
 ```
 
 **方針**:
-- 必須外部依存は `javalang` 1本のみを維持する（C/SQL/Shell/Kotlin/PL/SQL は標準ライブラリのみで完結）
+- 必須外部依存は `javalang` 1本のみを維持する（C/SQL/Shell/Kotlin/PL/SQL/TypeScript・JS/Python/Perl/C#・VB.NET/Groovy は標準ライブラリのみで完結）
 - `chardet` はオプション依存。インストール時のみ文字コード自動検出が有効になる
 - `setup.sh` / `setup.bat` で venv を作成し `pip install -r requirements.txt` を実行
 - `pip list --outdated` で定期的に確認

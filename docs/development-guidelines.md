@@ -54,21 +54,31 @@ analyze_common.py
 # 言語別アナライザー: analyze_[言語].py
 analyze.py       # Java（言語名を省略）
 analyze_c.py     # C
+analyze_dotnet.py  # C#/VB.NET
+analyze_groovy.py  # Groovy
 analyze_kotlin.py  # Kotlin
+analyze_perl.py    # Perl
 analyze_plsql.py   # PL/SQL
 analyze_proc.py  # Pro*C
+analyze_python.py  # Python
 analyze_sh.py    # Shell
 analyze_sql.py   # SQL
+analyze_ts.py    # TypeScript/JavaScript
 
 # テスト
 test_analyze.py         # Java（ルートに配置）
 test_analyze_proc.py    # Pro*C（ルートに配置）
 tests/test_common.py    # 共通インフラ
 tests/test_c_analyzer.py
+tests/test_dotnet_analyzer.py
+tests/test_groovy_analyzer.py
 tests/test_kotlin_analyzer.py
+tests/test_perl_analyzer.py
 tests/test_plsql_analyzer.py
+tests/test_python_analyzer.py
 tests/test_sh_analyzer.py
 tests/test_sql_analyzer.py
+tests/test_ts_analyzer.py
 
 # スクリプト
 run.sh / run.bat
@@ -372,7 +382,17 @@ tests/
 │   ├── input/  src/  expected/
 ├── sh/               # Shell（tests/test_sh_analyzer.py用）
 │   ├── input/  src/  expected/
-└── sql/              # SQL（tests/test_sql_analyzer.py用）
+├── sql/              # SQL（tests/test_sql_analyzer.py用）
+│   ├── input/  src/  expected/
+├── ts/               # TypeScript/JS（tests/test_ts_analyzer.py用）
+│   ├── input/  src/  expected/
+├── python/           # Python（tests/test_python_analyzer.py用）
+│   ├── input/  src/  expected/
+├── perl/             # Perl（tests/test_perl_analyzer.py用）
+│   ├── input/  src/  expected/
+├── dotnet/           # C#/VB.NET（tests/test_dotnet_analyzer.py用）
+│   ├── input/  src/  expected/
+└── groovy/           # Groovy（tests/test_groovy_analyzer.py用）
     ├── input/  src/  expected/
 ```
 

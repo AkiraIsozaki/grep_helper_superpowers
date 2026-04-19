@@ -7,15 +7,25 @@
 ├── analyze.py           # Javaアナライザー（3段階分析：直接/間接/getter経由）
 ├── analyze_common.py    # 全言語共通インフラ（GrepRecord, ProcessStats, parse_grep_line, write_tsv, detect_encoding）
 ├── analyze_c.py         # 純Cアナライザー（正規表現分類）
+├── analyze_dotnet.py    # C#/VB.NETアナライザー（const/static readonly定数の間接追跡あり）
+├── analyze_groovy.py    # Groovyアナライザー（static final間接追跡・setter追跡あり）
 ├── analyze_kotlin.py    # Kotlinアナライザー（const val定数の間接追跡あり）
+├── analyze_perl.py      # Perlアナライザー（直接参照のみ）
 ├── analyze_plsql.py     # PL/SQLアナライザー（直接参照のみ）
 ├── analyze_proc.py      # Pro*Cアナライザー（.pc/.c拡張子ベースのディスパッチ）
+├── analyze_python.py    # Pythonアナライザー（直接参照のみ）
+├── analyze_ts.py        # TypeScript/JavaScriptアナライザー（直接参照のみ）
 ├── analyze_sh.py        # Shellスクリプトアナライザー（BASH/CSH/TCSH）
 ├── analyze_sql.py       # Oracle SQLアナライザー
 ├── test_analyze.py      # Javaアナライザーのユニットテスト・統合テスト
 ├── test_analyze_proc.py # Pro*Cアナライザーのユニットテスト・統合テスト
+├── tests/test_dotnet_analyzer.py  # C#/VB.NETアナライザーのユニットテスト・統合テスト
+├── tests/test_groovy_analyzer.py  # Groovyアナライザーのユニットテスト・統合テスト
 ├── tests/test_kotlin_analyzer.py  # Kotlinアナライザーのユニットテスト・統合テスト
+├── tests/test_perl_analyzer.py    # Perlアナライザーのユニットテスト・統合テスト
 ├── tests/test_plsql_analyzer.py   # PL/SQLアナライザーのユニットテスト・統合テスト
+├── tests/test_python_analyzer.py  # Pythonアナライザーのユニットテスト・統合テスト
+├── tests/test_ts_analyzer.py      # TypeScript/JSアナライザーのユニットテスト・統合テスト
 ├── requirements.txt     # 依存ライブラリ（javalang のみ）
 ├── setup.sh             # venv作成スクリプト（Unix/Mac）
 ├── setup.bat            # venv作成スクリプト（Windows）
@@ -60,12 +70,37 @@
 │   │   ├── input/
 │   │   ├── src/
 │   │   └── expected/
+│   ├── ts/              # TypeScript/JSテストフィクスチャ（test_ts_analyzer.py用）
+│   │   ├── input/
+│   │   ├── src/
+│   │   └── expected/
+│   ├── python/          # Pythonテストフィクスチャ（test_python_analyzer.py用）
+│   │   ├── input/
+│   │   ├── src/
+│   │   └── expected/
+│   ├── perl/            # Perlテストフィクスチャ（test_perl_analyzer.py用）
+│   │   ├── input/
+│   │   ├── src/
+│   │   └── expected/
+│   ├── dotnet/          # C#/VB.NETテストフィクスチャ（test_dotnet_analyzer.py用）
+│   │   ├── input/
+│   │   ├── src/
+│   │   └── expected/
+│   ├── groovy/          # Groovyテストフィクスチャ（test_groovy_analyzer.py用）
+│   │   ├── input/
+│   │   ├── src/
+│   │   └── expected/
 │   ├── test_c_analyzer.py
 │   ├── test_common.py
+│   ├── test_dotnet_analyzer.py
+│   ├── test_groovy_analyzer.py
 │   ├── test_kotlin_analyzer.py
+│   ├── test_perl_analyzer.py
 │   ├── test_plsql_analyzer.py
+│   ├── test_python_analyzer.py
 │   ├── test_sh_analyzer.py
-│   └── test_sql_analyzer.py
+│   ├── test_sql_analyzer.py
+│   └── test_ts_analyzer.py
 ├── docs/                # プロジェクトドキュメント
 │   ├── ideas/
 │   │   └── initial-requirements.md
@@ -201,6 +236,63 @@
 
 ---
 
+### analyze_ts.py（TypeScript/JavaScriptアナライザー）
+
+**役割**: TypeScript/JavaScript（`.ts`/`.tsx`/`.js`/`.jsx`）grep結果の正規表現分類エントリーポイント
+
+**使用タイプ（7種）**: const定数定義・変数代入(let/var)・条件判定・return文・デコレータ・関数引数・その他
+
+**依存関係**: `analyze_common`（`detect_encoding` 含む）, `re`, `argparse`, `pathlib`, `sys`
+
+---
+
+### analyze_python.py（Pythonアナライザー）
+
+**役割**: Python（`.py`）grep結果の正規表現分類エントリーポイント
+
+**使用タイプ（6種）**: 変数代入・条件判定・return文・デコレータ・関数引数・その他
+
+**依存関係**: `analyze_common`（`detect_encoding` 含む）, `re`, `argparse`, `pathlib`, `sys`
+
+---
+
+### analyze_perl.py（Perlアナライザー）
+
+**役割**: Perl（`.pl`/`.pm`）grep結果の正規表現分類エントリーポイント
+
+**使用タイプ（6種）**: use constant定義・変数代入・条件判定・print/say出力・関数引数・その他
+
+**依存関係**: `analyze_common`（`detect_encoding` 含む）, `re`, `argparse`, `pathlib`, `sys`
+
+---
+
+### analyze_dotnet.py（C#/VB.NETアナライザー）
+
+**役割**: C#/VB.NET（`.cs`/`.vb`）grep結果の正規表現分類・const/static readonly定数間接追跡エントリーポイント
+
+**主要関数**:
+- `classify_usage_dotnet()`: 正規表現で7種（定数定義(Const/readonly)・変数代入・条件判定・return文・属性(Attribute)・メソッド引数・その他）に分類
+- `track_const()`: `const` / `static readonly` 定数を `.cs`/`.vb` ファイル対象にプロジェクト全体追跡（間接参照）
+- `main()`: CLIエントリーポイント（`--encoding` オプションあり）
+
+**依存関係**: `analyze_common`（`detect_encoding` 含む）, `re`, `argparse`, `pathlib`, `sys`
+
+---
+
+### analyze_groovy.py（Groovyアナライザー）
+
+**役割**: Groovy（`.groovy`/`.gvy`）grep結果の正規表現分類・static final定数間接追跡・setter追跡エントリーポイント
+
+**主要関数**:
+- `classify_usage_groovy()`: 正規表現で7種（static final定数定義・変数代入・条件判定・return文・アノテーション・メソッド引数・その他）に分類
+- `track_static_final()`: `static final` 定数をプロジェクト全体追跡（間接参照）
+- `track_setters()`: setter経由の代入箇所追跡
+- `main()`: CLIエントリーポイント（`--encoding` オプションあり）
+
+**依存関係**: `analyze_common`（`detect_encoding` 含む）, `re`, `argparse`, `pathlib`, `sys`
+
+---
+
 ### test_analyze.py（Javaテストファイル）
 
 **役割**: `analyze.py` のユニットテスト・統合テスト
@@ -226,6 +318,11 @@
 - `test_sql_analyzer.py`: `analyze_sql` のE2E統合テスト
 - `test_kotlin_analyzer.py`: `analyze_kotlin` のユニットテスト・E2E統合テスト
 - `test_plsql_analyzer.py`: `analyze_plsql` のユニットテスト・E2E統合テスト
+- `test_ts_analyzer.py`: `analyze_ts` のユニットテスト・E2E統合テスト
+- `test_python_analyzer.py`: `analyze_python` のユニットテスト・E2E統合テスト
+- `test_perl_analyzer.py`: `analyze_perl` のユニットテスト・E2E統合テスト
+- `test_dotnet_analyzer.py`: `analyze_dotnet` のユニットテスト・E2E統合テスト
+- `test_groovy_analyzer.py`: `analyze_groovy` のユニットテスト・E2E統合テスト
 
 **フィクスチャ構成**:
 ```
@@ -257,9 +354,29 @@ tests/
 │   ├── input/         # TARGET.grep
 │   ├── src/           # sample.kt
 │   └── expected/      # TARGET.tsv
-└── plsql/             # PL/SQL（test_plsql_analyzer.py用）
+├── plsql/             # PL/SQL（test_plsql_analyzer.py用）
+│   ├── input/         # TARGET.grep
+│   ├── src/           # sample.pls
+│   └── expected/      # TARGET.tsv
+├── ts/                # TypeScript/JS（test_ts_analyzer.py用）
+│   ├── input/         # TARGET.grep
+│   ├── src/           # sample.ts
+│   └── expected/      # TARGET.tsv
+├── python/            # Python（test_python_analyzer.py用）
+│   ├── input/         # TARGET.grep
+│   ├── src/           # sample.py
+│   └── expected/      # TARGET.tsv
+├── perl/              # Perl（test_perl_analyzer.py用）
+│   ├── input/         # TARGET.grep
+│   ├── src/           # sample.pl
+│   └── expected/      # TARGET.tsv
+├── dotnet/            # C#/VB.NET（test_dotnet_analyzer.py用）
+│   ├── input/         # TARGET.grep
+│   ├── src/           # sample.cs
+│   └── expected/      # TARGET.tsv
+└── groovy/            # Groovy（test_groovy_analyzer.py用）
     ├── input/         # TARGET.grep
-    ├── src/           # sample.pls
+    ├── src/           # sample.groovy
     └── expected/      # TARGET.tsv
 ```
 
@@ -422,7 +539,7 @@ clean:
 | テスト種別 | 配置先 | 命名規則 | 例 |
 |-----------|--------|---------|-----|
 | Java・Pro*Cユニット/統合テスト | プロジェクトルート | `test_[対象モジュール].py` | `test_analyze.py`, `test_analyze_proc.py` |
-| C/SQL/Shell/Kotlin/PL/SQLアナライザーテスト | `tests/` | `test_[言語]_analyzer.py` | `test_c_analyzer.py`, `test_kotlin_analyzer.py`, `test_plsql_analyzer.py` |
+| C/SQL/Shell/Kotlin/PL/SQL/TS・JS/Python/Perl/C#・VB.NET/Groovyアナライザーテスト | `tests/` | `test_[言語]_analyzer.py` | `test_c_analyzer.py`, `test_kotlin_analyzer.py`, `test_plsql_analyzer.py`, `test_ts_analyzer.py`, `test_python_analyzer.py`, `test_perl_analyzer.py`, `test_dotnet_analyzer.py`, `test_groovy_analyzer.py` |
 | 共通インフラテスト | `tests/` | `test_common.py` | - |
 | フィクスチャ（入力・期待値） | `tests/[言語]/` | 言語別サブディレクトリ | `tests/c/`, `tests/proc/` |
 
@@ -464,7 +581,9 @@ clean:
 test_analyze.py / test_analyze_proc.py / tests/test_*.py
     ↓ (import)
 analyze.py / analyze_c.py / analyze_kotlin.py / analyze_plsql.py /
-analyze_proc.py / analyze_sh.py / analyze_sql.py
+analyze_proc.py / analyze_sh.py / analyze_sql.py /
+analyze_ts.py / analyze_python.py / analyze_perl.py /
+analyze_dotnet.py / analyze_groovy.py
     ↓ (import)
 analyze_common.py   ← 共通インフラ（全言語から依存可）
     ↓ (import)

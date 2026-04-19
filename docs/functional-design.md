@@ -404,6 +404,11 @@ _MAX_FILE_CACHE = 800  # LRU風（超過時に先頭エントリを削除）
 | Shell | `analyze_sh.py` | 環境変数エクスポート・変数代入・条件判定・echo/print出力・コマンド引数・その他（6種） |
 | Kotlin | `analyze_kotlin.py` | const定数定義・変数代入・条件判定・return文・アノテーション・関数引数・その他（7種） |
 | PL/SQL | `analyze_plsql.py` | 定数/変数宣言・EXCEPTION処理・条件判定・カーソル定義・INSERT/UPDATE値・WHERE条件・その他（7種） |
+| TypeScript/JavaScript | `analyze_ts.py` | const定数定義・変数代入(let/var)・条件判定・return文・デコレータ・関数引数・その他（7種） |
+| Python | `analyze_python.py` | 変数代入・条件判定・return文・デコレータ・関数引数・その他（6種） |
+| Perl | `analyze_perl.py` | use constant定義・変数代入・条件判定・print/say出力・関数引数・その他（6種） |
+| C#/VB.NET | `analyze_dotnet.py` | 定数定義(Const/readonly)・変数代入・条件判定・return文・属性(Attribute)・メソッド引数・その他（7種） |
+| Groovy | `analyze_groovy.py` | static final定数定義・変数代入・条件判定・return文・アノテーション・メソッド引数・その他（7種） |
 
 **Pro*C 固有機能（拡張子ベースのディスパッチ）**:
 ```python
@@ -414,10 +419,13 @@ def _classify_for_filepath(code: str, filepath: str) -> str:
     return classify_usage_proc(code)    # .pc ファイル向け
 ```
 
-**間接参照追跡（C/Pro*C/Kotlin）**:
+**間接参照追跡（C/Pro*C/Kotlin/C#・VB.NET/Groovy）**:
 - C/Pro*C: `#define定数定義` → プロジェクト全体の `.c`/`.h`/`.pc` ファイルを追跡（`track_define()`）
 - C/Pro*C: `変数代入` → 同一ファイル内を追跡（`track_variable()`）
 - Kotlin: `const定数定義` → プロジェクト全体の `.kt`/`.kts` ファイルを追跡（`track_const()`）
+- C#/VB.NET: `const` / `static readonly` 定数定義 → プロジェクト全体の `.cs`/`.vb` ファイルを追跡（`track_const()`）
+- Groovy: `static final` 定数・フィールド → プロジェクト全体の `.groovy`/`.gvy` ファイルを追跡（`track_static_final()`）
+- Groovy: setter経由の代入箇所追跡（`track_setters()`）
 
 ## ユースケース図
 
@@ -571,6 +579,21 @@ python analyze_kotlin.py --source-dir /path/to/kotlin/src
 # PL/SQL
 python analyze_plsql.py --source-dir /path/to/plsql/src
 
+# TypeScript/JavaScript
+python analyze_ts.py --source-dir /path/to/ts/src
+
+# Python
+python analyze_python.py --source-dir /path/to/python/src
+
+# Perl
+python analyze_perl.py --source-dir /path/to/perl/src
+
+# C#/VB.NET
+python analyze_dotnet.py --source-dir /path/to/dotnet/src
+
+# Groovy
+python analyze_groovy.py --source-dir /path/to/groovy/src
+
 # オプション指定（全言語共通）
 python analyze_proc.py --source-dir /path/to/src \
        --input-dir /custom/input \
@@ -656,6 +679,11 @@ TARGET	直接	条件判定	Validator.java	80	if (x.equals("TARGET")) {
 | `tests/test_sql_analyzer.py` | `analyze_sql.py` | SQL E2Eフロー |
 | `tests/test_kotlin_analyzer.py` | `analyze_kotlin.py` | Kotlin E2Eフロー（直接参照 + const val間接参照） |
 | `tests/test_plsql_analyzer.py` | `analyze_plsql.py` | PL/SQL E2Eフロー（直接参照） |
+| `tests/test_ts_analyzer.py` | `analyze_ts.py` | TypeScript/JS E2Eフロー（直接参照） |
+| `tests/test_python_analyzer.py` | `analyze_python.py` | Python E2Eフロー（直接参照） |
+| `tests/test_perl_analyzer.py` | `analyze_perl.py` | Perl E2Eフロー（直接参照） |
+| `tests/test_dotnet_analyzer.py` | `analyze_dotnet.py` | C#/VB.NET E2Eフロー（直接参照 + const/static readonly間接参照） |
+| `tests/test_groovy_analyzer.py` | `analyze_groovy.py` | Groovy E2Eフロー（直接参照 + static final間接参照 + setter追跡） |
 
 ### 統合テスト（E2Eテスト）
 

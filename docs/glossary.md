@@ -212,6 +212,64 @@ someService.process(obj.getType());        // ← Handler.java:55
 
 **PL/SQL（`analyze_plsql.py`）— 7種**: 定数/変数宣言・EXCEPTION処理・条件判定・カーソル定義・INSERT/UPDATE値・WHERE条件・その他
 
+**TypeScript/JavaScript（`analyze_ts.py`）— 7種**:
+
+| 使用タイプ | 内容 | 例 |
+|----------|------|----|
+| const定数定義 | `const NAME = "値"` の定数宣言 | `const CODE = "TARGET"` |
+| 変数代入(let/var) | `let` / `var` による変数への代入 | `let type = "TARGET"` |
+| 条件判定 | `if/else if/while` の条件、`===`/`!==`/`==` 比較 | `if (x === "TARGET")` |
+| return文 | `return "値"` または `return 変数` | `return CODE;` |
+| デコレータ | `@Decorator("値")` またはデコレータ引数 | `@Component("TARGET")` |
+| 関数引数 | 関数・メソッド呼び出しの引数として渡している | `process(CODE)` |
+| その他 | 上記に当てはまらないもの（コメント行・テンプレートリテラルなど） | `// TARGET はここで使う` |
+
+**Python（`analyze_python.py`）— 6種**:
+
+| 使用タイプ | 内容 | 例 |
+|----------|------|----|
+| 変数代入 | 変数への代入 | `code = "TARGET"` |
+| 条件判定 | `if/elif/while` の条件、`==`/`!=`/`in` 比較 | `if x == "TARGET":` |
+| return文 | `return "値"` または `return 変数` | `return CODE` |
+| デコレータ | `@decorator("値")` またはデコレータ引数 | `@route("TARGET")` |
+| 関数引数 | 関数・メソッド呼び出しの引数として渡している | `process(CODE)` |
+| その他 | 上記に当てはまらないもの（コメント行・f-stringなど） | `# TARGET はここで使う` |
+
+**Perl（`analyze_perl.py`）— 6種**:
+
+| 使用タイプ | 内容 | 例 |
+|----------|------|----|
+| use constant定義 | `use constant NAME => "値"` の定数宣言 | `use constant CODE => "TARGET"` |
+| 変数代入 | スカラー/配列/ハッシュへの代入 | `$type = "TARGET"` |
+| 条件判定 | `if/elsif/unless/while` の条件、`eq`/`ne` 比較 | `if ($x eq "TARGET")` |
+| print/say出力 | `print` / `say` の引数として渡している | `print "TARGET\n"` |
+| 関数引数 | サブルーチン呼び出しの引数として渡している | `process(CODE)` |
+| その他 | 上記に当てはまらないもの（コメント行など） | `# TARGET はここで使う` |
+
+**C#/VB.NET（`analyze_dotnet.py`）— 7種**:
+
+| 使用タイプ | 内容 | 例 |
+|----------|------|----|
+| 定数定義(Const/readonly) | `const` または `static readonly` による定数宣言 | `const string CODE = "TARGET"` |
+| 変数代入 | 変数・フィールドへの代入 | `string type = "TARGET"` |
+| 条件判定 | `if/else if/while` の条件、`==`/`!=`/`.Equals()` 比較 | `if (x == "TARGET")` |
+| return文 | `return "値"` または `return 変数` | `return CODE;` |
+| 属性(Attribute) | `[Attribute("値")]` またはアトリビュート引数 | `[Route("TARGET")]` |
+| メソッド引数 | メソッド呼び出しの引数として渡している | `Process(CODE)` |
+| その他 | 上記に当てはまらないもの（コメント行・文字列補間など） | `// TARGET はここで使う` |
+
+**Groovy（`analyze_groovy.py`）— 7種**:
+
+| 使用タイプ | 内容 | 例 |
+|----------|------|----|
+| static final定数定義 | `static final TYPE NAME = "値"` の定数宣言 | `static final String CODE = "TARGET"` |
+| 変数代入 | 変数・フィールドへの代入 | `def type = "TARGET"` |
+| 条件判定 | `if/else if/while` の条件、`==`/`!=`/`.equals()` 比較 | `if (x == "TARGET")` |
+| return文 | `return "値"` または `return 変数` | `return CODE` |
+| アノテーション | `@Annotation("値")` またはアノテーション引数 | `@RequestMapping("TARGET")` |
+| メソッド引数 | メソッド呼び出しの引数として渡している | `process(CODE)` |
+| その他 | 上記に当てはまらないもの（コメント行・GStringなど） | `// TARGET はここで使う` |
+
 **注意**: どの言語でも分類できないものは「その他」として出力する（もれなく優先）
 
 ---
@@ -264,7 +322,7 @@ public String fetchOrderType() { return type; }
 **本プロジェクトでの用途**:
 `analyze_common.detect_encoding()` 内でオプション使用。`pip install chardet` でインストール可能。
 インストールされている場合、ファイル先頭4096バイトを読んで confidence ≥ 0.6 の場合に検出された文字コードを採用する。
-未インストール時は `cp932` にフォールバックする。Kotlin/PL/SQL 等の新言語アナライザーが利用する。
+未インストール時は `cp932` にフォールバックする。Kotlin/PL/SQL/TypeScript・JS/Python/Perl/C#・VB.NET/Groovy 等の新言語アナライザーが利用する。
 
 **関連ドキュメント**: [アーキテクチャ設計書](./architecture.md)
 
