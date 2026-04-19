@@ -1,0 +1,5 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+TARGET	直接	定数/変数宣言	tests/plsql/src/sample.pls	3	v_status CONSTANT VARCHAR2(10) := 'TARGET';			
+TARGET	直接	条件判定	tests/plsql/src/sample.pls	6	IF v_code = 'TARGET' THEN			
+TARGET	直接	WHERE条件	tests/plsql/src/sample.pls	10	SELECT code INTO v_code FROM t WHERE code = 'TARGET';			
+TARGET	直接	INSERT/UPDATE値	tests/plsql/src/sample.pls	12	UPDATE t SET code = 'TARGET' WHERE id = 1;			

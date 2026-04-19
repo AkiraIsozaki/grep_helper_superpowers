@@ -1,0 +1,4 @@
+tests/plsql/src/sample.pls:3:    v_status CONSTANT VARCHAR2(10) := 'TARGET';
+tests/plsql/src/sample.pls:6:    IF v_code = 'TARGET' THEN
+tests/plsql/src/sample.pls:10:    SELECT code INTO v_code FROM t WHERE code = 'TARGET';
+tests/plsql/src/sample.pls:12:    UPDATE t SET code = 'TARGET' WHERE id = 1;
