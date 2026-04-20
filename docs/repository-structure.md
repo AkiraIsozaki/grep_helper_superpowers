@@ -8,6 +8,7 @@
 ├── analyze_common.py    # 全言語共通インフラ（GrepRecord, ProcessStats, parse_grep_line, write_tsv, detect_encoding）
 ├── analyze_c.py         # 純Cアナライザー（正規表現分類）
 ├── analyze_dotnet.py    # C#/VB.NETアナライザー（const/static readonly定数の間接追跡あり）
+├── analyze_all.py       # 全言語対応ディスパッチャー（拡張子/シバン判定 → 各分類器に振り分け）
 ├── analyze_groovy.py    # Groovyアナライザー（static final間接追跡・setter追跡あり）
 ├── analyze_kotlin.py    # Kotlinアナライザー（const val定数の間接追跡あり）
 ├── analyze_perl.py      # Perlアナライザー（直接参照のみ）
