@@ -392,3 +392,76 @@ def _apply_indirect_tracking(
     ))
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="全言語対応ディスパッチャー grep結果 自動分類・使用箇所洗い出しツール"
+    )
+    parser.add_argument("--source-dir", required=True, help="ソースコードのルートディレクトリ")
+    parser.add_argument("--input-dir",  default="input",  help="grep結果ファイルのディレクトリ")
+    parser.add_argument("--output-dir", default="output", help="TSV出力先ディレクトリ")
+    parser.add_argument("--encoding",   default=None,     help="文字コード強制指定（例: utf-8, cp932）")
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    source_dir = Path(args.source_dir)
+    input_dir  = Path(args.input_dir)
+    output_dir = Path(args.output_dir)
+
+    if not source_dir.exists() or not source_dir.is_dir():
+        print(f"エラー: --source-dir が存在しません: {source_dir}", file=sys.stderr)
+        sys.exit(1)
+    if not input_dir.exists() or not input_dir.is_dir():
+        print(f"エラー: --input-dir が存在しません: {input_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    grep_files = sorted(input_dir.glob("*.grep"))
+    if not grep_files:
+        print("エラー: grep結果ファイルがありません", file=sys.stderr)
+        sys.exit(1)
+
+    stats = ProcessStats()
+    processed_files: list[str] = []
+
+    try:
+        for grep_path in grep_files:
+            keyword = grep_path.stem
+            enc = detect_encoding(grep_path, args.encoding)
+            raw_lines = grep_path.read_text(encoding=enc, errors="replace").splitlines()
+
+            direct_records = process_grep_lines_all(
+                raw_lines, keyword, source_dir, stats, args.encoding,
+            )
+            all_records = list(direct_records)
+            all_records.extend(
+                _apply_indirect_tracking(direct_records, source_dir, stats, args.encoding)
+            )
+
+            output_path = output_dir / f"{keyword}.tsv"
+            write_tsv(all_records, output_path)
+            processed_files.append(grep_path.name)
+            direct_count   = len(direct_records)
+            indirect_count = len(all_records) - direct_count
+            print(f"  {grep_path.name} → {output_path} "
+                  f"(直接: {direct_count} 件, 間接: {indirect_count} 件)")
+
+    except Exception as e:
+        print(f"予期しないエラー: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    print("\n--- 処理完了 ---")
+    print(f"処理ファイル: {', '.join(processed_files)}")
+    print(f"総行数: {stats.total_lines}  有効: {stats.valid_lines}"
+          f"  スキップ: {stats.skipped_lines}")
+
+
+if __name__ == "__main__":
+    main()

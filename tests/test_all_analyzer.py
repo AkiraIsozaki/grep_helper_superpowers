@@ -305,5 +305,72 @@ class TestIndirectTracking(unittest.TestCase):
             self.assertEqual(indirect, [])
 
 
+class TestE2EAll(unittest.TestCase):
+    TESTS_DIR = Path(__file__).parent / "all"
+
+    def test_all_input_lines_appear_in_output(self):
+        """全grep行がTSVに含まれること（漏れゼロ確認）。"""
+        src_dir   = self.TESTS_DIR / "src"
+        input_dir = self.TESTS_DIR / "input"
+
+        self.assertTrue(src_dir.exists(), f"src_dir not found: {src_dir}")
+        self.assertTrue(input_dir.exists(), f"input_dir not found: {input_dir}")
+
+        grep_path = input_dir / "TARGET.grep"
+        input_lines = [
+            l for l in grep_path.read_text(encoding="utf-8").splitlines()
+            if l.strip()
+        ]
+        self.assertGreater(len(input_lines), 0)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            stats = aa.ProcessStats()
+            keyword = "TARGET"
+
+            direct_records = aa.process_grep_lines_all(
+                input_lines, keyword, src_dir, stats, None,
+            )
+            all_records = list(direct_records)
+            all_records.extend(
+                aa._apply_indirect_tracking(direct_records, src_dir, stats, None)
+            )
+            output_path = output_dir / "TARGET.tsv"
+            aa.write_tsv(all_records, output_path)
+
+            # すべての直接参照 filepath が出力に含まれる
+            output_filepaths = {r.filepath for r in all_records if r.ref_type == "直接"}
+            for line in input_lines:
+                parsed = aa.parse_grep_line(line)
+                if parsed:
+                    self.assertIn(
+                        parsed["filepath"], output_filepaths,
+                        f"Missing in output: {parsed['filepath']}",
+                    )
+
+    def test_unknown_extension_has_other_usage_type(self):
+        src_dir   = self.TESTS_DIR / "src"
+        input_dir = self.TESTS_DIR / "input"
+        grep_path = input_dir / "TARGET.grep"
+        input_lines = grep_path.read_text(encoding="utf-8").splitlines()
+        stats = aa.ProcessStats()
+        records = aa.process_grep_lines_all(input_lines, "TARGET", src_dir, stats, None)
+        xml_records = [r for r in records if r.filepath.endswith(".xml")]
+        self.assertEqual(len(xml_records), 1)
+        self.assertEqual(xml_records[0].usage_type, "その他")
+
+    def test_no_extension_perl_not_other(self):
+        # Use repo root as src_dir so that "tests/all/src/cleanup" resolves correctly
+        src_dir   = Path(__file__).parent.parent
+        input_dir = self.TESTS_DIR / "input"
+        grep_path = input_dir / "TARGET.grep"
+        input_lines = grep_path.read_text(encoding="utf-8").splitlines()
+        stats = aa.ProcessStats()
+        records = aa.process_grep_lines_all(input_lines, "TARGET", src_dir, stats, None)
+        cleanup_records = [r for r in records if r.filepath.endswith("cleanup")]
+        self.assertEqual(len(cleanup_records), 1)
+        self.assertNotEqual(cleanup_records[0].usage_type, "その他")
+
+
 if __name__ == "__main__":
     unittest.main()

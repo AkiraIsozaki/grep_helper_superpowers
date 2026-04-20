@@ -1,0 +1,5 @@
+tests/all/src/Main.java:2:    static final String THRESHOLD = "TARGET";
+tests/all/src/Service.groovy:3:        if (code == THRESHOLD) { return true }
+tests/all/src/deploy.sh:2:THRESHOLD="TARGET"
+tests/all/src/config.xml:1:<config><value>TARGET</value></config>
+tests/all/src/cleanup:2:my $val = "TARGET";

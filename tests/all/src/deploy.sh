@@ -1,0 +1,3 @@
+#!/bin/sh
+THRESHOLD="TARGET"
+echo $THRESHOLD

@@ -1,0 +1,3 @@
+#!/usr/bin/perl
+my $val = "TARGET";
+print $val;
