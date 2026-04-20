@@ -23,6 +23,9 @@
 | Create | `tests/all/src/config.xml` | Unknown-extension fixture |
 | Create | `tests/all/src/cleanup` | Extension-less Perl fixture |
 | Create | `tests/all/expected/TARGET.tsv` | Expected TSV output |
+| Modify | `README.md` | `analyze_all.py` を対応言語表・実行例に追加 |
+| Modify | `docs/tool-overview.md` | `analyze_all.py` の概要・呼び出し方を追記 |
+| Modify | `docs/repository-structure.md` | `analyze_all.py` エントリを追加 |
 
 ---
 
@@ -1138,6 +1141,60 @@ git commit -m "feat: complete analyze_all.py with main() and E2E tests"
 
 ---
 
+---
+
+## Task 5: Documentation Update
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/tool-overview.md`
+- Modify: `docs/repository-structure.md`
+
+- [ ] **Step 1: Update `README.md`**
+
+In the `## 対応言語` 表に1行追加（表の末尾）:
+
+```markdown
+| 全言語（振り分け） | `analyze_all.py` | ✅ 各言語に準ずる | ✅ 各言語に準ずる |
+```
+
+`## 言語別の実行例` セクション先頭に追加:
+
+```markdown
+# 全言語まとめて処理（推奨）
+python analyze_all.py --source-dir ./src --input-dir input --output-dir output
+```
+
+- [ ] **Step 2: Update `docs/tool-overview.md`**
+
+`analyze_all.py` の説明を追記する。既存ツール一覧の末尾、または「振り分けシェルの代替」として以下の内容を追加:
+
+```markdown
+## analyze_all.py（全言語ディスパッチャー）
+
+grep結果に複数言語のファイルが混在する場合に使用する。1回の実行で全行を処理し、
+ファイル拡張子（または拡張子なしファイルのシバン行）で言語を判定して適切な分類器に振り分ける。
+対応外拡張子（.xml / .yaml / .properties など）は使用タイプ「その他」として出力され、漏れゼロを保証する。
+出力は `output/TARGET.tsv` 1本（既存アナライザーと同形式）。
+```
+
+- [ ] **Step 3: Update `docs/repository-structure.md`**
+
+`analyze_all.py` を `analyze_groovy.py` の次行などに追記:
+
+```
+analyze_all.py          全言語対応ディスパッチャー（拡張子/シバン判定 → 各分類器に振り分け）
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add README.md docs/tool-overview.md docs/repository-structure.md
+git commit -m "docs: document analyze_all.py in README and tool docs"
+```
+
+---
+
 ## Self-Review Notes
 
 **Spec coverage check:**
@@ -1150,6 +1207,7 @@ git commit -m "feat: complete analyze_all.py with main() and E2E tests"
 - ✅ 出力は1本のTSV → `write_tsv()` (Task 4)
 - ✅ CLI引数は既存アナライザーと共通 → `build_parser()` (Task 4)
 - ✅ テスト: 拡張子あり各言語、拡張子なし+シバン、未知拡張子、漏れゼロ確認 → Task 1-4
+- ✅ ドキュメント更新 (README / tool-overview / repository-structure) → Task 5
 
 **Type consistency check:**
 - `process_grep_lines_all` returns `list[GrepRecord]` ✅ consumed by `_apply_indirect_tracking` ✅
