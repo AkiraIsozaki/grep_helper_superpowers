@@ -235,5 +235,75 @@ class TestDirectClassification(unittest.TestCase):
             self.assertEqual(len(records), 0)
 
 
+class TestIndirectTracking(unittest.TestCase):
+
+    def test_groovy_static_final_tracks_indirect(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Const.groovy").write_text(
+                'static final String STATUS = "TARGET"\n'
+            )
+            (src / "Service.groovy").write_text(
+                'if (s == STATUS) { return }\n'
+            )
+            from analyze_common import ProcessStats, GrepRecord, RefType
+            direct = GrepRecord(
+                keyword="TARGET", ref_type=RefType.DIRECT.value,
+                usage_type="static final定数定義",
+                filepath=str(src / "Const.groovy"), lineno="1",
+                code='static final String STATUS = "TARGET"',
+            )
+            stats = ProcessStats()
+            indirect = aa._apply_indirect_tracking([direct], src, stats, None)
+            self.assertTrue(any("Service.groovy" in r.filepath for r in indirect))
+
+    def test_sh_variable_tracks_indirect(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            script = src / "deploy.sh"
+            script.write_text('STATUS="TARGET"\necho $STATUS\n')
+            from analyze_common import ProcessStats, GrepRecord, RefType
+            direct = GrepRecord(
+                keyword="TARGET", ref_type=RefType.DIRECT.value,
+                usage_type="変数代入",
+                filepath=str(script), lineno="1",
+                code='STATUS="TARGET"',
+            )
+            stats = ProcessStats()
+            indirect = aa._apply_indirect_tracking([direct], src, stats, None)
+            self.assertTrue(any("deploy.sh" in r.filepath for r in indirect))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in indirect))
+
+    def test_dotnet_const_tracks_indirect(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Consts.cs").write_text('const string STATUS = "TARGET";\n')
+            (src / "Service.cs").write_text('if (x == STATUS) { return; }\n')
+            from analyze_common import ProcessStats, GrepRecord, RefType
+            direct = GrepRecord(
+                keyword="TARGET", ref_type=RefType.DIRECT.value,
+                usage_type="定数定義(Const/readonly)",
+                filepath=str(src / "Consts.cs"), lineno="1",
+                code='const string STATUS = "TARGET";',
+            )
+            stats = ProcessStats()
+            indirect = aa._apply_indirect_tracking([direct], src, stats, None)
+            self.assertTrue(any("Service.cs" in r.filepath for r in indirect))
+
+    def test_other_language_no_indirect(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            from analyze_common import ProcessStats, GrepRecord, RefType
+            direct = GrepRecord(
+                keyword="TARGET", ref_type=RefType.DIRECT.value,
+                usage_type="その他",
+                filepath=str(src / "config.xml"), lineno="1",
+                code="<value>TARGET</value>",
+            )
+            stats = ProcessStats()
+            indirect = aa._apply_indirect_tracking([direct], src, stats, None)
+            self.assertEqual(indirect, [])
+
+
 if __name__ == "__main__":
     unittest.main()
