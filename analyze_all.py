@@ -62,3 +62,94 @@ def detect_language(filepath: str, source_dir: Path) -> str:
     except Exception:
         pass
     return "other"
+
+
+# ---------------------------------------------------------------------------
+# 分類器インポート
+# ---------------------------------------------------------------------------
+
+import analyze as _java_mod
+from analyze_kotlin  import classify_usage_kotlin
+from analyze_c       import classify_usage_c
+from analyze_proc    import classify_usage_proc
+from analyze_sql     import classify_usage_sql
+from analyze_sh      import classify_usage_sh
+from analyze_ts      import classify_usage_ts
+from analyze_python  import classify_usage_python
+from analyze_perl    import classify_usage_perl
+from analyze_dotnet  import classify_usage_dotnet
+from analyze_groovy  import classify_usage_groovy
+from analyze_plsql   import classify_usage_plsql
+
+_SIMPLE_CLASSIFIERS: dict[str, object] = {
+    "kotlin": classify_usage_kotlin,
+    "c":      classify_usage_c,
+    "proc":   classify_usage_proc,
+    "sql":    classify_usage_sql,
+    "sh":     classify_usage_sh,
+    "ts":     classify_usage_ts,
+    "python": classify_usage_python,
+    "perl":   classify_usage_perl,
+    "dotnet": classify_usage_dotnet,
+    "groovy": classify_usage_groovy,
+    "plsql":  classify_usage_plsql,
+}
+
+
+def _classify_for_lang(
+    lang: str,
+    code: str,
+    filepath: str,
+    lineno: str,
+    source_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+) -> str:
+    """言語キーに対応する classify_usage 関数を呼び出す。"""
+    if lang == "java":
+        _java_mod._encoding_override = encoding
+        return _java_mod.classify_usage(
+            code=code,
+            filepath=filepath,
+            lineno=int(lineno),
+            source_dir=source_dir,
+            stats=stats,
+        )
+    if lang == "other":
+        return "その他"
+    classifier = _SIMPLE_CLASSIFIERS.get(lang)
+    if classifier:
+        return classifier(code)  # type: ignore[call-arg]
+    return "その他"
+
+
+def process_grep_lines_all(
+    lines: list[str],
+    keyword: str,
+    source_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+) -> list[GrepRecord]:
+    """grep行リストを全行パースして直接参照 GrepRecord を返す。"""
+    records: list[GrepRecord] = []
+    for line in lines:
+        stats.total_lines += 1
+        parsed = parse_grep_line(line)
+        if parsed is None:
+            stats.skipped_lines += 1
+            continue
+        lang = detect_language(parsed["filepath"], source_dir)
+        usage_type = _classify_for_lang(
+            lang, parsed["code"], parsed["filepath"],
+            parsed["lineno"], source_dir, stats, encoding,
+        )
+        records.append(GrepRecord(
+            keyword=keyword,
+            ref_type=RefType.DIRECT.value,
+            usage_type=usage_type,
+            filepath=parsed["filepath"],
+            lineno=parsed["lineno"],
+            code=parsed["code"],
+        ))
+        stats.valid_lines += 1
+    return records

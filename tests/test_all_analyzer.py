@@ -153,5 +153,87 @@ class TestDetectLanguage(unittest.TestCase):
         self.assertEqual(aa.detect_language("nonexistent_file", Path("/tmp")), "other")
 
 
+class TestDirectClassification(unittest.TestCase):
+    """各言語の行が正しい usage_type に分類されることを確認する。"""
+
+    def _make_direct_records(self, grep_lines: list[str], source_dir: Path) -> list:
+        from analyze_common import ProcessStats
+        stats = ProcessStats()
+        return aa.process_grep_lines_all(grep_lines, "TEST", source_dir, stats, None)
+
+    def test_java_line_classified(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            records = self._make_direct_records(
+                [f"{src}/Foo.java:10:    static final String X = \"TARGET\""],
+                src,
+            )
+            self.assertEqual(len(records), 1)
+            self.assertIn("定数", records[0].usage_type)
+            self.assertEqual(records[0].ref_type, "直接")
+
+    def test_groovy_line_classified(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            records = self._make_direct_records(
+                [f"{src}/Svc.groovy:5:    if (code == TARGET) {{ return }}"],
+                src,
+            )
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].usage_type, "条件判定")
+
+    def test_sh_line_classified(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            records = self._make_direct_records(
+                [f"{src}/run.sh:3:TARGET=\"777\""],
+                src,
+            )
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].usage_type, "変数代入")
+
+    def test_unknown_extension_is_other(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            records = self._make_direct_records(
+                [f"{src}/config.xml:1:<value>TARGET</value>"],
+                src,
+            )
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0].usage_type, "その他")
+            self.assertEqual(records[0].ref_type, "直接")
+
+    def test_no_extension_perl_shebang_classified(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            script = src / "cleanup"
+            script.write_text("#!/usr/bin/perl\nmy $x = TARGET;\n")
+            records = self._make_direct_records(
+                [f"{src}/cleanup:2:my $x = TARGET;"],
+                src,
+            )
+            self.assertEqual(len(records), 1)
+            # Perl classifies assignment as "変数代入" or similar — just not "その他"
+            self.assertNotEqual(records[0].usage_type, "その他")
+
+    def test_invalid_grep_line_skipped(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            records = self._make_direct_records(
+                ["not a valid grep line"],
+                src,
+            )
+            self.assertEqual(len(records), 0)
+
+    def test_binary_line_skipped(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            records = self._make_direct_records(
+                ["Binary file src/app.bin matches"],
+                src,
+            )
+            self.assertEqual(len(records), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
