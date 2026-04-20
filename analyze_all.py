@@ -68,6 +68,8 @@ def detect_language(filepath: str, source_dir: Path) -> str:
 # 分類器インポート
 # ---------------------------------------------------------------------------
 
+from collections.abc import Callable
+
 import analyze as _java_mod
 from analyze_kotlin  import classify_usage_kotlin
 from analyze_c       import classify_usage_c
@@ -81,7 +83,7 @@ from analyze_dotnet  import classify_usage_dotnet
 from analyze_groovy  import classify_usage_groovy
 from analyze_plsql   import classify_usage_plsql
 
-_SIMPLE_CLASSIFIERS: dict[str, object] = {
+_SIMPLE_CLASSIFIERS: dict[str, Callable[[str], str]] = {
     "kotlin": classify_usage_kotlin,
     "c":      classify_usage_c,
     "proc":   classify_usage_proc,
@@ -106,6 +108,7 @@ def _classify_for_lang(
     encoding: str | None,
 ) -> str:
     """言語キーに対応する classify_usage 関数を呼び出す。"""
+    # NOTE: _encoding_override is a module global in analyze.py — not thread-safe.
     if lang == "java":
         _java_mod._encoding_override = encoding
         return _java_mod.classify_usage(
@@ -119,7 +122,7 @@ def _classify_for_lang(
         return "その他"
     classifier = _SIMPLE_CLASSIFIERS.get(lang)
     if classifier:
-        return classifier(code)  # type: ignore[call-arg]
+        return classifier(code)
     return "その他"
 
 
