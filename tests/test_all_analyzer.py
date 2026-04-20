@@ -348,6 +348,12 @@ class TestE2EAll(unittest.TestCase):
                         f"Missing in output: {parsed['filepath']}",
                     )
 
+            # extension-less Perl file must not fall back to "other"
+            cleanup_records = [r for r in all_records if r.ref_type == "直接" and r.filepath.endswith("cleanup")]
+            if cleanup_records:
+                self.assertNotEqual(cleanup_records[0].usage_type, "その他",
+                    "cleanup file (Perl shebang) was classified as 'other' — shebang detection failed")
+
     def test_unknown_extension_has_other_usage_type(self):
         src_dir   = self.TESTS_DIR / "src"
         input_dir = self.TESTS_DIR / "input"

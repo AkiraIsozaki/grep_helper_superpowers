@@ -47,13 +47,17 @@ def detect_language(filepath: str, source_dir: Path) -> str:
     if ext:
         return _EXT_TO_LANG.get(ext, "other")
 
-    # 拡張子なし: source_dir からシバン判定
-    candidate = source_dir / filepath
-    if not candidate.exists():
-        p = Path(filepath)
-        candidate = p if p.is_absolute() and p.exists() else None
-        if candidate is None:
-            return "other"
+    # 拡張子なし: CWD相対 → source_dir相対の順でシバン判定
+    p = Path(filepath)
+    if p.is_absolute():
+        candidate = p if p.exists() else None
+    elif p.exists():
+        candidate = p
+    else:
+        resolved = source_dir / filepath
+        candidate = resolved if resolved.exists() else None
+    if candidate is None:
+        return "other"
     try:
         first_line = candidate.read_text(encoding="utf-8", errors="replace").splitlines()[0]
         m = _SHEBANG_PAT.match(first_line)
@@ -170,6 +174,9 @@ from analyze import (
 )
 from analyze import _resolve_java_file  # type: ignore[attr-defined]
 from analyze import _get_method_scope   # type: ignore[attr-defined]
+from analyze import _batch_track_constants  # type: ignore[attr-defined]
+from analyze import _batch_track_getters    # type: ignore[attr-defined]
+from analyze import _batch_track_setters    # type: ignore[attr-defined]
 
 # Kotlin
 from analyze_kotlin import track_const as _track_const_kotlin
@@ -377,13 +384,10 @@ def _apply_indirect_tracking(
 
     # Java バッチ処理（プロジェクト全体を各1パスでスキャン）
     if java_project_tasks:
-        from analyze import _batch_track_constants  # type: ignore[attr-defined]
         result.extend(_batch_track_constants(java_project_tasks, source_dir, stats))
     if java_getter_tasks:
-        from analyze import _batch_track_getters  # type: ignore[attr-defined]
         result.extend(_batch_track_getters(java_getter_tasks, source_dir, stats))
     if java_setter_tasks:
-        from analyze import _batch_track_setters  # type: ignore[attr-defined]
         result.extend(_batch_track_setters(java_setter_tasks, source_dir, stats))
 
     # Groovy getter/setter バッチ処理
