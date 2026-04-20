@@ -165,11 +165,11 @@ def process_grep_lines_all(
 # Java
 from analyze import (
     UsageType, extract_variable_name, determine_scope,
-    track_constant, track_field, track_local,
+    track_field, track_local,
     find_getter_names, find_setter_names,
-    track_getter_calls, track_setter_calls,
 )
 from analyze import _resolve_java_file  # type: ignore[attr-defined]
+from analyze import _get_method_scope   # type: ignore[attr-defined]
 
 # Kotlin
 from analyze_kotlin import track_const as _track_const_kotlin
@@ -274,7 +274,6 @@ def _apply_indirect_tracking(
                     for s in find_setter_names(var_name, class_file):
                         java_setter_tasks.setdefault(s, []).append(record)
             elif scope == "method":
-                from analyze import _get_method_scope  # type: ignore[attr-defined]
                 method_scope = _get_method_scope(record.filepath, source_dir, int(record.lineno))
                 if method_scope:
                     result.extend(track_local(var_name, method_scope, record, source_dir, stats))
@@ -376,16 +375,16 @@ def _apply_indirect_tracking(
 
         # ts / python / perl / plsql / other: 間接追跡なし
 
-    # Java バッチ処理
-    for var_name, origins in java_project_tasks.items():
-        for origin in origins:
-            result.extend(track_constant(var_name, source_dir, origin, stats))
-    for getter_name, origins in java_getter_tasks.items():
-        for origin in origins:
-            result.extend(track_getter_calls(getter_name, source_dir, origin, stats))
-    for setter_name, origins in java_setter_tasks.items():
-        for origin in origins:
-            result.extend(track_setter_calls(setter_name, source_dir, origin, stats))
+    # Java バッチ処理（プロジェクト全体を各1パスでスキャン）
+    if java_project_tasks:
+        from analyze import _batch_track_constants  # type: ignore[attr-defined]
+        result.extend(_batch_track_constants(java_project_tasks, source_dir, stats))
+    if java_getter_tasks:
+        from analyze import _batch_track_getters  # type: ignore[attr-defined]
+        result.extend(_batch_track_getters(java_getter_tasks, source_dir, stats))
+    if java_setter_tasks:
+        from analyze import _batch_track_setters  # type: ignore[attr-defined]
+        result.extend(_batch_track_setters(java_setter_tasks, source_dir, stats))
 
     # Groovy getter/setter バッチ処理
     result.extend(_batch_track_getter_setter_groovy(
