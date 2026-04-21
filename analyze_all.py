@@ -185,18 +185,19 @@ from analyze_kotlin import track_const as _track_const_kotlin
 from analyze_c import (
     extract_define_name as _extract_define_name_c,
     extract_variable_name_c,
-    track_define as _track_define_c,
     track_variable as _track_variable_c,
+    _collect_define_aliases,
 )
+from analyze_c import _build_define_map as _build_define_map_c  # type: ignore[attr-defined]
 
 # Pro*C
 from analyze_proc import (
     extract_define_name as _extract_define_name_proc,
     extract_variable_name_proc,
     extract_host_var_name,
-    track_define as _track_define_proc,
     track_variable as _track_variable_proc,
 )
+from analyze_proc import _build_define_map as _build_define_map_proc  # type: ignore[attr-defined]
 
 # Shell
 from analyze_sh import extract_sh_variable_name, track_sh_variable
@@ -205,13 +206,13 @@ from analyze_sh import extract_sh_variable_name, track_sh_variable
 from analyze_sql import extract_sql_variable_name, track_sql_variable
 
 # .NET
-from analyze_dotnet import extract_const_name_dotnet, track_const_dotnet
+from analyze_dotnet import extract_const_name_dotnet
 
 # Groovy
 from analyze_groovy import (
     extract_static_final_name, is_class_level_field,
     find_getter_names_groovy, find_setter_names_groovy,
-    track_static_final_groovy, track_field_groovy,
+    track_field_groovy,
     _batch_track_getter_setter_groovy,  # type: ignore[attr-defined]
 )
 
@@ -227,12 +228,256 @@ def _resolve_file(filepath: str, source_dir: Path) -> Path | None:
     return resolved if resolved.exists() else None
 
 
+_file_cache_all: dict[str, list[str]] = {}
+_MAX_FILE_CACHE_ALL = 800
+
+
 def _read_lines(filepath: Path, encoding: str | None) -> list[str]:
+    key = str(filepath)
+    if key in _file_cache_all:
+        return _file_cache_all[key]
+    if len(_file_cache_all) >= _MAX_FILE_CACHE_ALL:
+        _file_cache_all.pop(next(iter(_file_cache_all)))
     enc = detect_encoding(filepath, encoding)
     try:
-        return filepath.read_text(encoding=enc, errors="replace").splitlines()
+        _file_cache_all[key] = filepath.read_text(encoding=enc, errors="replace").splitlines()
     except Exception:
+        _file_cache_all[key] = []
+    return _file_cache_all[key]
+
+
+def _batch_track_kotlin_const(
+    tasks: dict[str, list[GrepRecord]],
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+) -> list[GrepRecord]:
+    """Kotlin const val をプロジェクト全体に対して1パスでバッチスキャンする。"""
+    if not tasks:
         return []
+    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
+    results: list[GrepRecord] = []
+    src_files = sorted(src_dir.rglob("*.kt")) + sorted(src_dir.rglob("*.kts"))
+    for src_file in src_files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        lines = _read_lines(src_file, encoding)
+        for i, line in enumerate(lines, 1):
+            for m in combined.finditer(line):
+                name = m.group(1)
+                for origin in tasks[name]:
+                    def_path = _resolve_file(origin.filepath, src_dir)
+                    if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_kotlin(line.strip()),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=line.strip(),
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
+def _batch_track_dotnet_const(
+    tasks: dict[str, list[GrepRecord]],
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+) -> list[GrepRecord]:
+    """.NET const/static readonly をプロジェクト全体に対して1パスでバッチスキャンする。"""
+    if not tasks:
+        return []
+    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
+    results: list[GrepRecord] = []
+    src_files: list[Path] = []
+    for ext in (".cs", ".vb"):
+        src_files.extend(sorted(src_dir.rglob(f"*{ext}")))
+    for src_file in src_files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        lines = _read_lines(src_file, encoding)
+        for i, line in enumerate(lines, 1):
+            for m in combined.finditer(line):
+                name = m.group(1)
+                for origin in tasks[name]:
+                    def_path = _resolve_file(origin.filepath, src_dir)
+                    if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_dotnet(line.strip()),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=line.strip(),
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
+def _batch_track_groovy_static_final(
+    tasks: dict[str, list[GrepRecord]],
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+) -> list[GrepRecord]:
+    """Groovy static final 定数をプロジェクト全体に対して1パスでバッチスキャンする。"""
+    if not tasks:
+        return []
+    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
+    results: list[GrepRecord] = []
+    src_files: list[Path] = []
+    for ext in (".groovy", ".gvy"):
+        src_files.extend(sorted(src_dir.rglob(f"*{ext}")))
+    for src_file in src_files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        lines = _read_lines(src_file, encoding)
+        for i, line in enumerate(lines, 1):
+            for m in combined.finditer(line):
+                name = m.group(1)
+                for origin in tasks[name]:
+                    def_path = _resolve_file(origin.filepath, src_dir)
+                    if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_groovy(line.strip()),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=line.strip(),
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
+def _batch_track_define_c_all(
+    tasks: dict[str, list[GrepRecord]],
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+) -> list[GrepRecord]:
+    """C #define をエイリアス解決込みで1パスでバッチスキャンする。"""
+    if not tasks:
+        return []
+    define_map = _build_define_map_c(src_dir, stats, encoding)
+
+    # scan_tasks: {scan_name: [(is_primary, var_name, origin_record)]}
+    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord]]] = {}
+    for var_name, records in tasks.items():
+        aliases = _collect_define_aliases(var_name, define_map)
+        for scan_name in [var_name] + aliases:
+            is_primary = (scan_name == var_name)
+            for record in records:
+                scan_tasks.setdefault(scan_name, []).append((is_primary, var_name, record))
+
+    if not scan_tasks:
+        return []
+
+    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in scan_tasks) + r')\b')
+    results: list[GrepRecord] = []
+    src_files = (sorted(src_dir.rglob("*.c"))
+                 + sorted(src_dir.rglob("*.h"))
+                 + sorted(src_dir.rglob("*.pc")))
+    for src_file in src_files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        lines = _read_lines(src_file, encoding)
+        for i, line in enumerate(lines, 1):
+            for m in combined.finditer(line):
+                scan_name = m.group(1)
+                for is_primary, _var_name, origin in scan_tasks[scan_name]:
+                    if is_primary:
+                        def_path = _resolve_file(origin.filepath, src_dir)
+                        if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                            continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_c(line.strip()),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=line.strip(),
+                        src_var=scan_name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
+def _batch_track_define_proc_all(
+    tasks: dict[str, list[GrepRecord]],
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+) -> list[GrepRecord]:
+    """Pro*C #define をエイリアス解決込みで1パスでバッチスキャンする。"""
+    if not tasks:
+        return []
+    define_map = _build_define_map_proc(src_dir, stats, encoding)
+
+    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord]]] = {}
+    for var_name, records in tasks.items():
+        aliases = _collect_define_aliases(var_name, define_map)
+        for scan_name in [var_name] + aliases:
+            is_primary = (scan_name == var_name)
+            for record in records:
+                scan_tasks.setdefault(scan_name, []).append((is_primary, var_name, record))
+
+    if not scan_tasks:
+        return []
+
+    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in scan_tasks) + r')\b')
+    results: list[GrepRecord] = []
+    src_files = (sorted(src_dir.rglob("*.pc"))
+                 + sorted(src_dir.rglob("*.c"))
+                 + sorted(src_dir.rglob("*.h")))
+    for src_file in src_files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        lines = _read_lines(src_file, encoding)
+        ext = src_file.suffix.lower()
+        for i, line in enumerate(lines, 1):
+            for m in combined.finditer(line):
+                scan_name = m.group(1)
+                for is_primary, _var_name, origin in scan_tasks[scan_name]:
+                    if is_primary:
+                        def_path = _resolve_file(origin.filepath, src_dir)
+                        if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                            continue
+                    usage = classify_usage_c(line.strip()) if ext in (".c", ".h") else classify_usage_proc(line.strip())
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=usage,
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=line.strip(),
+                        src_var=scan_name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
 
 
 def _apply_indirect_tracking(
@@ -244,12 +489,15 @@ def _apply_indirect_tracking(
     """直接参照レコードから言語別間接追跡を行い、追加レコードを返す。"""
     result: list[GrepRecord] = []
 
-    # Java バッチ集積用
+    # バッチ集積用（各言語・追跡種別）
     java_project_tasks: dict[str, list[GrepRecord]] = {}
     java_getter_tasks:  dict[str, list[GrepRecord]] = {}
     java_setter_tasks:  dict[str, list[GrepRecord]] = {}
-
-    # Groovy getter/setter バッチ集積用
+    kotlin_const_tasks: dict[str, list[GrepRecord]] = {}
+    c_define_tasks:     dict[str, list[GrepRecord]] = {}
+    proc_define_tasks:  dict[str, list[GrepRecord]] = {}
+    dotnet_const_tasks: dict[str, list[GrepRecord]] = {}
+    groovy_sf_tasks:    dict[str, list[GrepRecord]] = {}
     groovy_getter_tasks: dict[str, list[GrepRecord]] = {}
     groovy_setter_tasks: dict[str, list[GrepRecord]] = {}
 
@@ -290,16 +538,14 @@ def _apply_indirect_tracking(
             if record.usage_type == "const val定数定義":
                 m = re.search(r'\bconst\s+val\s+(\w+)', record.code)
                 if m:
-                    result.extend(_track_const_kotlin(
-                        m.group(1), source_dir, record, stats, encoding,
-                    ))
+                    kotlin_const_tasks.setdefault(m.group(1), []).append(record)
 
         # ── C ─────────────────────────────────────────────────────────────
         elif lang == "c":
             if record.usage_type == "#define定数定義":
                 var_name = _extract_define_name_c(record.code)
                 if var_name:
-                    result.extend(_track_define_c(var_name, source_dir, record, stats, encoding))
+                    c_define_tasks.setdefault(var_name, []).append(record)
             elif record.usage_type == "変数代入":
                 var_name = extract_variable_name_c(record.code)
                 if var_name:
@@ -315,7 +561,7 @@ def _apply_indirect_tracking(
             if record.usage_type == "#define定数定義":
                 var_name = _extract_define_name_proc(record.code)
                 if var_name:
-                    result.extend(_track_define_proc(var_name, source_dir, record, stats, encoding))
+                    proc_define_tasks.setdefault(var_name, []).append(record)
             elif record.usage_type == "変数代入":
                 var_name = extract_variable_name_proc(record.code) or extract_host_var_name(record.code)
                 if var_name:
@@ -355,16 +601,14 @@ def _apply_indirect_tracking(
             if record.usage_type == "定数定義(Const/readonly)":
                 const_name = extract_const_name_dotnet(record.code)
                 if const_name:
-                    result.extend(track_const_dotnet(const_name, source_dir, record, stats, encoding))
+                    dotnet_const_tasks.setdefault(const_name, []).append(record)
 
         # ── Groovy ────────────────────────────────────────────────────────
         elif lang == "groovy":
             if record.usage_type == "static final定数定義":
                 const_name = extract_static_final_name(record.code)
                 if const_name:
-                    result.extend(track_static_final_groovy(
-                        const_name, source_dir, record, stats, encoding,
-                    ))
+                    groovy_sf_tasks.setdefault(const_name, []).append(record)
             elif record.usage_type == "変数代入" and is_class_level_field(record.code):
                 m = re.search(r'(\w+)\s*[=;]', record.code.strip())
                 if m:
@@ -389,6 +633,13 @@ def _apply_indirect_tracking(
         result.extend(_batch_track_getters(java_getter_tasks, source_dir, stats))
     if java_setter_tasks:
         result.extend(_batch_track_setters(java_setter_tasks, source_dir, stats))
+
+    # Kotlin / .NET / Groovy static final / C #define / Pro*C #define バッチ処理
+    result.extend(_batch_track_kotlin_const(kotlin_const_tasks, source_dir, stats, encoding))
+    result.extend(_batch_track_dotnet_const(dotnet_const_tasks, source_dir, stats, encoding))
+    result.extend(_batch_track_groovy_static_final(groovy_sf_tasks, source_dir, stats, encoding))
+    result.extend(_batch_track_define_c_all(c_define_tasks, source_dir, stats, encoding))
+    result.extend(_batch_track_define_proc_all(proc_define_tasks, source_dir, stats, encoding))
 
     # Groovy getter/setter バッチ処理
     result.extend(_batch_track_getter_setter_groovy(
