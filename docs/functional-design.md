@@ -2,7 +2,7 @@
 
 ## システム構成図
 
-### Java（analyze.py）— 3段階分析
+### Java（analyze.py）— 4段階分析
 
 ```mermaid
 graph TB
@@ -80,6 +80,7 @@ class RefType(Enum):
     DIRECT = "直接"
     INDIRECT = "間接"
     GETTER = "間接（getter経由）"
+    SETTER = "間接（setter経由）"
 
 class UsageType(Enum):
     ANNOTATION = "アノテーション"
@@ -105,7 +106,7 @@ class GrepRecord(NamedTuple):
 **制約**:
 - `NamedTuple` でイミュータブルに保つ
 - 直接参照の場合 `src_var` / `src_file` / `src_lineno` は空文字列
-- `ref_type` の取りうる値: `直接` / `間接` / `間接（getter経由）`
+- `ref_type` の取りうる値: `直接` / `間接` / `間接（getter経由）` / `間接（setter経由）`
 - `usage_type` の取りうる値: 7種のいずれか（分類不能時は `その他`）
 
 ### エンティティ: ProcessStats（処理レポート用）
@@ -134,7 +135,7 @@ erDiagram
     }
     GREP_RECORD {
         string keyword    "文言"
-        string ref_type   "直接/間接/間接（getter経由）"
+        string ref_type   "直接/間接/間接（getter経由）/間接（setter経由）"
         string usage_type "7種の使用タイプ"
         string filepath   "該当ファイルパス"
         string lineno     "該当行番号"
@@ -319,7 +320,7 @@ def write_tsv(records: list[GrepRecord], output_path: Path) -> None:
 | 列名 | GrepRecordフィールド | 備考 |
 |------|---------------------|------|
 | 文言 | `keyword` | 入力ファイル名から取得 |
-| 参照種別 | `ref_type` | 直接/間接/間接（getter経由） |
+| 参照種別 | `ref_type` | 直接/間接/間接（getter経由）/間接（setter経由） |
 | 使用タイプ | `usage_type` | 7種のいずれか |
 | ファイルパス | `filepath` | 該当行のファイルパス |
 | 行番号 | `lineno` | 該当行の行番号 |

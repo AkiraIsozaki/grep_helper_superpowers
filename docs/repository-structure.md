@@ -91,6 +91,7 @@
 │   │   ├── input/
 │   │   ├── src/
 │   │   └── expected/
+│   ├── test_all_analyzer.py
 │   ├── test_c_analyzer.py
 │   ├── test_common.py
 │   ├── test_dotnet_analyzer.py
@@ -314,6 +315,7 @@
 
 **言語別テストファイル（`tests/` 直下）**:
 - `test_common.py`: `analyze_common` のユニットテスト
+- `test_all_analyzer.py`: `analyze_all` のE2E統合テスト（多言語混在フィクスチャ使用）
 - `test_c_analyzer.py`: `analyze_c` のE2E統合テスト
 - `test_sh_analyzer.py`: `analyze_sh` のE2E統合テスト
 - `test_sql_analyzer.py`: `analyze_sql` のE2E統合テスト
@@ -375,10 +377,13 @@ tests/
 │   ├── input/         # TARGET.grep
 │   ├── src/           # sample.cs
 │   └── expected/      # TARGET.tsv
-└── groovy/            # Groovy（test_groovy_analyzer.py用）
-    ├── input/         # TARGET.grep
-    ├── src/           # sample.groovy
-    └── expected/      # TARGET.tsv
+├── groovy/            # Groovy（test_groovy_analyzer.py用）
+│   ├── input/         # TARGET.grep
+│   ├── src/           # sample.groovy
+│   └── expected/      # TARGET.tsv
+└── all/               # 全言語ディスパッチャー（test_all_analyzer.py用）
+    ├── input/         # TARGET.grep（複数言語混在）
+    └── src/           # Main.java, Service.groovy, deploy.sh, config.xml, cleanup（シバン付き）
 ```
 
 **運用ルール**:
@@ -541,6 +546,7 @@ clean:
 |-----------|--------|---------|-----|
 | Java・Pro*Cユニット/統合テスト | プロジェクトルート | `test_[対象モジュール].py` | `test_analyze.py`, `test_analyze_proc.py` |
 | C/SQL/Shell/Kotlin/PL/SQL/TS・JS/Python/Perl/C#・VB.NET/Groovyアナライザーテスト | `tests/` | `test_[言語]_analyzer.py` | `test_c_analyzer.py`, `test_kotlin_analyzer.py`, `test_plsql_analyzer.py`, `test_ts_analyzer.py`, `test_python_analyzer.py`, `test_perl_analyzer.py`, `test_dotnet_analyzer.py`, `test_groovy_analyzer.py` |
+| 全言語ディスパッチャーテスト | `tests/` | `test_all_analyzer.py` | - |
 | 共通インフラテスト | `tests/` | `test_common.py` | - |
 | フィクスチャ（入力・期待値） | `tests/[言語]/` | 言語別サブディレクトリ | `tests/c/`, `tests/proc/` |
 

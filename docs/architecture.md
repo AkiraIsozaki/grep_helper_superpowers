@@ -43,9 +43,10 @@
 │   (CLIパース・ファイル読込)│   grep結果ファイルを読み込み
 ├─────────────────────────┤
 │   分析レイヤー           │ ← 言語ごとに異なる（analyze.py / analyze_c.py / ...）
-│   (言語別分類・追跡)    │   Java: 3段階（直接→間接→getter）
-│                         │   C/Pro*C/Kotlin: 2段階（直接 + #define/const定数経由の間接）
-│                         │   SQL/Shell/PL/SQL: 1段階（直接のみ）
+│   (言語別分類・追跡)    │   Java/Groovy: 4段階（直接→間接→getter経由→setter経由）
+│                         │   C/Pro*C/Kotlin/C#・VB.NET: 2段階（直接 + 定数・変数経由の間接）
+│                         │   Shell/SQL: 2段階（直接 + 同一ファイル内変数代入の間接）
+│                         │   PL/SQL/TypeScript・JS/Python/Perl: 1段階（直接のみ）
 ├─────────────────────────┤
 │   出力レイヤー           │ ← write_tsv（analyze_common）
 │   (TSV出力・レポート)   │   結果をTSVに書き出しレポート表示
@@ -62,7 +63,8 @@
 - **Java（`analyze.py`）**: Javaソースファイルの読み込み・AST解析、ASTキャッシュの利用、3段階分析
 - **C（`analyze_c.py`）**: 正規表現による分類、#define定数の間接追跡
 - **Pro*C（`analyze_proc.py`）**: 拡張子ベースのディスパッチ、#define定数 + ホスト変数の間接追跡
-- **SQL/Shell（`analyze_sql.py`, `analyze_sh.py`）**: 正規表現による直接参照のみ分類
+- **SQL（`analyze_sql.py`）**: 正規表現による分類、`定数・変数定義` 行から変数名を抽出して同一ファイル内を間接追跡
+- **Shell（`analyze_sh.py`）**: 正規表現による分類、`変数代入` / `環境変数エクスポート` 行から変数名を抽出して同一ファイル内を間接追跡（`$VAR` / `${VAR}` パターン）
 - **Kotlin（`analyze_kotlin.py`）**: 正規表現による分類、const val定数のプロジェクト全体追跡
 - **PL/SQL（`analyze_plsql.py`）**: 正規表現による直接参照のみ分類
 - **TypeScript/JavaScript（`analyze_ts.py`）**: 正規表現による直接参照のみ分類（`.ts`/`.tsx`/`.js`/`.jsx`）
@@ -75,7 +77,7 @@
 - **責務**: 全レコードのソート、UTF-8 BOM付きTSV出力、処理サマリの標準出力表示
 - **外部ソート**: レコード数 < 100万件 → インメモリソート。100万件以上 → 50万件ごとにチャンクファイルを作成し `heapq.merge` でマージ
 
-### Java 3段階分析フロー
+### Java/Groovy 4段階分析フロー
 
 ```
 第1段階（直接参照）
@@ -93,9 +95,15 @@
   └── クラス内でgetter候補を特定（命名規則 + return文解析）
   └── プロジェクト全体でgetter呼び出しを追跡
   └── 参照種別 = 間接（getter経由）
+
+第4段階（setter経由）
+  └── 第2段階のフィールド追跡後に実施
+  └── クラス内でsetter候補を特定（命名規則 + this.field=引数の解析）
+  └── プロジェクト全体でsetter呼び出しを追跡
+  └── 参照種別 = 間接（setter経由）
 ```
 
-**注意**: GetterTracker（第3段階）は IndirectTracker（第2段階）のフィールド追跡完了後にのみ起動する。第2段階と並列実行は不可。
+**注意**: GetterTracker/SetterTracker（第3・第4段階）は IndirectTracker（第2段階）のフィールド追跡完了後にのみ起動する。第2段階と並列実行は不可。Groovy は正規表現で同等の4段階分析を実施する。
 
 ## データ永続化戦略
 
