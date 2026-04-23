@@ -24,6 +24,7 @@ from analyze_common import (
     detect_encoding,
     parse_grep_line,
     write_tsv,
+    grep_filter_files,
 )
 
 # 文字コードオーバーライド（--encoding CLIオプションで設定される）
@@ -60,7 +61,7 @@ class UsageType(Enum):
 # ---------------------------------------------------------------------------
 
 # キャッシュ上限（大規模プロジェクトでのOOM防止）
-_MAX_AST_CACHE_SIZE = 300    # ASTオブジェクトは大きいため厳しめ
+_MAX_AST_CACHE_SIZE = 2000   # 60GB規模のソースに対応（~2-6GB使用。メモリ不足時は500〜1000に調整）
 _MAX_FILE_CACHE_SIZE = 800   # ファイル行キャッシュの最大エントリ数
 
 # None = javalang パースエラーが発生したファイル（フォールバック対象）
@@ -932,21 +933,29 @@ def _batch_track_constants(
     tasks: dict[str, list[GrepRecord]],
     source_dir: Path,
     stats: ProcessStats,
+    file_list: list[Path] | None = None,
 ) -> list[GrepRecord]:
     """複数の定数をプロジェクト全体で一括追跡する。
 
-    個別に track_constant() を呼ぶと O(N_定数 × N_ファイル) になるところを、
-    組み合わせ正規表現で1パスに削減する。
+    file_list が指定された場合はそのリストをスキャン対象にする（rglob 共有）。
     """
     if not tasks:
         return []
+
+    java_files = file_list if file_list is not None else grep_filter_files(
+        list(tasks.keys()), source_dir, [".java"], label="Java定数追跡",
+    )
 
     combined = re.compile(
         r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\b"
     )
     records: list[GrepRecord] = []
+    total = len(java_files)
 
-    for java_file in _get_java_files(source_dir):
+    for idx, java_file in enumerate(java_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [Java定数追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         filepath_abs = str(java_file)
         try:
             filepath_str = str(java_file.relative_to(source_dir))
@@ -962,7 +971,6 @@ def _batch_track_constants(
                 origins = tasks.get(matched_name)
                 if not origins:
                     continue
-
                 code = line.strip()
                 usage_type = classify_usage(
                     code=code,
@@ -973,7 +981,7 @@ def _batch_track_constants(
                 )
                 for origin in origins:
                     if filepath_str == origin.filepath and str(i) == origin.lineno:
-                        continue  # 定義行はスキップ
+                        continue
                     records.append(GrepRecord(
                         keyword=origin.keyword,
                         ref_type=RefType.INDIRECT.value,
@@ -986,6 +994,7 @@ def _batch_track_constants(
                         src_lineno=origin.lineno,
                     ))
 
+    print(f"  [Java定数追跡] 完了: {total} ファイルスキャン / 参照 {len(records)} 件発見", file=sys.stderr, flush=True)
     return records
 
 
@@ -993,21 +1002,29 @@ def _batch_track_getters(
     tasks: dict[str, list[GrepRecord]],
     source_dir: Path,
     stats: ProcessStats,
+    file_list: list[Path] | None = None,
 ) -> list[GrepRecord]:
     """複数のgetterをプロジェクト全体で一括追跡する。
 
-    個別に track_getter_calls() を呼ぶと O(N_getter × N_ファイル) になるところを、
-    組み合わせ正規表現で1パスに削減する。
+    file_list が指定された場合はそのリストをスキャン対象にする（rglob 共有）。
     """
     if not tasks:
         return []
+
+    java_files = file_list if file_list is not None else grep_filter_files(
+        list(tasks.keys()), source_dir, [".java"], label="Javaゲッター追跡",
+    )
 
     combined = re.compile(
         r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\s*\("
     )
     records: list[GrepRecord] = []
+    total = len(java_files)
 
-    for java_file in _get_java_files(source_dir):
+    for idx, java_file in enumerate(java_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [Javaゲッター追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         filepath_abs = str(java_file)
         try:
             filepath_str = str(java_file.relative_to(source_dir))
@@ -1023,7 +1040,6 @@ def _batch_track_getters(
                 origins = tasks.get(getter_name)
                 if not origins:
                     continue
-
                 code = line.strip()
                 usage_type = classify_usage(
                     code=code,
@@ -1045,6 +1061,7 @@ def _batch_track_getters(
                         src_lineno=origin.lineno,
                     ))
 
+    print(f"  [Javaゲッター追跡] 完了: {total} ファイルスキャン / 参照 {len(records)} 件発見", file=sys.stderr, flush=True)
     return records
 
 
@@ -1052,17 +1069,29 @@ def _batch_track_setters(
     tasks: dict[str, list[GrepRecord]],
     source_dir: Path,
     stats: ProcessStats,
+    file_list: list[Path] | None = None,
 ) -> list[GrepRecord]:
-    """複数のsetterをプロジェクト全体で一括追跡する（getterバッチと同じ方式）。"""
+    """複数のsetterをプロジェクト全体で一括追跡する。
+
+    file_list が指定された場合はそのリストをスキャン対象にする（rglob 共有）。
+    """
     if not tasks:
         return []
+
+    java_files = file_list if file_list is not None else grep_filter_files(
+        list(tasks.keys()), source_dir, [".java"], label="Javaセッター追跡",
+    )
 
     combined = re.compile(
         r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\s*\("
     )
     records: list[GrepRecord] = []
+    total = len(java_files)
 
-    for java_file in _get_java_files(source_dir):
+    for idx, java_file in enumerate(java_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [Javaセッター追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         filepath_abs = str(java_file)
         try:
             filepath_str = str(java_file.relative_to(source_dir))
@@ -1078,7 +1107,6 @@ def _batch_track_setters(
                 origins = tasks.get(setter_name)
                 if not origins:
                     continue
-
                 code = line.strip()
                 usage_type = classify_usage(
                     code=code,
@@ -1100,6 +1128,7 @@ def _batch_track_setters(
                         src_lineno=origin.lineno,
                     ))
 
+    print(f"  [Javaセッター追跡] 完了: {total} ファイルスキャン / 参照 {len(records)} 件発見", file=sys.stderr, flush=True)
     return records
 
 
@@ -1204,6 +1233,7 @@ def main() -> None:
 
     try:
         for grep_path in grep_files:
+            print(f"  処理中: {grep_path.name} ...", file=sys.stderr, flush=True)
             keyword = grep_path.stem  # 拡張子なしのファイル名 = 検索文言
 
             # 第1段階: 直接参照の取得と分類
@@ -1258,18 +1288,29 @@ def main() -> None:
                             track_local(var_name, method_scope, record, source_dir, stats)
                         )
 
-            # 定数・getter・setter をプロジェクト全体に対して各1パスで一括スキャン
+            # 定数・getter・setter の事前フィルタを1回の rglob で共有
+            java_candidates: list[Path] | None = None
+            if project_scope_tasks or getter_tasks or setter_tasks:
+                all_java_names = (
+                    list(project_scope_tasks.keys())
+                    + list(getter_tasks.keys())
+                    + list(setter_tasks.keys())
+                )
+                java_candidates = grep_filter_files(
+                    all_java_names, source_dir, [".java"], label="Java追跡",
+                )
+
             if project_scope_tasks:
                 all_records.extend(
-                    _batch_track_constants(project_scope_tasks, source_dir, stats)
+                    _batch_track_constants(project_scope_tasks, source_dir, stats, file_list=java_candidates)
                 )
             if getter_tasks:
                 all_records.extend(
-                    _batch_track_getters(getter_tasks, source_dir, stats)
+                    _batch_track_getters(getter_tasks, source_dir, stats, file_list=java_candidates)
                 )
             if setter_tasks:
                 all_records.extend(
-                    _batch_track_setters(setter_tasks, source_dir, stats)
+                    _batch_track_setters(setter_tasks, source_dir, stats, file_list=java_candidates)
                 )
 
             # 出力
