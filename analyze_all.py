@@ -10,6 +10,7 @@ from pathlib import Path
 from analyze_common import (
     GrepRecord, ProcessStats, RefType,
     detect_encoding, parse_grep_line, write_tsv,
+    grep_filter_files,
 )
 
 # ---------------------------------------------------------------------------
@@ -257,8 +258,15 @@ def _batch_track_kotlin_const(
         return []
     combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
     results: list[GrepRecord] = []
-    src_files = sorted(src_dir.rglob("*.kt")) + sorted(src_dir.rglob("*.kts"))
-    for src_file in src_files:
+    src_files = grep_filter_files(list(tasks.keys()), src_dir, [".kt", ".kts"], label="Kotlin定数追跡")
+    if not src_files:
+        return []
+    total = len(src_files)
+
+    for idx, src_file in enumerate(src_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [Kotlin定数追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         try:
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
@@ -282,6 +290,8 @@ def _batch_track_kotlin_const(
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
                     ))
+
+    print(f"  [Kotlin定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
     return results
 
 
@@ -296,10 +306,15 @@ def _batch_track_dotnet_const(
         return []
     combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
     results: list[GrepRecord] = []
-    src_files: list[Path] = []
-    for ext in (".cs", ".vb"):
-        src_files.extend(sorted(src_dir.rglob(f"*{ext}")))
-    for src_file in src_files:
+    src_files = grep_filter_files(list(tasks.keys()), src_dir, [".cs", ".vb"], label=".NET定数追跡")
+    if not src_files:
+        return []
+    total = len(src_files)
+
+    for idx, src_file in enumerate(src_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [.NET定数追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         try:
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
@@ -323,6 +338,8 @@ def _batch_track_dotnet_const(
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
                     ))
+
+    print(f"  [.NET定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
     return results
 
 
@@ -337,10 +354,15 @@ def _batch_track_groovy_static_final(
         return []
     combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
     results: list[GrepRecord] = []
-    src_files: list[Path] = []
-    for ext in (".groovy", ".gvy"):
-        src_files.extend(sorted(src_dir.rglob(f"*{ext}")))
-    for src_file in src_files:
+    src_files = grep_filter_files(list(tasks.keys()), src_dir, [".groovy", ".gvy"], label="Groovy定数追跡")
+    if not src_files:
+        return []
+    total = len(src_files)
+
+    for idx, src_file in enumerate(src_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [Groovy定数追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         try:
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
@@ -364,6 +386,8 @@ def _batch_track_groovy_static_final(
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
                     ))
+
+    print(f"  [Groovy定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
     return results
 
 
@@ -378,7 +402,6 @@ def _batch_track_define_c_all(
         return []
     define_map = _build_define_map_c(src_dir, stats, encoding)
 
-    # scan_tasks: {scan_name: [(is_primary, var_name, origin_record)]}
     scan_tasks: dict[str, list[tuple[bool, str, GrepRecord]]] = {}
     for var_name, records in tasks.items():
         aliases = _collect_define_aliases(var_name, define_map)
@@ -392,10 +415,15 @@ def _batch_track_define_c_all(
 
     combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in scan_tasks) + r')\b')
     results: list[GrepRecord] = []
-    src_files = (sorted(src_dir.rglob("*.c"))
-                 + sorted(src_dir.rglob("*.h"))
-                 + sorted(src_dir.rglob("*.pc")))
-    for src_file in src_files:
+    src_files = grep_filter_files(list(scan_tasks.keys()), src_dir, [".c", ".h", ".pc"], label="C #define追跡")
+    if not src_files:
+        return []
+    total = len(src_files)
+
+    for idx, src_file in enumerate(src_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [C #define追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         try:
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
@@ -420,6 +448,8 @@ def _batch_track_define_c_all(
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
                     ))
+
+    print(f"  [C #define追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
     return results
 
 
@@ -447,16 +477,21 @@ def _batch_track_define_proc_all(
 
     combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in scan_tasks) + r')\b')
     results: list[GrepRecord] = []
-    src_files = (sorted(src_dir.rglob("*.pc"))
-                 + sorted(src_dir.rglob("*.c"))
-                 + sorted(src_dir.rglob("*.h")))
-    for src_file in src_files:
+    src_files = grep_filter_files(list(scan_tasks.keys()), src_dir, [".pc", ".c", ".h"], label="Pro*C #define追跡")
+    if not src_files:
+        return []
+    total = len(src_files)
+
+    for idx, src_file in enumerate(src_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [Pro*C #define追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
         try:
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
             filepath_str = str(src_file)
-        lines = _read_lines(src_file, encoding)
         ext = src_file.suffix.lower()
+        lines = _read_lines(src_file, encoding)
         for i, line in enumerate(lines, 1):
             for m in combined.finditer(line):
                 scan_name = m.group(1)
@@ -477,6 +512,8 @@ def _batch_track_define_proc_all(
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
                     ))
+
+    print(f"  [Pro*C #define追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
     return results
 
 
