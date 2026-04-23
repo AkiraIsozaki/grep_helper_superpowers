@@ -180,7 +180,6 @@ from analyze import _batch_track_getters    # type: ignore[attr-defined]
 from analyze import _batch_track_setters    # type: ignore[attr-defined]
 
 # Kotlin
-from analyze_kotlin import track_const as _track_const_kotlin
 
 # C
 from analyze_c import (
@@ -470,7 +469,7 @@ def _batch_track_define_c_all(
             code = line.strip()
             for m in combined.finditer(line):
                 scan_name = m.group(1)
-                for is_primary, _var_name, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
+                for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
                     if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
                     results.append(GrepRecord(
@@ -543,7 +542,7 @@ def _batch_track_define_proc_all(
             usage_fn = classify_usage_c if ext in (".c", ".h") else classify_usage_proc
             for m in combined.finditer(line):
                 scan_name = m.group(1)
-                for is_primary, _var_name, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
+                for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
                     if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
                     results.append(GrepRecord(

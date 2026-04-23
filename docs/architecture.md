@@ -8,7 +8,6 @@
 |------|-----------|
 | Python | 3.12+ |
 | venv | Python標準（3.12+） |
-| venv | Python標準（3.12+） |
 
 ### フレームワーク・ライブラリ
 
@@ -182,7 +181,7 @@
 ## テスト戦略
 
 ### ユニットテスト
-- **フレームワーク**: unittest（Python標準ライブラリ）
+- **フレームワーク**: unittest（Python標準ライブラリ、記述用）/ pytest（実行用、`requirements-dev.txt`）
 - **対象ファイル**: `tests/test_*.py`（全言語。Java: `tests/test_analyze.py`、Pro*C: `tests/test_analyze_proc.py`）
 - **カバレッジ目標**: 80%以上（推奨。マージのブロック条件ではない。詳細は `development-guidelines.md` 参照）
 
