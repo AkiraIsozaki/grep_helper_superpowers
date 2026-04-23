@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 # テスト対象モジュールをインポート
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze_proc as ap
 
 
@@ -208,7 +208,7 @@ class TestWriteTsv(unittest.TestCase):
 class TestE2EProc(unittest.TestCase):
     """E2E統合テスト: サンプルファイル群でツールを実行し、期待TSVと比較する"""
 
-    TESTS_DIR = Path(__file__).parent / "tests" / "proc"
+    TESTS_DIR = Path(__file__).parent / "proc"
 
     def test_e2e_target(self):
         """TARGET.grep を処理し、expected/TARGET.tsv と全行一致することを確認する"""
@@ -297,7 +297,7 @@ class TestDispatch(unittest.TestCase):
 class TestE2EMixed(unittest.TestCase):
     """混在E2Eテスト: .c と .pc が混在する grep ファイルの処理"""
 
-    TESTS_DIR = Path(__file__).parent / "tests" / "proc"
+    TESTS_DIR = Path(__file__).parent / "proc"
 
     def test_e2e_mixval(self):
         """MIXVAL.grep を処理し、expected/MIXVAL.tsv と全行一致することを確認する"""

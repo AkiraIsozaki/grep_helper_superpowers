@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze
 from analyze import (
     GrepRecord,
@@ -259,7 +260,7 @@ class TestIndirectTracker(unittest.TestCase):
 
     def test_determine_scope_package_private_field_returns_class(self):
         """パッケージプライベートフィールド（修飾子なし）が class スコープになること。"""
-        java_dir = Path(__file__).parent / "tests" / "fixtures" / "java"
+        java_dir = Path(__file__).parent / "fixtures" / "java"
         if not java_dir.exists():
             self.skipTest("フィクスチャが存在しません。")
         # Entity.java の `private String type = "SAMPLE";`（行8）は class スコープ
@@ -348,7 +349,7 @@ class TestReporter(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     """E2E統合テスト。フィクスチャを使って直接参照の出力を検証する。"""
 
-    FIXTURES_DIR = Path(__file__).parent / "tests" / "fixtures"
+    FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
     def setUp(self):
         """フィクスチャの存在確認。"""
@@ -368,7 +369,7 @@ class TestIntegration(unittest.TestCase):
             self.skipTest("統合テスト用フィクスチャが不完全です。")
 
         with tempfile.TemporaryDirectory() as tmp_out:
-            project_root = Path(__file__).parent
+            project_root = Path(__file__).parent.parent
             result = subprocess.run(
                 [
                     sys.executable, str(project_root / "analyze.py"),
@@ -419,7 +420,7 @@ class TestIntegration(unittest.TestCase):
 class TestProcessGrepFile(unittest.TestCase):
     """F-01: process_grep_file() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
@@ -495,7 +496,7 @@ class TestProcessGrepFile(unittest.TestCase):
 class TestGetAst(unittest.TestCase):
     """F-02: get_ast() とASTキャッシュのテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -544,7 +545,7 @@ class TestGetAst(unittest.TestCase):
 class TestClassifyUsage(unittest.TestCase):
     """F-02: classify_usage() と _classify_by_ast() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -632,7 +633,7 @@ class TestClassifyUsage(unittest.TestCase):
 class TestResolveJavaFile(unittest.TestCase):
     """F-03 内部: _resolve_java_file() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def test_relative_path_resolves(self):
         """相対パス（source_dir基準）が解決されること。"""
@@ -664,7 +665,7 @@ class TestResolveJavaFile(unittest.TestCase):
 class TestGetMethodScope(unittest.TestCase):
     """F-03 内部: _get_method_scope() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -705,7 +706,7 @@ class TestGetMethodScope(unittest.TestCase):
 class TestSearchInLines(unittest.TestCase):
     """F-03 内部: _search_in_lines() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -791,7 +792,7 @@ class TestSearchInLines(unittest.TestCase):
 class TestTrackConstant(unittest.TestCase):
     """F-03: track_constant() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -841,7 +842,7 @@ class TestTrackConstant(unittest.TestCase):
 class TestTrackField(unittest.TestCase):
     """F-03: track_field() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -897,7 +898,7 @@ class TestTrackField(unittest.TestCase):
 class TestTrackLocal(unittest.TestCase):
     """F-03: track_local() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
@@ -961,7 +962,7 @@ class TestTrackLocal(unittest.TestCase):
 class TestFindGetterNames(unittest.TestCase):
     """F-04: find_getter_names() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -1009,7 +1010,7 @@ class TestFindGetterNames(unittest.TestCase):
 class TestFindSetterNames(unittest.TestCase):
     """Java-4: find_setter_names() のテスト。"""
 
-    INTENSE_DIR = Path(__file__).parent / "tests" / "fixtures" / "intense" / "java"
+    INTENSE_DIR = Path(__file__).parent / "fixtures" / "intense" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -1046,7 +1047,7 @@ class TestFindSetterNames(unittest.TestCase):
 class TestTrackGetterCalls(unittest.TestCase):
     """F-04: track_getter_calls() のテスト。"""
 
-    JAVA_DIR = Path(__file__).parent / "tests" / "fixtures" / "java"
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def setUp(self):
         _ast_cache.clear()
@@ -1136,7 +1137,7 @@ class TestBuildParser(unittest.TestCase):
 class TestMain(unittest.TestCase):
     """main() のエンドツーエンドテスト。"""
 
-    FIXTURES_DIR = Path(__file__).parent / "tests" / "fixtures"
+    FIXTURES_DIR = Path(__file__).parent / "fixtures"
     JAVA_DIR = FIXTURES_DIR / "java"
     INPUT_DIR = FIXTURES_DIR / "input"
 
@@ -1271,7 +1272,7 @@ class TestIntenseE2E(unittest.TestCase):
     javalang なしでも実行可能（正規表現フォールバックで全機能を検証）。
     """
 
-    INTENSE_DIR = Path(__file__).parent / "tests" / "fixtures" / "intense"
+    INTENSE_DIR = Path(__file__).parent / "fixtures" / "intense"
     JAVA_DIR    = INTENSE_DIR / "java"
     GREP_DIR    = INTENSE_DIR / "grep"
 
