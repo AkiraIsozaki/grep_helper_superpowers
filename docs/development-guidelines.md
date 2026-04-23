@@ -80,9 +80,6 @@ tests/test_sh_analyzer.py
 tests/test_sql_analyzer.py
 tests/test_ts_analyzer.py
 
-# スクリプト
-run.sh / run.bat
-setup.sh / setup.bat
 ```
 
 ### コードフォーマット
@@ -239,7 +236,7 @@ feature/* / fix/* / refactor/*
 
 **マージ条件**:
 - レビュアー1名以上の承認
-- 全テストパス（`python -m unittest discover`）
+- 全テストパス（`python -m pytest tests/ -v`）
 - コードスタイル準拠（`python -m flake8 analyze.py`）
 - `feature/*` / `fix/*` → `develop` へマージ後、ブランチを削除する
 - `develop` → `main` はリリース時のみ（`vX.Y.Z` タグを付与）
@@ -280,7 +277,7 @@ Closes #12
 ### プルリクエストプロセス
 
 **作成前のチェック（作成者）**:
-- [ ] 全てのテストがパス（`python -m unittest discover`）
+- [ ] 全てのテストがパス（`python -m pytest tests/ -v`）
 - [ ] 構文エラーがない（`python -m py_compile analyze.py`）
 - [ ] コードスタイル準拠（`python -m flake8 analyze.py`）
 - [ ] 型ヒントが適切に付与されている
@@ -299,7 +296,7 @@ Closes #12
 
 **対象**: 個別の関数・クラス  
 **カバレッジ目標**: 80%以上（PRレビュー前に `coverage report` で確認。80%を下回る場合はテスト追加を推奨するが、マージのブロック条件ではない）  
-**フレームワーク**: `unittest`（標準ライブラリ）  
+**フレームワーク**: `unittest`（標準ライブラリ、記述用）/ `pytest`（実行用）  
 **テストファイル配置**: 全テストファイルは `tests/` 配下に配置する。Java は `tests/test_analyze.py`、Pro*C は `tests/test_analyze_proc.py`、その他は `tests/test_[言語]_analyzer.py`
 
 ```python
@@ -496,9 +493,10 @@ VS Code Dev Containers または GitHub Codespaces を使うと、Python 3.12と
 # 1. VS Code で「Reopen in Container」を実行
 # 2. コンテナ起動後、依存関係をインストール
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # 3. テストの実行
-python -m unittest discover -v
+python -m pytest tests/ -v
 ```
 
 #### ローカル環境を使う場合
@@ -509,30 +507,16 @@ git clone [URL]
 cd grep_analyzer
 
 # 2. venv作成と依存関係のインストール
-chmod +x setup.sh
-./setup.sh   # Windows: setup.bat
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
 
 # 3. テストの実行
-source .venv/bin/activate
-python -m unittest discover -v
+python -m pytest tests/ -v
 
 # 4. ツールの実行（テスト用）
-./run.sh --source-dir /path/to/sample/java
-```
-
-### パッケージング
-
-```bash
-# 配布用zipの生成
-make package
-# → dist/grep_analyzer.zip が生成される
-
-# 動作確認（配布後のユーザー操作をシミュレート）
-cd /tmp
-unzip grep_analyzer.zip -d test_install
-cd test_install
-./setup.sh
-./run.sh --source-dir /path/to/java
+python analyze.py --source-dir /path/to/sample/java
 ```
 
 ## チェックリスト
@@ -553,7 +537,7 @@ cd test_install
 - [ ] エンコーディングエラーは `errors='replace'` で継続している
 
 ### テスト
-- [ ] `python -m unittest discover` が全件パスする
+- [ ] `python -m pytest tests/ -v` が全件パスする
 - [ ] 7種の使用タイプそれぞれのテストケースがある
 - [ ] 境界ケース（空行・バイナリ通知行・Windowsパス）のテストがある
 

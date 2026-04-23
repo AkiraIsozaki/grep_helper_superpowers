@@ -8,7 +8,7 @@
 |------|-----------|
 | Python | 3.12+ |
 | venv | Python標準（3.12+） |
-| Makefile | GNU Make（パッケージング用） |
+| venv | Python標準（3.12+） |
 
 ### フレームワーク・ライブラリ
 
@@ -28,7 +28,8 @@
 
 | 技術 | バージョン | 用途 | 選定理由 |
 |------|-----------|------|----------|
-| unittest | Python標準 | ユニットテスト | 外部依存不要。`python -m unittest discover` で自動検出 |
+| unittest | Python標準 | テスト記述 | 外部依存不要。テストクラス・アサーションを標準ライブラリで記述 |
+| pytest | >=9.0.0,<10.0.0（`requirements-dev.txt`） | テスト実行 | `python -m pytest tests/ -v` で自動検出。unittest形式のテストもそのまま実行可能 |
 | coverage | 最新安定版（任意） | カバレッジ測定 | `pip install coverage` で導入可能 |
 | flake8 | 最新安定版（任意） | コード品質チェック | PEP 8準拠チェック・未使用インポート検出 |
 
@@ -202,7 +203,7 @@
 - **Python**: 3.12以上
 - **最小メモリ**: 512MB（小規模処理）、2GB推奨（大規模処理）
 - **必要ディスク容量**: 入力の10倍程度
-- **外部依存**: `javalang` のみ（`pip install javalang` または `setup.sh` で自動インストール）
+- **外部依存**: `javalang` のみ（`pip install -r requirements.txt` でインストール）
 - **入力文字コード（Javaソースファイル）**: Shift-JIS 固定（`encoding='shift_jis', errors='replace'` で読み込む）
 - **入力文字コード（grep結果ファイル）**: CP932（`encoding='cp932', errors='replace'`）
 - **出力文字コード（TSV）**: UTF-8 BOM付き（`encoding='utf-8-sig'`）— Excelで文字化けなく開くため
@@ -224,13 +225,18 @@
 | javalang | Java AST解析（`analyze.py` のみ） | `>=0.13.0,<1.0.0`（バグ修正のみ自動適用） |
 | chardet | 文字コード自動検出（任意） | 任意インストール（`pip install chardet`）。未インストール時は cp932 にフォールバック |
 
-**`requirements.txt`**:
+**`requirements.txt`**（本番依存）:
 ```
 javalang>=0.13.0,<1.0.0
+```
+
+**`requirements-dev.txt`**（開発用依存）:
+```
+pytest>=9.0.0,<10.0.0
 ```
 
 **方針**:
 - 必須外部依存は `javalang` 1本のみを維持する（C/SQL/Shell/Kotlin/PL/SQL/TypeScript・JS/Python/Perl/C#・VB.NET/Groovy は標準ライブラリのみで完結）
 - `chardet` はオプション依存。インストール時のみ文字コード自動検出が有効になる
-- `setup.sh` / `setup.bat` で venv を作成し `pip install -r requirements.txt` を実行
+- `python3 -m venv .venv` で venv を作成し `pip install -r requirements.txt` を実行
 - `pip list --outdated` で定期的に確認
