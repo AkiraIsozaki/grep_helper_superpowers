@@ -663,13 +663,23 @@ def _apply_indirect_tracking(
 
         # ts / python / perl / plsql / other: 間接追跡なし
 
-    # Java バッチ処理（プロジェクト全体を各1パスでスキャン）
+    # Java バッチ処理: 定数・getter・setter の事前フィルタを1回の rglob で共有
+    java_candidates: list[Path] | None = None
+    if java_project_tasks or java_getter_tasks or java_setter_tasks:
+        all_java_names = list(dict.fromkeys(
+            list(java_project_tasks.keys())
+            + list(java_getter_tasks.keys())
+            + list(java_setter_tasks.keys())
+        ))
+        java_candidates = grep_filter_files(
+            all_java_names, source_dir, [".java"], label="Java追跡",
+        )
     if java_project_tasks:
-        result.extend(_batch_track_constants(java_project_tasks, source_dir, stats))
+        result.extend(_batch_track_constants(java_project_tasks, source_dir, stats, file_list=java_candidates))
     if java_getter_tasks:
-        result.extend(_batch_track_getters(java_getter_tasks, source_dir, stats))
+        result.extend(_batch_track_getters(java_getter_tasks, source_dir, stats, file_list=java_candidates))
     if java_setter_tasks:
-        result.extend(_batch_track_setters(java_setter_tasks, source_dir, stats))
+        result.extend(_batch_track_setters(java_setter_tasks, source_dir, stats, file_list=java_candidates))
 
     # Kotlin / .NET / Groovy static final / C #define / Pro*C #define バッチ処理
     result.extend(_batch_track_kotlin_const(kotlin_const_tasks, source_dir, stats, encoding))
@@ -725,6 +735,7 @@ def main() -> None:
 
     try:
         for grep_path in grep_files:
+            print(f"  処理中: {grep_path.name} ...", file=sys.stderr, flush=True)
             keyword = grep_path.stem
             enc = detect_encoding(grep_path, args.encoding)
             raw_lines = grep_path.read_text(encoding=enc, errors="replace").splitlines()
