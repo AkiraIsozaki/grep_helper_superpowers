@@ -282,8 +282,11 @@
 
 **主要関数**:
 - `classify_usage_groovy()`: 正規表現で7種（static final定数定義・変数代入・条件判定・return文・アノテーション・メソッド引数・その他）に分類
-- `track_static_final()`: `static final` 定数をプロジェクト全体追跡（間接参照）
-- `track_setters()`: setter経由の代入箇所追跡
+- `track_static_final_groovy()`: `static final` 定数をプロジェクト全体追跡（間接参照）
+- `track_field_groovy()`: クラスフィールドを同一クラス内で追跡（間接参照）
+- `find_getter_names_groovy()`: 正規表現でgetter候補メソッド名を特定
+- `find_setter_names_groovy()`: 正規表現でsetter候補メソッド名を特定
+- `_batch_track_getter_setter_groovy()`: getter/setter呼び出し箇所をプロジェクト全体で一括追跡
 - `main()`: CLIエントリーポイント（`--encoding` オプションあり）
 
 **依存関係**: `analyze_common`（`detect_encoding` 含む）, `re`, `argparse`, `pathlib`, `sys`

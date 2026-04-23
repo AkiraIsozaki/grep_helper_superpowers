@@ -11,6 +11,7 @@ graph TB
     Stage1[第1段階: 直接参照分類]
     Stage2[第2段階: 間接参照追跡]
     Stage3[第3段階: getter経由追跡]
+    Stage4[第4段階: setter経由追跡]
     Output["TSV出力 / analyze_common.write_tsv()"]
     GrepFiles[("input/*.grep")]
     JavaSrc[("Javaソースコード")]
@@ -23,10 +24,13 @@ graph TB
     Stage1 --> Stage2
     Stage2 --> JavaSrc
     Stage2 --> Stage3
+    Stage2 --> Stage4
     Stage3 --> JavaSrc
+    Stage4 --> JavaSrc
     Stage1 --> Output
     Stage2 --> Output
     Stage3 --> Output
+    Stage4 --> Output
     Output --> TSVFiles
 ```
 
@@ -294,6 +298,47 @@ def track_getter_calls(getter_name: str, source_dir: Path, origin: GrepRecord,
 
 ---
 
+### F-04b: SetterTracker（setter経由追跡器）
+
+**責務**:
+- フィールドの同一クラス内からsetter候補を特定する（2方法の併用）
+- プロジェクト全体でsetter呼び出し箇所を検索・分類する
+
+**setter候補特定の2方法**:
+1. **命名規則**: フィールド名 `type` → `setType()` のメソッドを探す
+2. **代入文解析**: `this.フィールド名 = 引数;` しているメソッドを全て拾う（非標準命名も対象）
+
+**インターフェース**:
+```python
+def find_setter_names(field_name: str, class_file: Path) -> list[str]:
+    """クラスファイルからsetterメソッド名の候補リストを返す。
+    命名規則パターン + this.field代入解析の2方式を併用。
+    モジュールレベルの _ast_cache を利用してファイルを再解析しない。
+    """
+
+def track_setter_calls(setter_name: str, source_dir: Path, origin: GrepRecord,
+                       stats: ProcessStats) -> list[GrepRecord]:
+    """プロジェクト全体でsetter呼び出し箇所を検索・AST分類する。
+    false positiveは許容（もれなく優先）。
+    参照種別 = 間接（setter経由） として出力。
+    """
+```
+
+**バッチ処理**:
+```python
+def _batch_track_setters(
+    tasks: dict[str, list[GrepRecord]],
+    source_dir: Path,
+    stats: ProcessStats,
+    file_list: list[Path] | None = None,
+) -> list[GrepRecord]:
+    """複数のsetterをプロジェクト全体で一括追跡する（1回のファイル走査で全setter名を同時検索）。"""
+```
+
+**依存関係**: `UsageClassifier`, `ASTCache`, `javalang`
+
+---
+
 ### F-05: TsvWriter（TSV出力）
 
 **責務**:
@@ -441,13 +486,15 @@ def _classify_for_filepath(code: str, filepath: str) -> str:
     return classify_usage_proc(code)    # .pc ファイル向け
 ```
 
-**間接参照追跡（C/Pro*C/Kotlin/C#・VB.NET/Groovy）**:
+**間接参照追跡（C/Pro*C/Shell/SQL/Kotlin/C#・VB.NET/Groovy）**:
 - C/Pro*C: `#define定数定義` → プロジェクト全体の `.c`/`.h`/`.pc` ファイルを追跡（`track_define()`）
 - C/Pro*C: `変数代入` → 同一ファイル内を追跡（`track_variable()`）
+- Shell: `変数代入` / `環境変数エクスポート` → 同一ファイル内を追跡（`track_sh_variable()`）
+- SQL: `定数・変数定義` → 同一ファイル内を追跡（`track_sql_variable()`）
 - Kotlin: `const定数定義` → プロジェクト全体の `.kt`/`.kts` ファイルを追跡（`track_const()`）
 - C#/VB.NET: `const` / `static readonly` 定数定義 → プロジェクト全体の `.cs`/`.vb` ファイルを追跡（`track_const()`）
-- Groovy: `static final` 定数・フィールド → プロジェクト全体の `.groovy`/`.gvy` ファイルを追跡（`track_static_final()`）
-- Groovy: setter経由の代入箇所追跡（`track_setters()`）
+- Groovy: `static final` 定数・フィールド → プロジェクト全体の `.groovy`/`.gvy` ファイルを追跡（`track_static_final_groovy()`）
+- Groovy: getter/setter経由の呼び出し箇所追跡（`_batch_track_getter_setter_groovy()`）
 
 ## ユースケース図
 
