@@ -18,8 +18,8 @@
 ├── analyze_sh.py        # Shellスクリプトアナライザー（BASH/CSH/TCSH）
 ├── analyze_sql.py       # Oracle SQLアナライザー
 ├── analyze_ts.py        # TypeScript/JavaScriptアナライザー（直接参照のみ）
-├── test_analyze.py      # Javaアナライザーのユニットテスト・統合テスト
-├── test_analyze_proc.py # Pro*Cアナライザーのユニットテスト・統合テスト
+├── tests/test_analyze.py          # Javaアナライザーのユニットテスト・統合テスト
+├── tests/test_analyze_proc.py     # Pro*Cアナライザーのユニットテスト・統合テスト
 ├── tests/test_dotnet_analyzer.py  # C#/VB.NETアナライザーのユニットテスト・統合テスト
 ├── tests/test_groovy_analyzer.py  # Groovyアナライザーのユニットテスト・統合テスト
 ├── tests/test_kotlin_analyzer.py  # Kotlinアナライザーのユニットテスト・統合テスト
@@ -42,7 +42,7 @@
 ├── output/              # TSV出力先ディレクトリ（自動作成）
 │   └── .gitkeep
 ├── tests/               # テスト用フィクスチャ（言語別）
-│   ├── fixtures/        # Javaテストフィクスチャ（test_analyze.py用）
+│   ├── fixtures/        # Javaテストフィクスチャ（tests/test_analyze.py用）
 │   │   ├── input/
 │   │   ├── java/
 │   │   ├── intense/     # 大規模Javaフィクスチャ（多パッケージ構成）
@@ -51,7 +51,7 @@
 │   │   ├── input/
 │   │   ├── src/
 │   │   └── expected/
-│   ├── proc/            # Pro*Cテストフィクスチャ（test_analyze_proc.py用）
+│   ├── proc/            # Pro*Cテストフィクスチャ（tests/test_analyze_proc.py用）
 │   │   ├── input/
 │   │   ├── src/         # .pc / .c 混在ファイル
 │   │   └── expected/
@@ -295,25 +295,11 @@
 
 ---
 
-### test_analyze.py（Javaテストファイル）
-
-**役割**: `analyze.py` のユニットテスト・統合テスト
-
-**命名規則**:
-- パターン: `test_[対象関数]_[条件]_[期待結果]`
-- 例: `test_parse_valid_line_returns_dict`
-
----
-
-### test_analyze_proc.py（Pro*Cテストファイル）
-
-**役割**: `analyze_proc.py` のユニットテスト・統合テスト（E2E含む）
-
----
-
-### tests/（言語別テストファイル・フィクスチャ）
+### tests/（テストファイル・フィクスチャ）
 
 **言語別テストファイル（`tests/` 直下）**:
+- `test_analyze.py`: `analyze.py`（Java）のユニットテスト・統合テスト
+- `test_analyze_proc.py`: `analyze_proc.py`（Pro*C）のユニットテスト・統合テスト（E2E含む）
 - `test_common.py`: `analyze_common` のユニットテスト
 - `test_all_analyzer.py`: `analyze_all` のE2E統合テスト（多言語混在フィクスチャ使用）
 - `test_c_analyzer.py`: `analyze_c` のE2E統合テスト
@@ -330,7 +316,7 @@
 **フィクスチャ構成**:
 ```
 tests/
-├── fixtures/          # Java（test_analyze.py用）
+├── fixtures/          # Java（tests/test_analyze.py用）
 │   ├── input/         # SAMPLE.grep
 │   ├── java/          # Constants.java, Entity.java, Service.java
 │   ├── intense/       # 多パッケージ大規模フィクスチャ
@@ -341,7 +327,7 @@ tests/
 │   ├── input/         # TARGET.grep
 │   ├── src/           # sample.c
 │   └── expected/      # TARGET.tsv
-├── proc/              # Pro*C（test_analyze_proc.py用）
+├── proc/              # Pro*C（tests/test_analyze_proc.py用）
 │   ├── input/         # TARGET.grep, MIXVAL.grep
 │   ├── src/           # sample.pc, sample_c.c, mixed.pc
 │   └── expected/      # TARGET.tsv, MIXVAL.tsv
@@ -516,7 +502,7 @@ python analyze.py %*
 ```makefile
 package:
     mkdir -p dist
-    zip -r dist/grep_analyzer.zip analyze.py test_analyze.py \
+    zip -r dist/grep_analyzer.zip analyze.py tests/test_analyze.py \
         requirements.txt setup.sh setup.bat run.sh run.bat \
         README.txt input/.gitkeep output/.gitkeep
 
@@ -536,7 +522,7 @@ clean:
 | 共通インフラ | プロジェクトルート | `analyze_common.py` | - |
 | 言語別アナライザー | プロジェクトルート | `analyze_[言語].py` | `analyze_c.py`, `analyze_kotlin.py`, `analyze_plsql.py`, `analyze_proc.py` |
 | Javaアナライザー | プロジェクトルート | `analyze.py` | - |
-| ルートテスト | プロジェクトルート | `test_[対象].py` | `test_analyze.py`, `test_analyze_proc.py` |
+| テスト | `tests/` | `test_[対象].py` | `tests/test_analyze.py`, `tests/test_analyze_proc.py` |
 | 実行スクリプト | プロジェクトルート | `run.sh` / `run.bat` | - |
 | セットアップ | プロジェクトルート | `setup.sh` / `setup.bat` | - |
 
@@ -544,7 +530,7 @@ clean:
 
 | テスト種別 | 配置先 | 命名規則 | 例 |
 |-----------|--------|---------|-----|
-| Java・Pro*Cユニット/統合テスト | プロジェクトルート | `test_[対象モジュール].py` | `test_analyze.py`, `test_analyze_proc.py` |
+| Java・Pro*Cユニット/統合テスト | `tests/` | `test_[対象モジュール].py` | `tests/test_analyze.py`, `tests/test_analyze_proc.py` |
 | C/SQL/Shell/Kotlin/PL/SQL/TS・JS/Python/Perl/C#・VB.NET/Groovyアナライザーテスト | `tests/` | `test_[言語]_analyzer.py` | `test_c_analyzer.py`, `test_kotlin_analyzer.py`, `test_plsql_analyzer.py`, `test_ts_analyzer.py`, `test_python_analyzer.py`, `test_perl_analyzer.py`, `test_dotnet_analyzer.py`, `test_groovy_analyzer.py` |
 | 全言語ディスパッチャーテスト | `tests/` | `test_all_analyzer.py` | - |
 | 共通インフラテスト | `tests/` | `test_common.py` | - |
@@ -563,7 +549,7 @@ clean:
 ### ファイル名
 
 - **Pythonスクリプト**: `snake_case.py`
-  - 例: `analyze.py`, `test_analyze.py`
+  - 例: `analyze.py`, `tests/test_analyze.py`
 - **シェルスクリプト**: `snake_case.sh`
   - 例: `run.sh`, `setup.sh`
 - **ドキュメント（Markdown）**: `kebab-case.md`
@@ -585,7 +571,7 @@ clean:
 ## 依存関係のルール
 
 ```
-test_analyze.py / test_analyze_proc.py / tests/test_*.py
+tests/test_analyze.py / tests/test_analyze_proc.py / tests/test_*.py
     ↓ (import)
 analyze.py / analyze_c.py / analyze_kotlin.py / analyze_plsql.py /
 analyze_proc.py / analyze_sh.py / analyze_sql.py /

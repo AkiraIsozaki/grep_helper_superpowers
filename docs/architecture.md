@@ -182,7 +182,7 @@
 
 ### ユニットテスト
 - **フレームワーク**: unittest（Python標準ライブラリ）
-- **対象ファイル**: `test_analyze.py`（Java）, `test_analyze_proc.py`（Pro*C）, `tests/test_*.py`（C/SQL/Shell/Kotlin/PL/SQL/TypeScript・JS/Python/Perl/C#・VB.NET/Groovy/共通）
+- **対象ファイル**: `tests/test_*.py`（全言語。Java: `tests/test_analyze.py`、Pro*C: `tests/test_analyze_proc.py`）
 - **カバレッジ目標**: 80%以上（推奨。マージのブロック条件ではない。詳細は `development-guidelines.md` 参照）
 
 ### 統合テスト（E2Eテスト）

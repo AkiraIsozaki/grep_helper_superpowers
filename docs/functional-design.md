@@ -693,8 +693,8 @@ TARGET	直接	条件判定	Validator.java	80	if (x.equals("TARGET")) {
 
 | テストファイル | 対象モジュール | 主要テスト対象 |
 |-------------|------------|------------|
-| `test_analyze.py` | `analyze.py`（Java） | `parse_grep_line()`, `classify_usage_regex()`, `extract_variable_name()`, `write_tsv()` |
-| `test_analyze_proc.py` | `analyze_proc.py`（Pro*C） | `classify_usage_proc()`, `track_define()`, Pro*CE2Eフロー |
+| `tests/test_analyze.py` | `analyze.py`（Java） | `parse_grep_line()`, `classify_usage_regex()`, `extract_variable_name()`, `write_tsv()` |
+| `tests/test_analyze_proc.py` | `analyze_proc.py`（Pro*C） | `classify_usage_proc()`, `track_define()`, Pro*CE2Eフロー |
 | `tests/test_common.py` | `analyze_common.py` | `parse_grep_line()`, `write_tsv()`, 共通データモデル |
 | `tests/test_c_analyzer.py` | `analyze_c.py` | C E2Eフロー（直接参照 + #define間接参照） |
 | `tests/test_sh_analyzer.py` | `analyze_sh.py` | Shell E2Eフロー |
@@ -717,9 +717,6 @@ TARGET	直接	条件判定	Validator.java	80	if (x.equals("TARGET")) {
 ### テスト実行
 
 ```bash
-# 全テスト実行（ルート + tests/ 両方を発見）
-python -m pytest tests/ test_analyze.py test_analyze_proc.py -v
-
-# または unittest discover（ルートのみ）
-python -m unittest discover -v
+# 全テスト実行
+python -m pytest tests/ -v
 ```

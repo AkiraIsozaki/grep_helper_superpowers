@@ -66,9 +66,9 @@ analyze_sql.py   # SQL
 analyze_ts.py    # TypeScript/JavaScript
 
 # テスト
-test_analyze.py         # Java（ルートに配置）
-test_analyze_proc.py    # Pro*C（ルートに配置）
-tests/test_common.py    # 共通インフラ
+tests/test_analyze.py       # Java
+tests/test_analyze_proc.py  # Pro*C
+tests/test_common.py        # 共通インフラ
 tests/test_c_analyzer.py
 tests/test_dotnet_analyzer.py
 tests/test_groovy_analyzer.py
@@ -300,7 +300,7 @@ Closes #12
 **対象**: 個別の関数・クラス  
 **カバレッジ目標**: 80%以上（PRレビュー前に `coverage report` で確認。80%を下回る場合はテスト追加を推奨するが、マージのブロック条件ではない）  
 **フレームワーク**: `unittest`（標準ライブラリ）  
-**テストファイル配置**: Javaは `test_analyze.py`（ルート）、Pro*Cは `test_analyze_proc.py`（ルート）、その他は `tests/test_[言語]_analyzer.py`
+**テストファイル配置**: 全テストファイルは `tests/` 配下に配置する。Java は `tests/test_analyze.py`、Pro*C は `tests/test_analyze_proc.py`、その他は `tests/test_[言語]_analyzer.py`
 
 ```python
 import unittest
@@ -371,14 +371,14 @@ class TestUsageClassifier(unittest.TestCase):
 **フィクスチャ管理方針（言語別）**:
 ```
 tests/
-├── fixtures/         # Java（test_analyze.py用）
+├── fixtures/         # Java（tests/test_analyze.py用）
 │   ├── input/        # SAMPLE.grep
 │   ├── java/         # Constants.java, Entity.java, Service.java
 │   ├── intense/      # 多パッケージ大規模フィクスチャ
 │   └── expected/     # SAMPLE.tsv（手動作成・コミット管理）
 ├── c/                # C（tests/test_c_analyzer.py用）
 │   ├── input/  src/  expected/
-├── proc/             # Pro*C（test_analyze_proc.py用）
+├── proc/             # Pro*C（tests/test_analyze_proc.py用）
 │   ├── input/  src/  expected/
 ├── sh/               # Shell（tests/test_sh_analyzer.py用）
 │   ├── input/  src/  expected/
@@ -420,18 +420,15 @@ def test_ok(self): ...
 ### テスト実行
 
 ```bash
-# 全テスト実行（ルート + tests/ 配下）
-python -m pytest tests/ test_analyze.py test_analyze_proc.py -v
-
-# ルートの unittest のみ実行
-python -m unittest discover -v
+# 全テスト実行
+python -m pytest tests/ -v
 
 # 特定のテストファイル
-python -m unittest test_analyze.TestGrepParser
+python -m pytest tests/test_analyze.py::TestGrepParser -v
 python -m pytest tests/test_c_analyzer.py -v
 
 # カバレッジ測定（coverage.py）
-coverage run -m pytest tests/ test_analyze.py test_analyze_proc.py
+coverage run -m pytest tests/
 coverage report
 coverage html  # htmlcov/index.html で視覚的に確認
 ```
