@@ -116,6 +116,32 @@ class TestExtractDefineName(unittest.TestCase):
         self.assertEqual(ap.extract_define_name("#define MAX_LEN 256"), "MAX_LEN")
 
 
+class TestBuildDefineMapProc(unittest.TestCase):
+    """_build_define_map() のキャッシュテスト"""
+
+    def test_build_define_map_is_cached(self):
+        """同一 src_dir への2回目の呼び出しはキャッシュを返す（同一オブジェクト）。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "a.pc").write_text('#define ALIAS TARGET\n')
+            stats = ap.ProcessStats()
+            ap._define_map_cache.clear()
+            dm1 = ap._build_define_map(src, stats)
+            dm2 = ap._build_define_map(src, stats)
+            self.assertIs(dm1, dm2)
+
+    def test_build_define_map_cache_keyed_by_encoding(self):
+        """encoding が異なる場合は別キャッシュエントリになる。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "a.pc").write_text('#define ALIAS TARGET\n')
+            stats = ap.ProcessStats()
+            ap._define_map_cache.clear()
+            dm1 = ap._build_define_map(src, stats, encoding_override=None)
+            dm2 = ap._build_define_map(src, stats, encoding_override="utf-8")
+            self.assertIsNot(dm1, dm2)
+
+
 # ---------------------------------------------------------------------------
 # TestExtractVariableNameProc
 # ---------------------------------------------------------------------------

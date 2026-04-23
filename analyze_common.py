@@ -170,27 +170,30 @@ def grep_filter_files(
     label が指定された場合は事前フィルタ結果を stderr に出力する。
     """
     patterns = [n.encode("ascii") for n in names if n.isascii()]
+    ext_set = {e.lower() for e in extensions}
 
     if not patterns:
         result: list[Path] = []
-        for ext in extensions:
-            result.extend(src_dir.rglob(f"*{ext}"))
+        for f in src_dir.rglob("*"):
+            if f.suffix.lower() in ext_set:
+                result.append(f)
         return sorted(result)
 
     total = 0
     result = []
-    for ext in extensions:
-        for f in src_dir.rglob(f"*{ext}"):
-            total += 1
-            try:
-                if f.stat().st_size == 0:
-                    continue
-                with open(f, "rb") as fh, \
-                     mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                    if any(mm.find(p) != -1 for p in patterns):
-                        result.append(f)
-            except (OSError, ValueError, mmap.error):
-                result.append(f)
+    for f in src_dir.rglob("*"):
+        if f.suffix.lower() not in ext_set:
+            continue
+        total += 1
+        try:
+            if f.stat().st_size == 0:
+                continue
+            with open(f, "rb") as fh, \
+                 mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                if any(mm.find(p) != -1 for p in patterns):
+                    result.append(f)
+        except (OSError, ValueError, mmap.error):
+            result.append(f)
 
     if label:
         print(

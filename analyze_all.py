@@ -263,6 +263,14 @@ def _batch_track_kotlin_const(
         return []
     total = len(src_files)
 
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]] = {}
+    for name, origins in tasks.items():
+        ext_list = []
+        for origin in origins:
+            def_path = _resolve_file(origin.filepath, src_dir)
+            ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
+        tasks_ext[name] = ext_list
+
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -271,21 +279,22 @@ def _batch_track_kotlin_const(
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
             filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
         lines = _read_lines(src_file, encoding)
         for i, line in enumerate(lines, 1):
+            code = line.strip()
             for m in combined.finditer(line):
                 name = m.group(1)
-                for origin in tasks[name]:
-                    def_path = _resolve_file(origin.filepath, src_dir)
-                    if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
                     results.append(GrepRecord(
                         keyword=origin.keyword,
                         ref_type=RefType.INDIRECT.value,
-                        usage_type=classify_usage_kotlin(line.strip()),
+                        usage_type=classify_usage_kotlin(code),
                         filepath=filepath_str,
                         lineno=str(i),
-                        code=line.strip(),
+                        code=code,
                         src_var=name,
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
@@ -311,6 +320,14 @@ def _batch_track_dotnet_const(
         return []
     total = len(src_files)
 
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]] = {}
+    for name, origins in tasks.items():
+        ext_list = []
+        for origin in origins:
+            def_path = _resolve_file(origin.filepath, src_dir)
+            ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
+        tasks_ext[name] = ext_list
+
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -319,21 +336,22 @@ def _batch_track_dotnet_const(
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
             filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
         lines = _read_lines(src_file, encoding)
         for i, line in enumerate(lines, 1):
+            code = line.strip()
             for m in combined.finditer(line):
                 name = m.group(1)
-                for origin in tasks[name]:
-                    def_path = _resolve_file(origin.filepath, src_dir)
-                    if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
                     results.append(GrepRecord(
                         keyword=origin.keyword,
                         ref_type=RefType.INDIRECT.value,
-                        usage_type=classify_usage_dotnet(line.strip()),
+                        usage_type=classify_usage_dotnet(code),
                         filepath=filepath_str,
                         lineno=str(i),
-                        code=line.strip(),
+                        code=code,
                         src_var=name,
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
@@ -359,6 +377,14 @@ def _batch_track_groovy_static_final(
         return []
     total = len(src_files)
 
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]] = {}
+    for name, origins in tasks.items():
+        ext_list = []
+        for origin in origins:
+            def_path = _resolve_file(origin.filepath, src_dir)
+            ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
+        tasks_ext[name] = ext_list
+
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -367,21 +393,22 @@ def _batch_track_groovy_static_final(
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
             filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
         lines = _read_lines(src_file, encoding)
         for i, line in enumerate(lines, 1):
+            code = line.strip()
             for m in combined.finditer(line):
                 name = m.group(1)
-                for origin in tasks[name]:
-                    def_path = _resolve_file(origin.filepath, src_dir)
-                    if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
                     results.append(GrepRecord(
                         keyword=origin.keyword,
                         ref_type=RefType.INDIRECT.value,
-                        usage_type=classify_usage_groovy(line.strip()),
+                        usage_type=classify_usage_groovy(code),
                         filepath=filepath_str,
                         lineno=str(i),
-                        code=line.strip(),
+                        code=code,
                         src_var=name,
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
@@ -402,13 +429,22 @@ def _batch_track_define_c_all(
         return []
     define_map = _build_define_map_c(src_dir, stats, encoding)
 
-    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord]]] = {}
+    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]] = {}
     for var_name, records in tasks.items():
         aliases = _collect_define_aliases(var_name, define_map)
         for scan_name in [var_name] + aliases:
             is_primary = (scan_name == var_name)
             for record in records:
-                scan_tasks.setdefault(scan_name, []).append((is_primary, var_name, record))
+                if is_primary:
+                    def_path = _resolve_file(record.filepath, src_dir)
+                    def_resolved = def_path.resolve() if def_path else None
+                    def_lineno = int(record.lineno)
+                else:
+                    def_resolved = None
+                    def_lineno = 0
+                scan_tasks.setdefault(scan_name, []).append(
+                    (is_primary, var_name, record, def_resolved, def_lineno)
+                )
 
     if not scan_tasks:
         return []
@@ -428,22 +464,22 @@ def _batch_track_define_c_all(
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
             filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
         lines = _read_lines(src_file, encoding)
         for i, line in enumerate(lines, 1):
+            code = line.strip()
             for m in combined.finditer(line):
                 scan_name = m.group(1)
-                for is_primary, _var_name, origin in scan_tasks[scan_name]:
-                    if is_primary:
-                        def_path = _resolve_file(origin.filepath, src_dir)
-                        if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
-                            continue
+                for is_primary, _var_name, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
+                    if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
                     results.append(GrepRecord(
                         keyword=origin.keyword,
                         ref_type=RefType.INDIRECT.value,
-                        usage_type=classify_usage_c(line.strip()),
+                        usage_type=classify_usage_c(code),
                         filepath=filepath_str,
                         lineno=str(i),
-                        code=line.strip(),
+                        code=code,
                         src_var=scan_name,
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
@@ -464,13 +500,22 @@ def _batch_track_define_proc_all(
         return []
     define_map = _build_define_map_proc(src_dir, stats, encoding)
 
-    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord]]] = {}
+    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]] = {}
     for var_name, records in tasks.items():
         aliases = _collect_define_aliases(var_name, define_map)
         for scan_name in [var_name] + aliases:
             is_primary = (scan_name == var_name)
             for record in records:
-                scan_tasks.setdefault(scan_name, []).append((is_primary, var_name, record))
+                if is_primary:
+                    def_path = _resolve_file(record.filepath, src_dir)
+                    def_resolved = def_path.resolve() if def_path else None
+                    def_lineno = int(record.lineno)
+                else:
+                    def_resolved = None
+                    def_lineno = 0
+                scan_tasks.setdefault(scan_name, []).append(
+                    (is_primary, var_name, record, def_resolved, def_lineno)
+                )
 
     if not scan_tasks:
         return []
@@ -490,24 +535,24 @@ def _batch_track_define_proc_all(
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
             filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
         ext = src_file.suffix.lower()
         lines = _read_lines(src_file, encoding)
         for i, line in enumerate(lines, 1):
+            code = line.strip()
+            usage_fn = classify_usage_c if ext in (".c", ".h") else classify_usage_proc
             for m in combined.finditer(line):
                 scan_name = m.group(1)
-                for is_primary, _var_name, origin in scan_tasks[scan_name]:
-                    if is_primary:
-                        def_path = _resolve_file(origin.filepath, src_dir)
-                        if def_path and src_file.resolve() == def_path.resolve() and i == int(origin.lineno):
-                            continue
-                    usage = classify_usage_c(line.strip()) if ext in (".c", ".h") else classify_usage_proc(line.strip())
+                for is_primary, _var_name, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
+                    if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
                     results.append(GrepRecord(
                         keyword=origin.keyword,
                         ref_type=RefType.INDIRECT.value,
-                        usage_type=usage,
+                        usage_type=usage_fn(code),
                         filepath=filepath_str,
                         lineno=str(i),
-                        code=line.strip(),
+                        code=code,
                         src_var=scan_name,
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,

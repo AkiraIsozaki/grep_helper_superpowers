@@ -19,6 +19,7 @@ _C_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
 
 _file_cache: dict[str, list[str]] = {}
 _MAX_FILE_CACHE = 800
+_define_map_cache: dict[tuple[str, str], dict[str, str]] = {}
 
 
 def _get_cached_lines(
@@ -89,6 +90,9 @@ def _build_define_map(
     encoding_override: str | None = None,
 ) -> dict[str, str]:
     """src_dir配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。"""
+    cache_key = (str(src_dir), encoding_override or "")
+    if cache_key in _define_map_cache:
+        return _define_map_cache[cache_key]
     define_map: dict[str, str] = {}
     src_files = (sorted(src_dir.rglob("*.c"))
                  + sorted(src_dir.rglob("*.h"))
@@ -98,6 +102,7 @@ def _build_define_map(
             m = _DEFINE_ALIAS_PAT.match(line.strip())
             if m:
                 define_map[m.group(1)] = m.group(2)
+    _define_map_cache[cache_key] = define_map
     return define_map
 
 
@@ -107,14 +112,17 @@ def _collect_define_aliases(
     max_depth: int = 10,
 ) -> list[str]:
     """var_nameを直接・間接的に参照する#define名のリストをBFSで返す。"""
+    reverse: dict[str, list[str]] = {}
+    for k, v in define_map.items():
+        reverse.setdefault(v, []).append(k)
     aliases: list[str] = []
     to_visit = [var_name]
     seen: set[str] = {var_name}
     for _ in range(max_depth):
         next_level: list[str] = []
         for name in to_visit:
-            for k, v in define_map.items():
-                if v == name and k not in seen:
+            for k in reverse.get(name, []):
+                if k not in seen:
                     aliases.append(k)
                     next_level.append(k)
                     seen.add(k)

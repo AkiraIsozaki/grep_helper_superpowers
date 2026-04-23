@@ -85,6 +85,29 @@ class TestBuildDefineMap(unittest.TestCase):
             dm = ac._build_define_map(src, stats)
             self.assertNotIn("STATUS", dm)
 
+    def test_build_define_map_is_cached(self):
+        """同一 src_dir への2回目の呼び出しはキャッシュを返す（同一オブジェクト）。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "a.c").write_text('#define ALIAS TARGET\n')
+            stats = ac.ProcessStats()
+            ac._define_map_cache.clear()
+            dm1 = ac._build_define_map(src, stats)
+            dm2 = ac._build_define_map(src, stats)
+            self.assertIs(dm1, dm2)
+
+    def test_build_define_map_cache_keyed_by_encoding(self):
+        """encoding が異なる場合は別キャッシュエントリになる。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "a.c").write_text('#define ALIAS TARGET\n')
+            stats = ac.ProcessStats()
+            ac._define_map_cache.clear()
+            dm1 = ac._build_define_map(src, stats, encoding_override=None)
+            dm2 = ac._build_define_map(src, stats, encoding_override="utf-8")
+            # 異なるエンコーディング指定は別キャッシュエントリ（別オブジェクト）
+            self.assertIsNot(dm1, dm2)
+
 
 class TestCollectDefineAliases(unittest.TestCase):
     def test_two_level_chain(self):

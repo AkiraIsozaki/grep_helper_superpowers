@@ -29,6 +29,7 @@ _PROC_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
 
 _file_cache: dict[str, list[str]] = {}
 _MAX_FILE_CACHE = 800
+_define_map_cache: dict[tuple[str, str], dict[str, str]] = {}
 
 
 def _get_cached_lines(
@@ -111,6 +112,9 @@ def _build_define_map(
     encoding_override: str | None = None,
 ) -> dict[str, str]:
     """src_dir配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。"""
+    cache_key = (str(src_dir), encoding_override or "")
+    if cache_key in _define_map_cache:
+        return _define_map_cache[cache_key]
     define_map: dict[str, str] = {}
     pc_files = (sorted(src_dir.rglob("*.pc"))
                 + sorted(src_dir.rglob("*.c"))
@@ -120,6 +124,7 @@ def _build_define_map(
             m = _DEFINE_ALIAS_PAT.match(line.strip())
             if m:
                 define_map[m.group(1)] = m.group(2)
+    _define_map_cache[cache_key] = define_map
     return define_map
 
 
