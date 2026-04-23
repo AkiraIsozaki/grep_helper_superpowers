@@ -946,6 +946,9 @@ def _batch_track_constants(
         list(tasks.keys()), source_dir, [".java"], label="Java定数追跡",
     )
 
+    if not java_files:
+        return []
+
     combined = re.compile(
         r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\b"
     )
@@ -1015,6 +1018,9 @@ def _batch_track_getters(
         list(tasks.keys()), source_dir, [".java"], label="Javaゲッター追跡",
     )
 
+    if not java_files:
+        return []
+
     combined = re.compile(
         r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\s*\("
     )
@@ -1081,6 +1087,9 @@ def _batch_track_setters(
     java_files = file_list if file_list is not None else grep_filter_files(
         list(tasks.keys()), source_dir, [".java"], label="Javaセッター追跡",
     )
+
+    if not java_files:
+        return []
 
     combined = re.compile(
         r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\s*\("
@@ -1291,11 +1300,11 @@ def main() -> None:
             # 定数・getter・setter の事前フィルタを1回の rglob で共有
             java_candidates: list[Path] | None = None
             if project_scope_tasks or getter_tasks or setter_tasks:
-                all_java_names = (
+                all_java_names = list(dict.fromkeys(
                     list(project_scope_tasks.keys())
                     + list(getter_tasks.keys())
                     + list(setter_tasks.keys())
-                )
+                ))
                 java_candidates = grep_filter_files(
                     all_java_names, source_dir, [".java"], label="Java追跡",
                 )
