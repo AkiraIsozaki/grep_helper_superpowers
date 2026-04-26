@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from analyze_common import (
     GrepRecord, ProcessStats, RefType,
     detect_encoding, parse_grep_line, write_tsv,
-    grep_filter_files,
+    grep_filter_files, iter_grep_lines,
 )
 
 # ---------------------------------------------------------------------------
@@ -784,10 +784,10 @@ def main() -> None:
             print(f"  処理中: {grep_path.name} ...", file=sys.stderr, flush=True)
             keyword = grep_path.stem
             enc = detect_encoding(grep_path, args.encoding)
-            raw_lines = grep_path.read_text(encoding=enc, errors="replace").splitlines()
 
             direct_records = process_grep_lines_all(
-                raw_lines, keyword, source_dir, stats, args.encoding,
+                iter_grep_lines(grep_path, enc),
+                keyword, source_dir, stats, args.encoding,
             )
             all_records = list(direct_records)
             all_records.extend(
