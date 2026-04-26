@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
 
 _KOTLIN_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bconst\s+val\s+\w+\s*='),              "const定数定義"),
@@ -19,29 +19,6 @@ _KOTLIN_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'@\w+'),                                  "アノテーション"),
     (re.compile(r'\w+\s*\('),                              "関数引数"),
 ]
-
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
 
 
 def classify_usage_kotlin(code: str) -> str:
@@ -81,7 +58,7 @@ def track_const(
         except ValueError:
             filepath_str = str(src_file)
 
-        lines = _get_cached_lines(src_file, stats, encoding_override)
+        lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
         for i, line in enumerate(lines, 1):
             if (def_file is not None
                     and src_file.resolve() == def_file.resolve()

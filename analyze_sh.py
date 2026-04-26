@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
 
 _SH_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bexport\b|\bsetenv\b'), "環境変数エクスポート"),
@@ -19,29 +19,6 @@ _SH_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\becho\b|\bprint\b|\bprintf\b'), "echo/print出力"),
     (re.compile(r'^\s*\w+\s+\S'), "コマンド引数"),
 ]
-
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
 
 
 def classify_usage_sh(code: str) -> str:
@@ -87,7 +64,7 @@ def track_sh_variable(
     except ValueError:
         filepath_str = str(filepath)
 
-    lines = _get_cached_lines(filepath, stats, encoding_override)
+    lines = cached_file_lines(Path(filepath), detect_encoding(Path(filepath), encoding_override), stats)
     for i, line in enumerate(lines, 1):
         if i == def_lineno:
             continue

@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze
+import analyze_common
 from analyze import (
     GrepRecord,
     ProcessStats,
@@ -19,7 +20,7 @@ from analyze import (
     UsageType,
     _ast_cache,
     _batch_track_setters,
-    _file_lines_cache,
+
     _get_method_scope,
     _resolve_java_file,
     _search_in_lines,
@@ -1713,7 +1714,7 @@ class TestBatchTrackSetters(unittest.TestCase):
                 code='private String type = "TARGET";',
             )
             stats = ProcessStats()
-            _file_lines_cache.clear()
+            analyze_common._file_lines_cache_clear()
             results = _batch_track_setters({"setType": [origin]}, src_dir, stats)
             self.assertTrue(any("Service.java" in r.filepath for r in results))
             self.assertTrue(all(r.ref_type == RefType.SETTER.value for r in results))

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
 
 _DOTNET_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bconst\b|\bConst\b|\breadonly\b'),                           "定数定義(Const/readonly)"),
@@ -22,35 +22,12 @@ _DOTNET_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
 
 _DOTNET_EXTENSIONS = (".cs", ".vb")
 
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-
 _CS_CONST_PATS = [
     re.compile(r'\bconst\s+\w[\w<>]*\s+(\w+)\s*='),
     re.compile(r'\bpublic\s+static\s+readonly\s+\w[\w<>]*\s+(\w+)\s*='),
     re.compile(r'\bprivate\s+static\s+readonly\s+\w[\w<>]*\s+(\w+)\s*='),
 ]
 _VB_CONST_PAT = re.compile(r'\bConst\s+(\w+)\s+As\b')
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
 
 
 def classify_usage_dotnet(code: str) -> str:
@@ -94,7 +71,7 @@ def track_const_dotnet(
         except ValueError:
             filepath_str = str(src_file)
 
-        lines = _get_cached_lines(src_file, stats, encoding_override)
+        lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
         for i, line in enumerate(lines, 1):
             if src_file.resolve() == def_file.resolve() and i == int(record.lineno):
                 continue

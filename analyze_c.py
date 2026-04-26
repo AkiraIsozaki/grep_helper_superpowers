@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
 
 _C_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'#\s*define\b'),                               "#define定数定義"),
@@ -19,29 +19,7 @@ _C_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\w+\s*\('),                                   "関数引数"),
 ]
 
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
 _define_map_cache: dict[tuple[str, str], dict[str, str]] = {}
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
 
 
 def classify_usage_c(code: str) -> str:
@@ -89,7 +67,7 @@ def _build_define_map(
                  + sorted(src_dir.rglob("*.h"))
                  + sorted(src_dir.rglob("*.pc")))
     for src_file in src_files:
-        for line in _get_cached_lines(src_file, stats, encoding_override):
+        for line in cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats):
             m = _DEFINE_ALIAS_PAT.match(line.strip())
             if m:
                 define_map[m.group(1)] = m.group(2)
@@ -151,7 +129,7 @@ def track_define(
             except ValueError:
                 filepath_str = str(src_file)
 
-            lines = _get_cached_lines(src_file, stats, encoding_override)
+            lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
             for i, line in enumerate(lines, 1):
                 if (scan_name == var_name
                         and def_file is not None
@@ -190,7 +168,7 @@ def track_variable(
     except ValueError:
         filepath_str = str(candidate)
 
-    lines = _get_cached_lines(candidate, stats, encoding_override)
+    lines = cached_file_lines(Path(candidate), detect_encoding(Path(candidate), encoding_override), stats)
     for i, line in enumerate(lines, 1):
         if i == def_lineno:
             continue

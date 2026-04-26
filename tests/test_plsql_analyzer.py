@@ -2,6 +2,7 @@ import sys, unittest, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze_plsql as ap
+import analyze_common
 
 
 class TestClassifyUsagePlsql(unittest.TestCase):
@@ -52,7 +53,7 @@ class TestE2EPlsql(unittest.TestCase):
         self.assertTrue(src_dir.exists(), f"src_dir が存在しない: {src_dir}")
         self.assertTrue(expected_path.exists(), f"expected TSV が存在しない: {expected_path}")
 
-        ap._file_cache.clear()
+        analyze_common._file_lines_cache_clear()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

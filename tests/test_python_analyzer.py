@@ -2,6 +2,7 @@ import sys, unittest, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze_python as ap
+import analyze_common
 
 
 class TestClassifyUsagePython(unittest.TestCase):
@@ -41,7 +42,7 @@ class TestE2EPython(unittest.TestCase):
         self.assertTrue(src_dir.exists())
         self.assertTrue(expected_path.exists())
 
-        ap._file_cache.clear()
+        analyze_common._file_lines_cache_clear()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

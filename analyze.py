@@ -23,6 +23,7 @@ from analyze_common import (
     GrepRecord,
     ProcessStats,
     RefType,
+    cached_file_lines,
     detect_encoding,
     iter_grep_lines,
     parse_grep_line,
@@ -65,7 +66,6 @@ class UsageType(Enum):
 
 # キャッシュ上限（大規模プロジェクトでのOOM防止）
 _MAX_AST_CACHE_SIZE = 2000   # 60GB規模のソースに対応（~2-6GB使用。メモリ不足時は500〜1000に調整）
-_MAX_FILE_CACHE_SIZE = 800   # ファイル行キャッシュの最大エントリ数
 
 # None = javalang パースエラーが発生したファイル（フォールバック対象）
 _ast_cache: dict[str, object | None] = {}
@@ -73,9 +73,6 @@ _ast_cache: dict[str, object | None] = {}
 # AST行インデックス: filepath → {lineno: (usage_type | None, scope | None)}
 # usage_type: UsageType.value, scope: "class" | "method" | None
 _ast_line_index: dict[str, dict[int, tuple[str | None, str | None]]] = {}
-
-# ファイル行キャッシュ: filepath → lines（shift_jis, errors=replace）
-_file_lines_cache: dict[str, list[str]] = {}
 
 # Javaファイルリストキャッシュ: source_dir → sorted list of .java paths
 _java_files_cache: dict[str, list[Path]] = {}
@@ -228,25 +225,6 @@ def get_ast(filepath: str, source_dir: Path) -> object | None:
         _ast_cache[cache_key] = None
 
     return _ast_cache[cache_key]
-
-
-def _cached_read_lines(filepath: str | Path, stats: "ProcessStats | None" = None) -> list[str]:
-    """Javaファイルの行リストをキャッシュ付きで返す。同一ファイルは1回のみ読み込む。"""
-    key = str(filepath)
-    if key not in _file_lines_cache:
-        # キャッシュ上限に達した場合、最古エントリを削除
-        if len(_file_lines_cache) >= _MAX_FILE_CACHE_SIZE:
-            _file_lines_cache.pop(next(iter(_file_lines_cache)))
-        try:
-            fp = Path(filepath)
-            _file_lines_cache[key] = fp.read_text(
-                encoding=detect_encoding(fp, _encoding_override), errors="replace"
-            ).splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_lines_cache[key] = []
-    return _file_lines_cache[key]
 
 
 def _get_or_build_ast_index(
@@ -547,7 +525,7 @@ def _get_method_scope(
     if java_file is None:
         return None
 
-    lines = _cached_read_lines(java_file)
+    lines = cached_file_lines(Path(java_file), detect_encoding(Path(java_file), _encoding_override))
     if not lines:
         return None
 
@@ -661,7 +639,7 @@ def track_constant(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = _cached_read_lines(filepath_abs, stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
         if not lines:
             continue
 
@@ -698,7 +676,7 @@ def track_field(
     Returns:
         間接参照 GrepRecord のリスト
     """
-    lines = _cached_read_lines(str(class_file), stats)
+    lines = cached_file_lines(Path(class_file), detect_encoding(Path(class_file), _encoding_override), stats)
     if not lines:
         return []
 
@@ -742,7 +720,7 @@ def track_local(
     if java_file is None:
         return []
 
-    all_lines = _cached_read_lines(str(java_file), stats)
+    all_lines = cached_file_lines(Path(java_file), detect_encoding(Path(java_file), _encoding_override), stats)
     if not all_lines:
         return []
 
@@ -869,7 +847,7 @@ def track_setter_calls(
 
     for java_file in _get_java_files(source_dir):
         filepath_abs = str(java_file)
-        lines = _cached_read_lines(filepath_abs, stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
         for i, line in enumerate(lines, 1):
             if not pattern.search(line):
                 continue
@@ -928,7 +906,7 @@ def track_getter_calls(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = _cached_read_lines(filepath_abs, stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
         if not lines:
             continue
 
@@ -998,7 +976,7 @@ def _batch_track_constants(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = _cached_read_lines(filepath_abs, stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
         if not lines:
             continue
 
@@ -1070,7 +1048,7 @@ def _batch_track_getters(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = _cached_read_lines(filepath_abs, stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
         if not lines:
             continue
 
@@ -1140,7 +1118,7 @@ def _batch_track_setters(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = _cached_read_lines(filepath_abs, stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
         if not lines:
             continue
 

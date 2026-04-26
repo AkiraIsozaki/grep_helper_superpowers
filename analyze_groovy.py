@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
 
 _GROOVY_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bstatic\s+final\b'),                                              "static final定数定義"),
@@ -32,28 +32,6 @@ _GETTER_RETURN_PAT = re.compile(r'\breturn\s+(?:this\.)?(\w+)')
 _SETTER_ASSIGN_PAT = re.compile(r'(?:this\.)?(\w+)\s*=\s*\w+')
 _METHOD_DEF_PAT    = re.compile(r'\b(?:def|void|\w+)\s+(\w+)\s*\(')
 
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
 
 
 def classify_usage_groovy(code: str) -> str:
@@ -132,7 +110,7 @@ def track_static_final_groovy(
         except ValueError:
             filepath_str = str(src_file)
 
-        lines = _get_cached_lines(src_file, stats, encoding_override)
+        lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
         for i, line in enumerate(lines, 1):
             if src_file.resolve() == def_file.resolve() and i == int(record.lineno):
                 continue
@@ -162,7 +140,7 @@ def track_field_groovy(
     """同一ファイル内でフィールド使用箇所を追跡する。"""
     results: list[GrepRecord] = []
     pattern = re.compile(r'\b' + re.escape(field_name) + r'\b')
-    lines = _get_cached_lines(src_file, stats, encoding_override)
+    lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
 
     try:
         filepath_str = str(src_file.relative_to(src_dir))
@@ -214,7 +192,7 @@ def _batch_track_getter_setter_groovy(
         except ValueError:
             filepath_str = str(src_file)
 
-        lines = _get_cached_lines(src_file, stats, encoding_override)
+        lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
         for i, line in enumerate(lines, 1):
             for m in combined.finditer(line):
                 method_name = m.group(1)
@@ -351,7 +329,7 @@ def main() -> None:
                             all_records.extend(
                                 track_field_groovy(fname, src_file, record, source_dir, stats, args.encoding)
                             )
-                            lines = _get_cached_lines(src_file, stats, args.encoding)
+                            lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), args.encoding), stats)
                             for g in find_getter_names_groovy(fname, lines):
                                 getter_tasks.setdefault(g, []).append(record)
                             for s in find_setter_names_groovy(fname, lines):

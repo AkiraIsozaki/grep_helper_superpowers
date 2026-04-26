@@ -2,6 +2,7 @@ import sys, unittest, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze_groovy as ag
+import analyze_common
 
 
 class TestClassifyUsageGroovy(unittest.TestCase):
@@ -113,7 +114,7 @@ class TestTrackStaticFinalGroovy(unittest.TestCase):
                 code='static final String STATUS = "TARGET"',
             )
             stats = ProcessStats()
-            ag._file_cache.clear()
+            analyze_common._file_lines_cache_clear()
             results = ag.track_static_final_groovy("STATUS", src, record, stats)
             self.assertTrue(any("Service.groovy" in r.filepath for r in results))
             self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
@@ -130,7 +131,7 @@ class TestE2EGroovy(unittest.TestCase):
         self.assertTrue(src_dir.exists())
         self.assertTrue(expected_path.exists())
 
-        ag._file_cache.clear()
+        analyze_common._file_lines_cache_clear()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

@@ -2,6 +2,7 @@ import sys, unittest, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze_kotlin as ak
+import analyze_common
 
 
 class TestClassifyUsageKotlin(unittest.TestCase):
@@ -60,7 +61,7 @@ class TestTrackConst(unittest.TestCase):
                 code='const val STATUS = "TARGET"',
             )
             stats = ProcessStats()
-            ak._file_cache.clear()
+            analyze_common._file_lines_cache_clear()
             results = ak.track_const("STATUS", src, record, stats)
             filepaths = [r.filepath for r in results]
             self.assertTrue(any("Service.kt" in fp for fp in filepaths))
@@ -80,7 +81,7 @@ class TestTrackConst(unittest.TestCase):
                 code='const val STATUS = "TARGET"',
             )
             stats = ProcessStats()
-            ak._file_cache.clear()
+            analyze_common._file_lines_cache_clear()
             results = ak.track_const("STATUS", src, record, stats)
             self.assertEqual(results, [])
 
@@ -98,7 +99,7 @@ class TestE2EKotlin(unittest.TestCase):
         self.assertTrue(src_dir.exists(), f"src_dir が存在しない: {src_dir}")
         self.assertTrue(expected_path.exists(), f"expected TSV が存在しない: {expected_path}")
 
-        ak._file_cache.clear()
+        analyze_common._file_lines_cache_clear()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

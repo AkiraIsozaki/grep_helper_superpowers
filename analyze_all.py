@@ -11,7 +11,7 @@ from collections.abc import Iterable
 
 from analyze_common import (
     GrepRecord, ProcessStats, RefType,
-    detect_encoding, parse_grep_line, write_tsv,
+    cached_file_lines, detect_encoding, parse_grep_line, write_tsv,
     grep_filter_files, iter_grep_lines, resolve_file_cached,
 )
 
@@ -219,22 +219,6 @@ from analyze_groovy import (
 )
 
 
-_file_cache_all: dict[str, list[str]] = {}
-_MAX_FILE_CACHE_ALL = 800
-
-
-def _read_lines(filepath: Path, encoding: str | None) -> list[str]:
-    key = str(filepath)
-    if key in _file_cache_all:
-        return _file_cache_all[key]
-    if len(_file_cache_all) >= _MAX_FILE_CACHE_ALL:
-        _file_cache_all.pop(next(iter(_file_cache_all)))
-    enc = detect_encoding(filepath, encoding)
-    try:
-        _file_cache_all[key] = filepath.read_text(encoding=enc, errors="replace").splitlines()
-    except Exception:
-        _file_cache_all[key] = []
-    return _file_cache_all[key]
 
 
 def _batch_track_kotlin_const(
@@ -270,7 +254,7 @@ def _batch_track_kotlin_const(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
             for m in combined.finditer(line):
@@ -327,7 +311,7 @@ def _batch_track_dotnet_const(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
             for m in combined.finditer(line):
@@ -384,7 +368,7 @@ def _batch_track_groovy_static_final(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
             for m in combined.finditer(line):
@@ -455,7 +439,7 @@ def _batch_track_define_c_all(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
             for m in combined.finditer(line):
@@ -527,7 +511,7 @@ def _batch_track_define_proc_all(
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
         ext = src_file.suffix.lower()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
             usage_fn = classify_usage_c if ext in (".c", ".h") else classify_usage_proc
@@ -690,7 +674,7 @@ def _apply_indirect_tracking(
                         result.extend(track_field_groovy(
                             fname, src_file, record, source_dir, stats, encoding,
                         ))
-                        lines = _read_lines(src_file, encoding)
+                        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
                         for g in find_getter_names_groovy(fname, lines):
                             groovy_getter_tasks.setdefault(g, []).append(record)
                         for s in find_setter_names_groovy(fname, lines):

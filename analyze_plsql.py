@@ -22,30 +22,6 @@ _PLSQL_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bWHERE\b', re.IGNORECASE),                           "WHERE条件"),
 ]
 
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
-
-
 def classify_usage_plsql(code: str) -> str:
     """PL/SQLコード行の使用タイプを分類する（7種）。"""
     stripped = code.strip()
@@ -53,8 +29,6 @@ def classify_usage_plsql(code: str) -> str:
         if pattern.search(stripped):
             return usage_type
     return "その他"
-
-
 def process_grep_lines(
     lines: Iterable[str],
     keyword: str,
@@ -79,8 +53,6 @@ def process_grep_lines(
         ))
         stats.valid_lines += 1
     return records
-
-
 def process_grep_file(
     path: Path,
     keyword: str,
@@ -91,8 +63,6 @@ def process_grep_file(
     """grepファイル全行を処理し、直接参照レコードを返す。後方互換ラッパー。"""
     enc = detect_encoding(path, encoding_override)
     return process_grep_lines(iter_grep_lines(path, enc), keyword, source_dir, stats)
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PL/SQL grep結果 自動分類・使用箇所洗い出しツール")
     parser.add_argument("--source-dir", required=True, help="PL/SQLソースのルートディレクトリ")
@@ -100,8 +70,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--encoding",   default=None, help="文字コード強制指定（省略時は自動検出）")
     return parser
-
-
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -142,7 +110,5 @@ def main() -> None:
     print(f"処理ファイル: {', '.join(processed_files)}")
     print(f"総行数: {stats.total_lines}  有効: {stats.valid_lines}"
           f"  スキップ: {stats.skipped_lines}")
-
-
 if __name__ == "__main__":
     main()

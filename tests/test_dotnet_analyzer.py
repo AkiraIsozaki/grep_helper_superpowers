@@ -2,6 +2,7 @@ import sys, unittest, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze_dotnet as ad
+import analyze_common
 
 
 class TestClassifyUsageDotnet(unittest.TestCase):
@@ -82,7 +83,7 @@ class TestTrackConstDotnet(unittest.TestCase):
                 code='public const string STATUS = "TARGET";',
             )
             stats = ProcessStats()
-            ad._file_cache.clear()
+            analyze_common._file_lines_cache_clear()
             results = ad.track_const_dotnet("STATUS", src, record, stats)
             filepaths = [r.filepath for r in results]
             self.assertTrue(any("Service.cs" in fp for fp in filepaths))
@@ -103,7 +104,7 @@ class TestTrackConstDotnet(unittest.TestCase):
                 code='public const string STATUS = "TARGET";',
             )
             stats = ProcessStats()
-            ad._file_cache.clear()
+            analyze_common._file_lines_cache_clear()
             results = ad.track_const_dotnet("STATUS", src, record, stats)
             self.assertEqual(results, [])
 
@@ -119,7 +120,7 @@ class TestE2EDotnet(unittest.TestCase):
         self.assertTrue(src_dir.exists())
         self.assertTrue(expected_path.exists())
 
-        ad._file_cache.clear()
+        analyze_common._file_lines_cache_clear()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
