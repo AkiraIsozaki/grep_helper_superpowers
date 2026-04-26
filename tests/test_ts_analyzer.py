@@ -6,38 +6,48 @@ import analyze_common
 
 
 class TestClassifyUsageTs(unittest.TestCase):
-    def test_const_def(self):
+    def test_const定数定義として分類されること(self):
+        """const宣言で定数が代入されている行をconst定数定義として分類することを検証する"""
         self.assertEqual(at.classify_usage_ts('const STATUS = "TARGET"'), "const定数定義")
 
-    def test_let_assignment(self):
+    def test_let宣言は変数代入として分類されること(self):
+        """let宣言での代入が変数代入(let/var)として分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('let x = STATUS'), "変数代入(let/var)")
 
-    def test_var_assignment(self):
+    def test_var宣言は変数代入として分類されること(self):
+        """var宣言での代入が変数代入(let/var)として分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('var x = STATUS'), "変数代入(let/var)")
 
-    def test_if_condition(self):
+    def test_if文の比較は条件判定として分類されること(self):
+        """if文内の比較式が条件判定として分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('if (code === STATUS)'), "条件判定")
 
-    def test_switch_condition(self):
+    def test_switch文は条件判定として分類されること(self):
+        """switch文の対象式が条件判定として分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('switch (STATUS)'), "条件判定")
 
-    def test_return(self):
+    def test_return文として分類されること(self):
+        """return文での値返却がreturn文として分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('return STATUS'), "return文")
 
-    def test_decorator(self):
+    def test_デコレータ記法が分類されること(self):
+        """@で始まるデコレータ記法がデコレータとして分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('@Component'), "デコレータ")
 
-    def test_function_arg(self):
+    def test_関数呼び出しの引数として分類されること(self):
+        """関数呼び出しの引数として渡される値が関数引数として分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('process(STATUS)'), "関数引数")
 
-    def test_other(self):
+    def test_該当しない行はその他として分類されること(self):
+        """どのパターンにも該当しない行がその他として分類されることを検証する"""
         self.assertEqual(at.classify_usage_ts('STATUS'), "その他")
 
 
 class TestE2ETs(unittest.TestCase):
     TESTS_DIR = Path(__file__).parent / "ts"
 
-    def test_e2e_target(self):
+    def test_TARGETに対するE2E解析結果が期待TSVと一致すること(self):
+        """TARGETキーワードに対するgrep入力からTSコードを解析し、生成TSVが期待値と一致することを検証する"""
         src_dir       = self.TESTS_DIR / "src"
         input_dir     = self.TESTS_DIR / "input"
         expected_path = self.TESTS_DIR / "expected" / "TARGET.tsv"

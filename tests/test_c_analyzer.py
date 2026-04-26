@@ -6,71 +6,91 @@ import analyze_common
 
 
 class TestClassifyUsageC(unittest.TestCase):
-    def test_define(self):
+    def test_define定数定義を分類できる(self):
+        """#define 行が「#define定数定義」に分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('#define MAX_SIZE 100'), "#define定数定義")
 
-    def test_define_with_spaces(self):
+    def test_hashとdefineの間に空白がある場合も分類できる(self):
+        """# define のように空白があっても #define定数定義 と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('# define STATUS "value"'), "#define定数定義")
 
-    def test_condition_if(self):
+    def test_if文を条件判定として分類できる(self):
+        """if (...) 形式が「条件判定」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('if (code == STATUS)'), "条件判定")
 
-    def test_condition_strcmp(self):
+    def test_strcmp呼び出しを条件判定として分類できる(self):
+        """strcmp 呼び出しが「条件判定」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('strcmp(code, STATUS)'), "条件判定")
 
-    def test_condition_strncmp(self):
+    def test_strncmp呼び出しを条件判定として分類できる(self):
+        """strncmp 呼び出しが「条件判定」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('strncmp(code, STATUS, 4)'), "条件判定")
 
-    def test_condition_switch(self):
+    def test_switch文を条件判定として分類できる(self):
+        """switch 文が「条件判定」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('switch (code) {'), "条件判定")
 
-    def test_return(self):
+    def test_return文を分類できる(self):
+        """return 文が「return文」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('return STATUS;'), "return文")
 
-    def test_variable_assignment(self):
+    def test_変数代入を分類できる(self):
+        """配列宣言+代入が「変数代入」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('char buf[32] = STATUS;'), "変数代入")
 
-    def test_function_argument(self):
+    def test_関数引数を分類できる(self):
+        """関数呼び出しの引数として渡される場合「関数引数」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('process(STATUS)'), "関数引数")
 
-    def test_other(self):
+    def test_その他の出現を分類できる(self):
+        """単独識別子はどれにも該当せず「その他」と分類されることを確認する。"""
         self.assertEqual(ac.classify_usage_c('STATUS'), "その他")
 
-    def test_no_exec_sql(self):
+    def test_EXEC_SQL文はC側では分類されない(self):
+        """C アナライザは EXEC SQL 行を「EXEC SQL文」として分類しないことを確認する。"""
         result = ac.classify_usage_c('EXEC SQL SELECT * FROM t;')
         self.assertNotEqual(result, "EXEC SQL文")
 
 
 class TestExtractDefineName(unittest.TestCase):
-    def test_basic(self):
+    def test_define行から定数名を抽出できる(self):
+        """通常の #define 行から定数名を取り出せることを確認する。"""
         self.assertEqual(ac.extract_define_name('#define STATUS "value"'), "STATUS")
 
-    def test_with_spaces_after_hash(self):
+    def test_hashの後に空白があっても定数名を抽出できる(self):
+        """# define のように空白があっても定数名を取り出せることを確認する。"""
         self.assertEqual(ac.extract_define_name('# define STATUS "value"'), "STATUS")
 
-    def test_no_match(self):
+    def test_define以外の行ではNoneを返す(self):
+        """#define ではない行に対しては None を返すことを確認する。"""
         self.assertIsNone(ac.extract_define_name('if (x == STATUS)'))
 
-    def test_no_value(self):
+    def test_値を持たないdefineではNoneを返す(self):
+        """値が指定されていない #define 行に対しては None を返すことを確認する。"""
         self.assertIsNone(ac.extract_define_name('#define STATUS'))
 
 
 class TestExtractVariableNameC(unittest.TestCase):
-    def test_char_array(self):
+    def test_char配列宣言から変数名を抽出できる(self):
+        """char buf[32]; から変数名 buf を抽出できることを確認する。"""
         self.assertEqual(ac.extract_variable_name_c('char buf[32];'), "buf")
 
-    def test_int_with_assignment(self):
+    def test_int宣言と代入から変数名を抽出できる(self):
+        """int count = 0; から変数名 count を抽出できることを確認する。"""
         self.assertEqual(ac.extract_variable_name_c('int count = 0;'), "count")
 
-    def test_pointer(self):
+    def test_ポインタ宣言から変数名を抽出できる(self):
+        """char *ptr; から変数名 ptr を抽出できることを確認する。"""
         self.assertEqual(ac.extract_variable_name_c('char *ptr;'), "ptr")
 
-    def test_no_match(self):
+    def test_変数宣言ではない行ではNoneを返す(self):
+        """変数宣言でない行に対しては None を返すことを確認する。"""
         self.assertIsNone(ac.extract_variable_name_c('if (x == 1)'))
 
 
 class TestBuildDefineMap(unittest.TestCase):
-    def test_single_define_alias(self):
+    def test_単純なdefineエイリアスを収集できる(self):
+        """#define ALIAS TARGET 形式から ALIAS->TARGET のマップが作られることを確認する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "a.c").write_text('#define ALIAS TARGET\n')
@@ -78,7 +98,8 @@ class TestBuildDefineMap(unittest.TestCase):
             dm = ac._build_define_map(src, stats)
             self.assertEqual(dm.get("ALIAS"), "TARGET")
 
-    def test_ignores_string_literal(self):
+    def test_文字列リテラル値のdefineは無視される(self):
+        """値が文字列リテラルの #define はエイリアスマップに含まれないことを確認する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "a.c").write_text('#define STATUS "value"\n')
@@ -86,7 +107,7 @@ class TestBuildDefineMap(unittest.TestCase):
             dm = ac._build_define_map(src, stats)
             self.assertNotIn("STATUS", dm)
 
-    def test_build_define_map_is_cached(self):
+    def test_定義マップが同一src_dirに対してキャッシュされる(self):
         """同一 src_dir への2回目の呼び出しはキャッシュを返す（同一オブジェクト）。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
@@ -97,7 +118,7 @@ class TestBuildDefineMap(unittest.TestCase):
             dm2 = ac._build_define_map(src, stats)
             self.assertIs(dm1, dm2)
 
-    def test_build_define_map_cache_keyed_by_encoding(self):
+    def test_定義マップキャッシュがエンコーディング別に分かれる(self):
         """encoding が異なる場合は別キャッシュエントリになる。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
@@ -111,18 +132,21 @@ class TestBuildDefineMap(unittest.TestCase):
 
 
 class TestCollectDefineAliases(unittest.TestCase):
-    def test_two_level_chain(self):
+    def test_2段階のdefineチェーンを辿れる(self):
+        """B->A, C->B のような連鎖を辿って A のエイリアス集合に B と C を含むことを確認する。"""
         define_map = {"B": "A", "C": "B"}
         aliases = ac._collect_define_aliases("A", define_map)
         self.assertIn("B", aliases)
         self.assertIn("C", aliases)
 
-    def test_circular_reference_guard(self):
+    def test_循環参照があっても無限ループしない(self):
+        """A と B が相互参照していても収集が打ち切られ、件数が制限内に収まることを確認する。"""
         define_map = {"B": "A", "A": "B"}
         aliases = ac._collect_define_aliases("A", define_map)
         self.assertLessEqual(len(aliases), 10)
 
-    def test_no_aliases(self):
+    def test_該当エイリアスがない場合は空リストを返す(self):
+        """対象キーワードへ向かう #define が存在しない場合は空リストを返すことを確認する。"""
         define_map = {"X": "Y"}
         aliases = ac._collect_define_aliases("A", define_map)
         self.assertEqual(aliases, [])
@@ -133,7 +157,8 @@ class TestE2EC(unittest.TestCase):
 
     TESTS_DIR = Path(__file__).parent / "c"
 
-    def test_e2e_target(self):
+    def test_TARGETキーワードのE2E出力が期待TSVと一致する(self):
+        """sample.c に対し TARGET キーワードで解析した結果が期待 TSV と完全一致することを確認する。"""
         src_dir       = self.TESTS_DIR / "src"
         input_dir     = self.TESTS_DIR / "input"
         expected_path = self.TESTS_DIR / "expected" / "TARGET.tsv"
@@ -183,7 +208,7 @@ class TestE2EC(unittest.TestCase):
 
 
 class TestDefineMapWithReverse(unittest.TestCase):
-    def test_collect_aliases_reuses_reverse_map(self):
+    def test_エイリアス収集でreverseマップが再構築されない(self):
         """_collect_define_aliases を多数回呼んでも reverse 構築は 1 回。"""
         import analyze_c
         from analyze_c import _collect_define_aliases, _build_define_map, _define_map_cache

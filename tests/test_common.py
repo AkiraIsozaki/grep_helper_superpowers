@@ -5,21 +5,25 @@ from analyze_common import GrepRecord, ProcessStats, RefType, parse_grep_line, w
 import tempfile, csv
 
 class TestCommonImports(unittest.TestCase):
-    def test_grep_record_fields(self):
+    def test_GrepRecordのフィールドが正しく設定される(self):
+        """GrepRecord 生成時に keyword が設定され src_var が空文字となる。"""
         r = GrepRecord("kw", "直接", "その他", "f.sql", "1", "code")
         self.assertEqual(r.keyword, "kw")
         self.assertEqual(r.src_var, "")
 
-    def test_parse_grep_line_valid(self):
+    def test_有効なgrep行をパースできる(self):
+        """parse_grep_line がファイルパス・行番号・コードを正しく抽出する。"""
         result = parse_grep_line("src/sample.sql:10:WHERE code = 'A';")
         self.assertEqual(result["filepath"], "src/sample.sql")
         self.assertEqual(result["lineno"], "10")
         self.assertEqual(result["code"], "WHERE code = 'A';")
 
-    def test_parse_grep_line_binary(self):
+    def test_バイナリファイル行はNoneになる(self):
+        """`Binary file ... matches` 行は None として扱われる。"""
         self.assertIsNone(parse_grep_line("Binary file ./obj/sample.o matches"))
 
-    def test_write_tsv_creates_bom(self):
+    def test_write_tsvがBOM付きで書き出す(self):
+        """write_tsv の出力先頭に UTF-8 BOM が付与される。"""
         records = [GrepRecord("K", "直接", "その他", "f.sql", "1", "code")]
         with tempfile.TemporaryDirectory() as d:
             out = Path(d) / "out.tsv"
@@ -27,7 +31,8 @@ class TestCommonImports(unittest.TestCase):
             raw = out.read_bytes()
             self.assertTrue(raw.startswith(b'\xef\xbb\xbf'))
 
-    def test_write_tsv_sort_direct_before_indirect(self):
+    def test_write_tsvが直接を間接より先にソートする(self):
+        """write_tsv は ref_type 直接 → 間接 の順で並べて出力する。"""
         records = [
             GrepRecord("K", "間接", "その他", "b.sql", "5", "c",
                        src_var="V", src_file="a.sql", src_lineno="2"),
@@ -42,7 +47,8 @@ class TestCommonImports(unittest.TestCase):
             self.assertEqual(rows[1][1], "間接")
 
 class TestGrepFilterFiles(unittest.TestCase):
-    def test_includes_matching_file(self):
+    def test_マッチするファイルが結果に含まれる(self):
+        """指定キーワードを含むファイルは結果に含まれる。"""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -51,7 +57,8 @@ class TestGrepFilterFiles(unittest.TestCase):
             result = grep_filter_files(["FOO_CONST"], p, [".java"])
             self.assertIn(f, result)
 
-    def test_excludes_non_matching_file(self):
+    def test_マッチしないファイルは結果から除外される(self):
+        """キーワードを含まないファイルは結果から除外される。"""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -60,7 +67,8 @@ class TestGrepFilterFiles(unittest.TestCase):
             result = grep_filter_files(["FOO_CONST"], p, [".java"])
             self.assertNotIn(f, result)
 
-    def test_excludes_wrong_extension(self):
+    def test_対象拡張子以外のファイルは除外される(self):
+        """指定された拡張子以外のファイルは検索対象から外れる。"""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -69,7 +77,8 @@ class TestGrepFilterFiles(unittest.TestCase):
             result = grep_filter_files(["FOO_CONST"], p, [".java"])
             self.assertNotIn(f, result)
 
-    def test_empty_names_returns_all_files(self):
+    def test_キーワード空なら全ファイルを返す(self):
+        """names が空のときは拡張子に合う全ファイルを返す。"""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -78,7 +87,8 @@ class TestGrepFilterFiles(unittest.TestCase):
             result = grep_filter_files([], p, [".java"])
             self.assertEqual(set(result), {f1, f2})
 
-    def test_empty_file_excluded(self):
+    def test_空ファイルは結果に含まれない(self):
+        """サイズ 0 のファイルは grep 対象から除外される。"""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -86,7 +96,8 @@ class TestGrepFilterFiles(unittest.TestCase):
             result = grep_filter_files(["FOO"], p, [".java"])
             self.assertNotIn(f, result)
 
-    def test_multiple_extensions(self):
+    def test_複数拡張子を指定できる(self):
+        """複数拡張子を指定すると該当ファイルだけが含まれる。"""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -98,7 +109,8 @@ class TestGrepFilterFiles(unittest.TestCase):
             self.assertIn(kts, result)
             self.assertNotIn(java, result)
 
-    def test_result_is_sorted(self):
+    def test_結果がソート済みで返る(self):
+        """grep_filter_files の戻り値はソートされている。"""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -107,7 +119,8 @@ class TestGrepFilterFiles(unittest.TestCase):
             result = grep_filter_files(["PATTERN"], p, [".java"])
             self.assertEqual(result, sorted(result))
 
-    def test_label_prints_to_stderr(self):
+    def test_labelが標準エラー出力に表示される(self):
+        """label 引数が事前フィルタ完了メッセージとして stderr に出る。"""
         import tempfile, io
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -124,7 +137,7 @@ class TestGrepFilterFiles(unittest.TestCase):
 
 
 class TestDetectEncodingStreaming(unittest.TestCase):
-    def test_does_not_call_read_bytes(self):
+    def test_read_bytesを呼ばない(self):
         """巨大ファイルでも先頭 4KB だけ読む（read_bytes は使わない）。"""
         from analyze_common import detect_encoding
         from unittest.mock import patch
@@ -137,7 +150,7 @@ class TestDetectEncodingStreaming(unittest.TestCase):
                 enc = detect_encoding(p)
                 self.assertIsInstance(enc, str)
 
-    def test_reads_at_most_4kb(self):
+    def test_最大4KBまでしか読まない(self):
         """4096 バイト以下しか read しない。"""
         from analyze_common import detect_encoding
         with tempfile.TemporaryDirectory() as d:
@@ -161,7 +174,7 @@ class TestDetectEncodingStreaming(unittest.TestCase):
 
 
 class TestIterGrepLines(unittest.TestCase):
-    def test_yields_lines_without_loading_all(self):
+    def test_全行をロードせずにジェネレータで返す(self):
         """iter_grep_lines はジェネレータで返る（list 化されない）。"""
         from analyze_common import iter_grep_lines
         import types
@@ -172,7 +185,7 @@ class TestIterGrepLines(unittest.TestCase):
             self.assertIsInstance(it, types.GeneratorType)
             self.assertEqual(list(it), ["a:1:foo", "b:2:bar"])
 
-    def test_handles_decode_errors(self):
+    def test_デコードエラーを置換して継続する(self):
         """不正バイトは errors=replace で継続。"""
         from analyze_common import iter_grep_lines
         with tempfile.TemporaryDirectory() as d:
@@ -182,7 +195,7 @@ class TestIterGrepLines(unittest.TestCase):
 
 
 class TestIterSourceFiles(unittest.TestCase):
-    def test_caches_per_extension_set(self):
+    def test_拡張子セットごとにキャッシュする(self):
         """同じ (src_dir, extensions) は二度目はディスクを読まない。"""
         from analyze_common import iter_source_files, _source_files_cache_clear
         _source_files_cache_clear()
@@ -197,7 +210,8 @@ class TestIterSourceFiles(unittest.TestCase):
             self.assertEqual(len(r1), 1)     # b.java は無いので 1 件
             self.assertNotIn(p / "c.java", r2)
 
-    def test_different_extensions_separate_cache(self):
+    def test_拡張子が異なればキャッシュも別になる(self):
+        """異なる拡張子セットはそれぞれ独立にキャッシュされる。"""
         from analyze_common import iter_source_files, _source_files_cache_clear
         _source_files_cache_clear()
         with tempfile.TemporaryDirectory() as d:
@@ -210,7 +224,8 @@ class TestIterSourceFiles(unittest.TestCase):
 
 
 class TestResolveFileCached(unittest.TestCase):
-    def test_resolves_relative_to_src_dir(self):
+    def test_src_dirからの相対パスを解決できる(self):
+        """サブディレクトリ内のファイルを相対パスから解決する。"""
         from analyze_common import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
         with tempfile.TemporaryDirectory() as d:
@@ -220,13 +235,15 @@ class TestResolveFileCached(unittest.TestCase):
             f.write_text("x")
             self.assertEqual(resolve_file_cached("sub/x.txt", p), f)
 
-    def test_returns_none_for_missing(self):
+    def test_存在しないファイルはNoneを返す(self):
+        """対象ファイルが存在しないときは None が返る。"""
         from analyze_common import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             self.assertIsNone(resolve_file_cached("missing.txt", Path(d)))
 
-    def test_caches_result(self):
+    def test_解決結果がキャッシュされる(self):
+        """一度解決した結果はファイル削除後もキャッシュから返る。"""
         from analyze_common import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
         with tempfile.TemporaryDirectory() as d:
@@ -240,7 +257,8 @@ class TestResolveFileCached(unittest.TestCase):
 
 
 class TestCachedFileLines(unittest.TestCase):
-    def test_returns_lines(self):
+    def test_行リストを返す(self):
+        """cached_file_lines はファイルを行ごとのリストとして返す。"""
         from analyze_common import cached_file_lines, _file_lines_cache_clear
         _file_lines_cache_clear()
         with tempfile.TemporaryDirectory() as d:
@@ -248,7 +266,8 @@ class TestCachedFileLines(unittest.TestCase):
             p.write_text("a\nb\nc\n", encoding="utf-8")
             self.assertEqual(cached_file_lines(p, "utf-8"), ["a", "b", "c"])
 
-    def test_caches_within_size_limit(self):
+    def test_サイズ上限内ならキャッシュされる(self):
+        """サイズ上限内のファイルは内部キャッシュに保持される。"""
         from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache
         _file_lines_cache_clear()
         with tempfile.TemporaryDirectory() as d:
@@ -257,7 +276,7 @@ class TestCachedFileLines(unittest.TestCase):
             cached_file_lines(p, "utf-8")
             self.assertIn(str(p), _file_lines_cache)
 
-    def test_evicts_when_total_size_exceeds_limit(self):
+    def test_合計サイズが上限超過で古いものを破棄する(self):
         """合計バイト数が上限を超えたら最古のエントリを破棄。"""
         from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache, set_file_lines_cache_limit
         _file_lines_cache_clear()
@@ -274,18 +293,20 @@ class TestCachedFileLines(unittest.TestCase):
 
 
 class TestBatchScannerSelector(unittest.TestCase):
-    def test_uses_aho_corasick_for_many_patterns(self):
+    def test_パターン数が多いとAhoCorasickを選ぶ(self):
         """パターン数が閾値超えで Aho-Corasick が選択される。"""
         from analyze_common import build_batch_scanner
         scanner = build_batch_scanner([f"NAME{i:04d}" for i in range(200)])
         self.assertEqual(scanner.backend, "ahocorasick")
 
-    def test_uses_regex_for_few_patterns(self):
+    def test_パターン数が少ないとregexを選ぶ(self):
+        """パターン数が少ない場合は regex バックエンドが選ばれる。"""
         from analyze_common import build_batch_scanner
         scanner = build_batch_scanner(["A", "B", "C"])
         self.assertEqual(scanner.backend, "regex")
 
-    def test_findall_word_boundary(self):
+    def test_findallが単語境界でマッチする(self):
+        """findall は単語境界を考慮し FOOBAR にはマッチしない。"""
         from analyze_common import build_batch_scanner
         scanner = build_batch_scanner(["FOO"])
         line = "x = FOO + FOOBAR;"

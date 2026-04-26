@@ -7,149 +7,184 @@ import analyze_all as aa
 
 class TestDetectLanguage(unittest.TestCase):
 
-    def test_java_extension(self):
+    def test_java拡張子はjavaと判定される(self):
+        """.java 拡張子は java 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/Foo.java", Path(".")), "java")
 
-    def test_kotlin_kt(self):
+    def test_kt拡張子はkotlinと判定される(self):
+        """.kt 拡張子は kotlin 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/Foo.kt", Path(".")), "kotlin")
 
-    def test_kotlin_kts(self):
+    def test_kts拡張子はkotlinと判定される(self):
+        """.kts 拡張子は kotlin 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/build.kts", Path(".")), "kotlin")
 
-    def test_c_extension(self):
+    def test_c拡張子はc言語と判定される(self):
+        """.c 拡張子は c 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/util.c", Path(".")), "c")
 
-    def test_header_extension(self):
+    def test_h拡張子はc言語と判定される(self):
+        """.h ヘッダ拡張子は c 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/util.h", Path(".")), "c")
 
-    def test_proc_pc(self):
+    def test_pc拡張子はprocと判定される(self):
+        """.pc 拡張子は proc(Pro*C)として判定される。"""
         self.assertEqual(aa.detect_language("src/proc.pc", Path(".")), "proc")
 
-    def test_sql_extension(self):
+    def test_sql拡張子はsqlと判定される(self):
+        """.sql 拡張子は sql 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/query.sql", Path(".")), "sql")
 
-    def test_sh_extension(self):
+    def test_sh拡張子はshと判定される(self):
+        """.sh 拡張子は sh(シェル)として判定される。"""
         self.assertEqual(aa.detect_language("src/run.sh", Path(".")), "sh")
 
-    def test_bash_extension(self):
+    def test_bash拡張子はshと判定される(self):
+        """.bash 拡張子は sh(シェル)として判定される。"""
         self.assertEqual(aa.detect_language("src/run.bash", Path(".")), "sh")
 
-    def test_ts_extension(self):
+    def test_ts拡張子はtsと判定される(self):
+        """.ts 拡張子は ts(TypeScript)として判定される。"""
         self.assertEqual(aa.detect_language("src/app.ts", Path(".")), "ts")
 
-    def test_js_extension(self):
+    def test_js拡張子はtsと判定される(self):
+        """.js 拡張子も ts カテゴリとして判定される。"""
         self.assertEqual(aa.detect_language("src/app.js", Path(".")), "ts")
 
-    def test_tsx_extension(self):
+    def test_tsx拡張子はtsと判定される(self):
+        """.tsx 拡張子は ts カテゴリとして判定される。"""
         self.assertEqual(aa.detect_language("src/app.tsx", Path(".")), "ts")
 
-    def test_jsx_extension(self):
+    def test_jsx拡張子はtsと判定される(self):
+        """.jsx 拡張子は ts カテゴリとして判定される。"""
         self.assertEqual(aa.detect_language("src/app.jsx", Path(".")), "ts")
 
-    def test_python_extension(self):
+    def test_py拡張子はpythonと判定される(self):
+        """.py 拡張子は python 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/util.py", Path(".")), "python")
 
-    def test_perl_pl(self):
+    def test_pl拡張子はperlと判定される(self):
+        """.pl 拡張子は perl 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/script.pl", Path(".")), "perl")
 
-    def test_perl_pm(self):
+    def test_pm拡張子はperlと判定される(self):
+        """.pm 拡張子は perl モジュールとして判定される。"""
         self.assertEqual(aa.detect_language("src/Mod.pm", Path(".")), "perl")
 
-    def test_dotnet_cs(self):
+    def test_cs拡張子はdotnetと判定される(self):
+        """.cs 拡張子は dotnet(C#)として判定される。"""
         self.assertEqual(aa.detect_language("src/App.cs", Path(".")), "dotnet")
 
-    def test_dotnet_vb(self):
+    def test_vb拡張子はdotnetと判定される(self):
+        """.vb 拡張子は dotnet(VB.NET)として判定される。"""
         self.assertEqual(aa.detect_language("src/App.vb", Path(".")), "dotnet")
 
-    def test_groovy_extension(self):
+    def test_groovy拡張子はgroovyと判定される(self):
+        """.groovy 拡張子は groovy 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/Svc.groovy", Path(".")), "groovy")
 
-    def test_groovy_gvy(self):
+    def test_gvy拡張子はgroovyと判定される(self):
+        """.gvy 拡張子は groovy 言語として判定される。"""
         self.assertEqual(aa.detect_language("src/Svc.gvy", Path(".")), "groovy")
 
-    def test_plsql_pls(self):
+    def test_pls拡張子はplsqlと判定される(self):
+        """.pls 拡張子は plsql として判定される。"""
         self.assertEqual(aa.detect_language("src/pkg.pls", Path(".")), "plsql")
 
-    def test_plsql_pck(self):
+    def test_pck拡張子はplsqlと判定される(self):
+        """.pck 拡張子は plsql として判定される。"""
         self.assertEqual(aa.detect_language("src/pkg.pck", Path(".")), "plsql")
 
-    def test_xml_is_other(self):
+    def test_xml拡張子はotherと判定される(self):
+        """.xml 拡張子はサポート対象外で other に分類される。"""
         self.assertEqual(aa.detect_language("src/config.xml", Path(".")), "other")
 
-    def test_yaml_is_other(self):
+    def test_yaml拡張子はotherと判定される(self):
+        """.yaml 拡張子はサポート対象外で other に分類される。"""
         self.assertEqual(aa.detect_language("src/app.yaml", Path(".")), "other")
 
-    def test_no_extension_perl_shebang(self):
+    def test_拡張子なしperlシェバンはperlと判定される(self):
+        """拡張子なしファイルでも #!/usr/bin/perl のシェバンで perl と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "myscript"
             f.write_text("#!/usr/bin/perl\nprint 1;\n")
             self.assertEqual(aa.detect_language("myscript", src), "perl")
 
-    def test_no_extension_env_perl_shebang(self):
+    def test_拡張子なしenv_perlシェバンはperlと判定される(self):
+        """拡張子なしファイルでも #!/usr/bin/env perl のシェバンで perl と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "myscript"
             f.write_text("#!/usr/bin/env perl\nprint 1;\n")
             self.assertEqual(aa.detect_language("myscript", src), "perl")
 
-    def test_no_extension_bash_shebang(self):
+    def test_拡張子なしbashシェバンはshと判定される(self):
+        """拡張子なしファイルでも #!/bin/bash のシェバンで sh と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("#!/bin/bash\necho hi\n")
             self.assertEqual(aa.detect_language("run", src), "sh")
 
-    def test_no_extension_sh_shebang(self):
+    def test_拡張子なしshシェバンはshと判定される(self):
+        """拡張子なしファイルでも #!/bin/sh のシェバンで sh と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("#!/bin/sh\necho hi\n")
             self.assertEqual(aa.detect_language("run", src), "sh")
 
-    def test_no_extension_csh_shebang(self):
+    def test_拡張子なしcshシェバンはshと判定される(self):
+        """拡張子なしファイルでも #!/bin/csh のシェバンで sh と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("#!/bin/csh\necho hi\n")
             self.assertEqual(aa.detect_language("run", src), "sh")
 
-    def test_no_extension_tcsh_shebang(self):
+    def test_拡張子なしtcshシェバンはshと判定される(self):
+        """拡張子なしファイルでも #!/bin/tcsh のシェバンで sh と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("#!/bin/tcsh\necho hi\n")
             self.assertEqual(aa.detect_language("run", src), "sh")
 
-    def test_no_extension_ksh_shebang(self):
+    def test_拡張子なしkshシェバンはshと判定される(self):
+        """拡張子なしファイルでも #!/bin/ksh のシェバンで sh と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("#!/bin/ksh\necho hi\n")
             self.assertEqual(aa.detect_language("run", src), "sh")
 
-    def test_no_extension_ksh93_shebang(self):
+    def test_拡張子なしksh93シェバンはshと判定される(self):
+        """拡張子なしファイルでも #!/bin/ksh93 のシェバンで sh と判定される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("#!/bin/ksh93\necho hi\n")
             self.assertEqual(aa.detect_language("run", src), "sh")
 
-    def test_no_extension_unknown_shebang_is_other(self):
+    def test_拡張子なし未知シェバンはotherと判定される(self):
+        """サポート外のシェバン(例:ruby)は other に分類される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("#!/usr/bin/ruby\nputs 1\n")
             self.assertEqual(aa.detect_language("run", src), "other")
 
-    def test_no_extension_no_shebang_is_other(self):
+    def test_拡張子なしシェバンなしはotherと判定される(self):
+        """シェバンを持たない拡張子なしファイルは other に分類される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
             f.write_text("some content\n")
             self.assertEqual(aa.detect_language("run", src), "other")
 
-    def test_no_extension_file_missing_is_other(self):
+    def test_拡張子なしファイル不在はotherと判定される(self):
+        """存在しない拡張子なしファイルは other にフォールバックする。"""
         self.assertEqual(aa.detect_language("nonexistent_file", Path("/tmp")), "other")
 
 
@@ -161,7 +196,8 @@ class TestDirectClassification(unittest.TestCase):
         stats = ProcessStats()
         return aa.process_grep_lines_all(grep_lines, "TEST", source_dir, stats, None)
 
-    def test_java_line_classified(self):
+    def test_java行は定数として直接参照に分類される(self):
+        """Java の static final 定数行が「定数」「直接」として分類される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -172,7 +208,8 @@ class TestDirectClassification(unittest.TestCase):
             self.assertIn("定数", records[0].usage_type)
             self.assertEqual(records[0].ref_type, "直接")
 
-    def test_groovy_line_classified(self):
+    def test_groovy行は条件判定として分類される(self):
+        """Groovy の if 文比較行が「条件判定」として分類される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -182,7 +219,8 @@ class TestDirectClassification(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0].usage_type, "条件判定")
 
-    def test_sh_line_classified(self):
+    def test_sh行は変数代入として分類される(self):
+        """シェルスクリプトの代入行が「変数代入」として分類される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -192,7 +230,8 @@ class TestDirectClassification(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0].usage_type, "変数代入")
 
-    def test_unknown_extension_is_other(self):
+    def test_未知拡張子は直接かつその他に分類される(self):
+        """サポート外拡張子(.xml)は ref_type=直接、usage_type=その他になる。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -203,7 +242,8 @@ class TestDirectClassification(unittest.TestCase):
             self.assertEqual(records[0].usage_type, "その他")
             self.assertEqual(records[0].ref_type, "直接")
 
-    def test_no_extension_perl_shebang_classified(self):
+    def test_拡張子なしperlファイルはその他に分類されない(self):
+        """拡張子なしでも Perl シェバンがあれば「その他」にフォールバックしない。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             script = src / "cleanup"
@@ -216,7 +256,8 @@ class TestDirectClassification(unittest.TestCase):
             # Perl classifies assignment as "変数代入" or similar — just not "その他"
             self.assertNotEqual(records[0].usage_type, "その他")
 
-    def test_invalid_grep_line_skipped(self):
+    def test_不正なgrep行はスキップされる(self):
+        """grep 形式に合致しない行はレコード化されずスキップされる。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -225,7 +266,8 @@ class TestDirectClassification(unittest.TestCase):
             )
             self.assertEqual(len(records), 0)
 
-    def test_binary_line_skipped(self):
+    def test_バイナリ行はスキップされる(self):
+        """grep の "Binary file ... matches" 行はスキップされる。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -237,7 +279,8 @@ class TestDirectClassification(unittest.TestCase):
 
 class TestIndirectTracking(unittest.TestCase):
 
-    def test_groovy_static_final_tracks_indirect(self):
+    def test_groovyのstatic_final定数は間接参照を追跡する(self):
+        """Groovy の static final 定数定義から参照する別ファイルを間接参照として検出する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "Const.groovy").write_text(
@@ -257,7 +300,8 @@ class TestIndirectTracking(unittest.TestCase):
             indirect = aa._apply_indirect_tracking([direct], src, stats, None)
             self.assertTrue(any("Service.groovy" in r.filepath for r in indirect))
 
-    def test_sh_variable_tracks_indirect(self):
+    def test_sh変数定義は間接参照を追跡する(self):
+        """シェル変数代入から $VAR 参照を間接参照として検出する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             script = src / "deploy.sh"
@@ -274,7 +318,8 @@ class TestIndirectTracking(unittest.TestCase):
             self.assertTrue(any("deploy.sh" in r.filepath for r in indirect))
             self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in indirect))
 
-    def test_dotnet_const_tracks_indirect(self):
+    def test_dotnetのconst定義は間接参照を追跡する(self):
+        """C# の const 定義から参照する別ファイルを間接参照として検出する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "Consts.cs").write_text('const string STATUS = "TARGET";\n')
@@ -290,7 +335,8 @@ class TestIndirectTracking(unittest.TestCase):
             indirect = aa._apply_indirect_tracking([direct], src, stats, None)
             self.assertTrue(any("Service.cs" in r.filepath for r in indirect))
 
-    def test_other_language_no_indirect(self):
+    def test_対象外言語は間接参照を追跡しない(self):
+        """サポート外言語(usage_type=その他)は間接参照を生成しない。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             from analyze_common import ProcessStats, GrepRecord, RefType
@@ -308,8 +354,8 @@ class TestIndirectTracking(unittest.TestCase):
 class TestE2EAll(unittest.TestCase):
     TESTS_DIR = Path(__file__).parent / "all"
 
-    def test_all_input_lines_appear_in_output(self):
-        """全grep行がTSVに含まれること（漏れゼロ確認）。"""
+    def test_全grep行がTSV出力に含まれる(self):
+        """全grep行がTSVに含まれること(漏れゼロ確認)。"""
         src_dir   = self.TESTS_DIR / "src"
         input_dir = self.TESTS_DIR / "input"
 
@@ -354,7 +400,8 @@ class TestE2EAll(unittest.TestCase):
                 self.assertNotEqual(cleanup_records[0].usage_type, "その他",
                     "cleanup file (Perl shebang) was classified as 'other' — shebang detection failed")
 
-    def test_unknown_extension_has_other_usage_type(self):
+    def test_未知拡張子のusage_typeはその他になる(self):
+        """E2E入力中の .xml ファイルは usage_type が「その他」になる。"""
         src_dir   = self.TESTS_DIR / "src"
         input_dir = self.TESTS_DIR / "input"
         grep_path = input_dir / "TARGET.grep"
@@ -365,7 +412,8 @@ class TestE2EAll(unittest.TestCase):
         self.assertEqual(len(xml_records), 1)
         self.assertEqual(xml_records[0].usage_type, "その他")
 
-    def test_no_extension_perl_not_other(self):
+    def test_拡張子なしperlファイルはその他にならない(self):
+        """E2E入力中の拡張子なし Perl ファイル(cleanup)はシェバン判定で「その他」にならない。"""
         # Use repo root as src_dir so that "tests/all/src/cleanup" resolves correctly
         src_dir   = Path(__file__).parent.parent
         input_dir = self.TESTS_DIR / "input"
@@ -379,7 +427,7 @@ class TestE2EAll(unittest.TestCase):
 
 
 class TestProcessGrepLinesAllIterable(unittest.TestCase):
-    def test_accepts_generator(self):
+    def test_ジェネレータ入力を受け付ける(self):
         """list ではなくジェネレータも受け取れる。"""
         from analyze_all import process_grep_lines_all
         from analyze_common import ProcessStats
@@ -391,7 +439,7 @@ class TestProcessGrepLinesAllIterable(unittest.TestCase):
 
 
 class TestMainStreaming(unittest.TestCase):
-    def test_main_does_not_load_full_grep_file(self):
+    def test_mainはgrepファイル全体を読み込まない(self):
         """main は grep_path.read_text(...).splitlines() を使わない。"""
         import analyze_all, inspect
         src = inspect.getsource(analyze_all.main)

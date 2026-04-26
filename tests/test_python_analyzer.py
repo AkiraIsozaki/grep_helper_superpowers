@@ -6,35 +6,44 @@ import analyze_common
 
 
 class TestClassifyUsagePython(unittest.TestCase):
-    def test_assignment(self):
+    def test_単純な変数代入を変数代入と分類する(self):
+        """シンボルを右辺に持つ代入文が変数代入と判定されること"""
         self.assertEqual(ap.classify_usage_python('STATUS = "TARGET"'), "変数代入")
 
-    def test_indented_assignment(self):
+    def test_インデント付き代入も変数代入と分類する(self):
+        """先頭にインデントがある代入文も変数代入と判定されること"""
         self.assertEqual(ap.classify_usage_python('    x = STATUS'), "変数代入")
 
-    def test_if_condition(self):
+    def test_if文の比較式を条件判定と分類する(self):
+        """if文の等価比較が条件判定として扱われること"""
         self.assertEqual(ap.classify_usage_python('if code == STATUS:'), "条件判定")
 
-    def test_elif_condition(self):
+    def test_elif文のin式を条件判定と分類する(self):
+        """elif文の包含チェックが条件判定として扱われること"""
         self.assertEqual(ap.classify_usage_python('elif STATUS in values:'), "条件判定")
 
-    def test_return(self):
+    def test_return文をreturn文と分類する(self):
+        """return文に出現するシンボルがreturn文と判定されること"""
         self.assertEqual(ap.classify_usage_python('return STATUS'), "return文")
 
-    def test_decorator(self):
+    def test_decoratorをデコレータと分類する(self):
+        """@で始まる行がデコレータと判定されること"""
         self.assertEqual(ap.classify_usage_python('@property'), "デコレータ")
 
-    def test_function_arg(self):
+    def test_関数呼び出しの引数を関数引数と分類する(self):
+        """関数呼び出しに渡されたシンボルが関数引数と判定されること"""
         self.assertEqual(ap.classify_usage_python('process(STATUS)'), "関数引数")
 
-    def test_other(self):
+    def test_該当しない行はその他と分類する(self):
+        """どの分類にも合致しない行がその他と判定されること"""
         self.assertEqual(ap.classify_usage_python('STATUS'), "その他")
 
 
 class TestE2EPython(unittest.TestCase):
     TESTS_DIR = Path(__file__).parent / "python"
 
-    def test_e2e_target(self):
+    def test_TARGETシンボルのE2E解析結果が期待TSVと一致する(self):
+        """grep入力からTSVを生成しゴールデンファイルと一致することを検証する"""
         src_dir       = self.TESTS_DIR / "src"
         input_dir     = self.TESTS_DIR / "input"
         expected_path = self.TESTS_DIR / "expected" / "TARGET.tsv"
