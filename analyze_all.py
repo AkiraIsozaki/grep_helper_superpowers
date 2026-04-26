@@ -115,15 +115,14 @@ def _classify_for_lang(
     encoding: str | None,
 ) -> str:
     """言語キーに対応する classify_usage 関数を呼び出す。"""
-    # NOTE: _encoding_override is a module global in analyze.py — not thread-safe.
     if lang == "java":
-        _java_mod._encoding_override = encoding
         return _java_mod.classify_usage(
             code=code,
             filepath=filepath,
             lineno=int(lineno),
             source_dir=source_dir,
             stats=stats,
+            encoding_override=encoding,
         )
     if lang == "other":
         return "その他"
@@ -574,25 +573,34 @@ def _apply_indirect_tracking(
             var_name = extract_variable_name(record.code, record.usage_type)
             if not var_name:
                 continue
-            _java_mod._encoding_override = encoding
             scope = determine_scope(
                 record.usage_type, record.code,
                 record.filepath, source_dir, int(record.lineno),
+                encoding_override=encoding,
             )
             if scope == "project":
                 java_project_tasks.setdefault(var_name, []).append(record)
             elif scope == "class":
                 class_file = _resolve_java_file(record.filepath, source_dir)
                 if class_file:
-                    result.extend(track_field(var_name, class_file, record, source_dir, stats))
-                    for g in find_getter_names(var_name, class_file):
+                    result.extend(track_field(
+                        var_name, class_file, record, source_dir, stats,
+                        encoding_override=encoding,
+                    ))
+                    for g in find_getter_names(var_name, class_file, encoding_override=encoding):
                         java_getter_tasks.setdefault(g, []).append(record)
-                    for s in find_setter_names(var_name, class_file):
+                    for s in find_setter_names(var_name, class_file, encoding_override=encoding):
                         java_setter_tasks.setdefault(s, []).append(record)
             elif scope == "method":
-                method_scope = _get_method_scope(record.filepath, source_dir, int(record.lineno))
+                method_scope = _get_method_scope(
+                    record.filepath, source_dir, int(record.lineno),
+                    encoding_override=encoding,
+                )
                 if method_scope:
-                    result.extend(track_local(var_name, method_scope, record, source_dir, stats))
+                    result.extend(track_local(
+                        var_name, method_scope, record, source_dir, stats,
+                        encoding_override=encoding,
+                    ))
 
         # ── Kotlin ────────────────────────────────────────────────────────
         elif lang == "kotlin":
@@ -703,6 +711,7 @@ def _apply_indirect_tracking(
             getter_tasks=java_getter_tasks,
             setter_tasks=java_setter_tasks,
             source_dir=source_dir, stats=stats, file_list=java_candidates,
+            encoding_override=encoding,
         ))
 
     # Kotlin / .NET / Groovy static final / C #define / Pro*C #define バッチ処理

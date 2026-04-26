@@ -1756,5 +1756,13 @@ class TestBatchTrackOnePass(unittest.TestCase):
             self.assertIn(("間接（setter経由）", "setCode"), ref_types)
 
 
+class TestNoModuleGlobalEncoding(unittest.TestCase):
+    def test_no_encoding_override_module_global(self):
+        """_encoding_override モジュールグローバルは廃止されている。"""
+        import analyze
+        self.assertFalse(hasattr(analyze, "_encoding_override"),
+            "_encoding_override は引数化されたため削除されているべき")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -31,9 +31,6 @@ from analyze_common import (
     grep_filter_files,
 )
 
-# 文字コードオーバーライド（--encoding CLIオプションで設定される）
-_encoding_override: str | None = None
-
 # ---------------------------------------------------------------------------
 # Java専用定数
 # ---------------------------------------------------------------------------
@@ -89,16 +86,18 @@ def process_grep_lines(
     *,
     report_progress: bool = False,
     path_name: str = "",
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """grep行イテラブルを処理し、第1段階（直接参照）レコードのリストを返す。
 
     Args:
-        lines:           処理する行のイテラブル（iter_grep_lines 等）
-        keyword:         検索文言（入力ファイル名から取得）
-        source_dir:      Javaソースコードのルートディレクトリ
-        stats:           処理統計（更新される）
-        report_progress: Trueのとき10万行ごとに進捗表示
-        path_name:       進捗表示に使うファイル名（report_progress=True時のみ使用）
+        lines:             処理する行のイテラブル（iter_grep_lines 等）
+        keyword:           検索文言（入力ファイル名から取得）
+        source_dir:        Javaソースコードのルートディレクトリ
+        stats:             処理統計（更新される）
+        report_progress:   Trueのとき10万行ごとに進捗表示
+        path_name:         進捗表示に使うファイル名（report_progress=True時のみ使用）
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         直接参照 GrepRecord のリスト
@@ -128,6 +127,7 @@ def process_grep_lines(
             lineno=int(parsed["lineno"]),
             source_dir=source_dir,
             stats=stats,
+            encoding_override=encoding_override,
         )
 
         records.append(GrepRecord(
@@ -148,14 +148,17 @@ def process_grep_file(
     keyword: str,
     source_dir: Path,
     stats: ProcessStats,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """grepファイル全行を処理し、第1段階（直接参照）レコードのリストを返す。後方互換ラッパー。
 
     Args:
-        path:       処理する .grep ファイルのパス
-        keyword:    検索文言（入力ファイル名から取得）
-        source_dir: Javaソースコードのルートディレクトリ
-        stats:      処理統計（更新される）
+        path:              処理する .grep ファイルのパス
+        keyword:           検索文言（入力ファイル名から取得）
+        source_dir:        Javaソースコードのルートディレクトリ
+        stats:             処理統計（更新される）
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         直接参照 GrepRecord のリスト
@@ -168,7 +171,7 @@ def process_grep_file(
             f"警告: {path.name} のサイズが {file_size_mb:.1f}MB を超えています。処理に時間がかかる場合があります。",
             file=sys.stderr,
         )
-    enc = detect_encoding(path, _encoding_override)
+    enc = detect_encoding(path, encoding_override)
     return process_grep_lines(
         iter_grep_lines(path, enc),
         keyword,
@@ -176,6 +179,7 @@ def process_grep_file(
         stats,
         report_progress=report_progress,
         path_name=path.name,
+        encoding_override=encoding_override,
     )
 
 
@@ -183,12 +187,18 @@ def process_grep_file(
 # F-02: UsageClassifier
 # ---------------------------------------------------------------------------
 
-def get_ast(filepath: str, source_dir: Path) -> object | None:
+def get_ast(
+    filepath: str,
+    source_dir: Path,
+    *,
+    encoding_override: str | None = None,
+) -> object | None:
     """Javaファイルを解析してASTを返す。キャッシュを利用して再解析を省略する。
 
     Args:
-        filepath:   Javaファイルのパス（相対または絶対）
-        source_dir: Javaソースのルートディレクトリ
+        filepath:          Javaファイルのパス（相対または絶対）
+        source_dir:        Javaソースのルートディレクトリ
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         javalang の CompilationUnit、またはパースエラー時は None
@@ -217,7 +227,7 @@ def get_ast(filepath: str, source_dir: Path) -> object | None:
         return None
 
     try:
-        source = candidate.read_text(encoding=detect_encoding(candidate, _encoding_override), errors="replace")
+        source = candidate.read_text(encoding=detect_encoding(candidate, encoding_override), errors="replace")
         tree = javalang.parse.parse(source)
         _ast_cache[cache_key] = tree
     except Exception:
@@ -304,6 +314,8 @@ def classify_usage(
     lineno: int,
     source_dir: Path,
     stats: ProcessStats,
+    *,
+    encoding_override: str | None = None,
 ) -> str:
     """コード行を解析し、使用タイプ文字列を返す。
 
@@ -311,16 +323,17 @@ def classify_usage(
     正規表現フォールバックで継続する。
 
     Args:
-        code:       分類対象のコード行（前後の空白はtrim済み）
-        filepath:   Javaファイルのパス（AST解析用）
-        lineno:     対象行の行番号（AST解析用）
-        source_dir: Javaソースのルートディレクトリ
-        stats:      処理統計（フォールバック件数の記録用）
+        code:              分類対象のコード行（前後の空白はtrim済み）
+        filepath:          Javaファイルのパス（AST解析用）
+        lineno:            対象行の行番号（AST解析用）
+        source_dir:        Javaソースのルートディレクトリ
+        stats:             処理統計（フォールバック件数の記録用）
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         UsageType の value 文字列（7種のいずれか）
     """
-    tree = get_ast(filepath, source_dir)
+    tree = get_ast(filepath, source_dir, encoding_override=encoding_override)
 
     if tree is None:
         # AST解析失敗またはjavalang未インストール → 正規表現フォールバック
@@ -375,6 +388,8 @@ def determine_scope(
     filepath: str = "",
     source_dir: Path | None = None,
     lineno: int = 0,
+    *,
+    encoding_override: str | None = None,
 ) -> str:
     """変数の種類に応じた追跡スコープを返す。
 
@@ -383,11 +398,12 @@ def determine_scope(
     "class" と判定できる。AST が使えない場合は正規表現フォールバック。
 
     Args:
-        usage_type:  使用タイプ文字列（UsageType.value）
-        code:        変数定義のコード行
-        filepath:    Javaファイルのパス（AST判定に使用。省略時はフォールバック）
-        source_dir:  Javaソースのルートディレクトリ（AST判定に使用）
-        lineno:      対象行の行番号（AST判定に使用）
+        usage_type:        使用タイプ文字列（UsageType.value）
+        code:              変数定義のコード行
+        filepath:          Javaファイルのパス（AST判定に使用。省略時はフォールバック）
+        source_dir:        Javaソースのルートディレクトリ（AST判定に使用）
+        lineno:            対象行の行番号（AST判定に使用）
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         "project"（定数）/ "class"（フィールド）/ "method"（ローカル変数）
@@ -397,7 +413,7 @@ def determine_scope(
 
     # ASTインデックスでO(1)判定（FieldDeclaration/LocalVariableDeclaration）
     if filepath and source_dir and lineno and _JAVALANG_AVAILABLE:
-        tree = get_ast(filepath, source_dir)
+        tree = get_ast(filepath, source_dir, encoding_override=encoding_override)
         if tree is not None:
             try:
                 index = _get_or_build_ast_index(filepath, tree)
@@ -461,7 +477,12 @@ def _resolve_java_file(filepath: str, source_dir: Path) -> Path | None:
     return None
 
 
-def _get_method_starts(filepath: str, source_dir: Path) -> list[int]:
+def _get_method_starts(
+    filepath: str,
+    source_dir: Path,
+    *,
+    encoding_override: str | None = None,
+) -> list[int]:
     """ファイルの全メソッド開始行をキャッシュ付きで返す（内部ヘルパー）。
 
     同一ファイルに対する繰り返し呼び出しでASTフィルタリングを省略する。
@@ -469,7 +490,7 @@ def _get_method_starts(filepath: str, source_dir: Path) -> list[int]:
     if filepath in _method_starts_cache:
         return _method_starts_cache[filepath]
 
-    tree = get_ast(filepath, source_dir)
+    tree = get_ast(filepath, source_dir, encoding_override=encoding_override)
     if tree is None:
         _method_starts_cache[filepath] = []
         return []
@@ -488,7 +509,11 @@ def _get_method_starts(filepath: str, source_dir: Path) -> list[int]:
 
 
 def _get_method_scope(
-    filepath: str, source_dir: Path, lineno: int
+    filepath: str,
+    source_dir: Path,
+    lineno: int,
+    *,
+    encoding_override: str | None = None,
 ) -> tuple[int, int] | None:
     """指定行を含むメソッドの行範囲を返す（内部ヘルパー）。
 
@@ -496,9 +521,10 @@ def _get_method_scope(
     javalang はノードの終了行を提供しないため、ブレースカウンタ方式を採用。
 
     Args:
-        filepath:   Javaファイルのパス
-        source_dir: Javaソースのルートディレクトリ
-        lineno:     対象行の行番号
+        filepath:          Javaファイルのパス
+        source_dir:        Javaソースのルートディレクトリ
+        lineno:            対象行の行番号
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         (start_line, end_line) のタプル、または特定不能の場合は None
@@ -507,7 +533,7 @@ def _get_method_scope(
         return None
 
     # キャッシュ済みメソッド開始行を取得（AST再フィルタリングを省略）
-    method_starts = _get_method_starts(filepath, source_dir)
+    method_starts = _get_method_starts(filepath, source_dir, encoding_override=encoding_override)
     if not method_starts:
         return None
 
@@ -525,7 +551,7 @@ def _get_method_scope(
     if java_file is None:
         return None
 
-    lines = cached_file_lines(Path(java_file), detect_encoding(Path(java_file), _encoding_override))
+    lines = cached_file_lines(Path(java_file), detect_encoding(Path(java_file), encoding_override))
     if not lines:
         return None
 
@@ -550,6 +576,8 @@ def _search_in_lines(
     ref_type: str,
     stats: ProcessStats,
     filepath_for_record: str,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """行リストから var_name を検索してGrepRecordを生成する（内部ヘルパー）。
 
@@ -562,6 +590,7 @@ def _search_in_lines(
         ref_type:           参照種別（RefType.INDIRECT.value 等）
         stats:              処理統計
         filepath_for_record: GrepRecord に記録するファイルパス文字列
+        encoding_override:  文字コード強制指定（省略時は自動検出）
 
     Returns:
         生成した GrepRecord のリスト
@@ -585,6 +614,7 @@ def _search_in_lines(
             lineno=current_lineno,
             source_dir=source_dir,
             stats=stats,
+            encoding_override=encoding_override,
         )
         records.append(GrepRecord(
             keyword=origin.keyword,
@@ -619,14 +649,17 @@ def track_constant(
     source_dir: Path,
     origin: GrepRecord,
     stats: ProcessStats,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """static final の定数をプロジェクト全体で追跡する。
 
     Args:
-        var_name:   追跡する定数名
-        source_dir: Javaソースのルートディレクトリ
-        origin:     定数定義の直接参照レコード
-        stats:      処理統計
+        var_name:          追跡する定数名
+        source_dir:        Javaソースのルートディレクトリ
+        origin:            定数定義の直接参照レコード
+        stats:             処理統計
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         間接参照 GrepRecord のリスト
@@ -639,7 +672,7 @@ def track_constant(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), encoding_override), stats)
         if not lines:
             continue
 
@@ -652,6 +685,7 @@ def track_constant(
             ref_type=RefType.INDIRECT.value,
             stats=stats,
             filepath_for_record=filepath_str,
+            encoding_override=encoding_override,
         ))
 
     return records
@@ -663,20 +697,23 @@ def track_field(
     origin: GrepRecord,
     source_dir: Path,
     stats: ProcessStats,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """フィールドを同一クラス内で追跡する。
 
     Args:
-        var_name:   追跡するフィールド名
-        class_file: フィールドが定義されたJavaファイル
-        origin:     フィールド定義の直接参照レコード
-        source_dir: Javaソースのルートディレクトリ
-        stats:      処理統計
+        var_name:          追跡するフィールド名
+        class_file:        フィールドが定義されたJavaファイル
+        origin:            フィールド定義の直接参照レコード
+        source_dir:        Javaソースのルートディレクトリ
+        stats:             処理統計
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         間接参照 GrepRecord のリスト
     """
-    lines = cached_file_lines(Path(class_file), detect_encoding(Path(class_file), _encoding_override), stats)
+    lines = cached_file_lines(Path(class_file), detect_encoding(Path(class_file), encoding_override), stats)
     if not lines:
         return []
 
@@ -694,6 +731,7 @@ def track_field(
         ref_type=RefType.INDIRECT.value,
         stats=stats,
         filepath_for_record=filepath_for_record,
+        encoding_override=encoding_override,
     )
 
 
@@ -703,15 +741,18 @@ def track_local(
     origin: GrepRecord,
     source_dir: Path,
     stats: ProcessStats,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """ローカル変数を同一メソッド内で追跡する。
 
     Args:
-        var_name:     追跡するローカル変数名
-        method_scope: (開始行番号, 終了行番号) のタプルでメソッドの行範囲を指定
-        origin:       変数定義の直接参照レコード
-        source_dir:   Javaソースのルートディレクトリ
-        stats:        処理統計
+        var_name:          追跡するローカル変数名
+        method_scope:      (開始行番号, 終了行番号) のタプルでメソッドの行範囲を指定
+        origin:            変数定義の直接参照レコード
+        source_dir:        Javaソースのルートディレクトリ
+        stats:             処理統計
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         間接参照 GrepRecord のリスト
@@ -720,7 +761,7 @@ def track_local(
     if java_file is None:
         return []
 
-    all_lines = cached_file_lines(Path(java_file), detect_encoding(Path(java_file), _encoding_override), stats)
+    all_lines = cached_file_lines(Path(java_file), detect_encoding(Path(java_file), encoding_override), stats)
     if not all_lines:
         return []
 
@@ -737,6 +778,7 @@ def track_local(
         ref_type=RefType.INDIRECT.value,
         stats=stats,
         filepath_for_record=origin.filepath,
+        encoding_override=encoding_override,
     )
 
 
@@ -744,7 +786,12 @@ def track_local(
 # F-04: GetterTracker
 # ---------------------------------------------------------------------------
 
-def find_getter_names(field_name: str, class_file: Path) -> list[str]:
+def find_getter_names(
+    field_name: str,
+    class_file: Path,
+    *,
+    encoding_override: str | None = None,
+) -> list[str]:
     """クラスファイルからgetterメソッド名の候補リストを返す。
 
     2方式を併用:
@@ -752,8 +799,9 @@ def find_getter_names(field_name: str, class_file: Path) -> list[str]:
     2. return文解析: `return field_name;` しているメソッドを全て検出（非標準命名も対象）
 
     Args:
-        field_name: フィールド名
-        class_file: フィールドが定義されたJavaファイル
+        field_name:        フィールド名
+        class_file:        フィールドが定義されたJavaファイル
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         getter候補名の重複なしリスト
@@ -770,7 +818,7 @@ def find_getter_names(field_name: str, class_file: Path) -> list[str]:
         # in 演算子でキー存在確認（.get() はNone値と未設定の区別ができないため）
         if cache_key not in _ast_cache:
             try:
-                source = class_file.read_text(encoding=detect_encoding(class_file, _encoding_override), errors="replace")
+                source = class_file.read_text(encoding=detect_encoding(class_file, encoding_override), errors="replace")
                 _ast_cache[cache_key] = javalang.parse.parse(source)
             except Exception:
                 _ast_cache[cache_key] = None
@@ -795,7 +843,12 @@ def find_getter_names(field_name: str, class_file: Path) -> list[str]:
     return list(set(candidates))
 
 
-def find_setter_names(field_name: str, class_file: Path) -> list[str]:
+def find_setter_names(
+    field_name: str,
+    class_file: Path,
+    *,
+    encoding_override: str | None = None,
+) -> list[str]:
     """クラスファイルからsetterメソッド名の候補リストを返す。
 
     2方式を併用:
@@ -813,7 +866,7 @@ def find_setter_names(field_name: str, class_file: Path) -> list[str]:
         cache_key = str(class_file)
         if cache_key not in _ast_cache:
             try:
-                source = class_file.read_text(encoding=detect_encoding(class_file, _encoding_override), errors="replace")
+                source = class_file.read_text(encoding=detect_encoding(class_file, encoding_override), errors="replace")
                 _ast_cache[cache_key] = javalang.parse.parse(source)
             except Exception:
                 _ast_cache[cache_key] = None
@@ -840,6 +893,8 @@ def track_setter_calls(
     source_dir: Path,
     origin: GrepRecord,
     stats: ProcessStats,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """プロジェクト全体でsetter呼び出し箇所を検索・AST分類する。"""
     pattern = re.compile(r'\b' + re.escape(setter_name) + r'\s*\(')
@@ -847,7 +902,7 @@ def track_setter_calls(
 
     for java_file in _get_java_files(source_dir):
         filepath_abs = str(java_file)
-        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), encoding_override), stats)
         for i, line in enumerate(lines, 1):
             if not pattern.search(line):
                 continue
@@ -857,6 +912,7 @@ def track_setter_calls(
                 lineno=i,
                 source_dir=source_dir,
                 stats=stats,
+                encoding_override=encoding_override,
             )
             try:
                 filepath_str = str(java_file.relative_to(source_dir))
@@ -881,6 +937,8 @@ def track_getter_calls(
     source_dir: Path,
     origin: GrepRecord,
     stats: ProcessStats,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """プロジェクト全体でgetter呼び出し箇所を検索・AST分類する。
 
@@ -888,10 +946,11 @@ def track_getter_calls(
     他クラスの同名getterが混入する可能性があるが仕様上許容。
 
     Args:
-        getter_name: 追跡するgetterメソッド名
-        source_dir:  Javaソースのルートディレクトリ
-        origin:      フィールド定義の直接参照レコード
-        stats:       処理統計
+        getter_name:       追跡するgetterメソッド名
+        source_dir:        Javaソースのルートディレクトリ
+        origin:            フィールド定義の直接参照レコード
+        stats:             処理統計
+        encoding_override: 文字コード強制指定（省略時は自動検出）
 
     Returns:
         間接（getter経由）参照 GrepRecord のリスト
@@ -906,7 +965,7 @@ def track_getter_calls(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), encoding_override), stats)
         if not lines:
             continue
 
@@ -921,6 +980,7 @@ def track_getter_calls(
                 lineno=i,
                 source_dir=source_dir,
                 stats=stats,
+                encoding_override=encoding_override,
             )
             records.append(GrepRecord(
                 keyword=origin.keyword,
@@ -948,6 +1008,8 @@ def _batch_track_combined(
     source_dir: Path,
     stats: ProcessStats,
     file_list: list[Path] | None = None,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """定数 / getter / setter を 1 パスで一括追跡する。
 
@@ -984,7 +1046,7 @@ def _batch_track_combined(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = cached_file_lines(java_file, detect_encoding(java_file, _encoding_override), stats)
+        lines = cached_file_lines(java_file, detect_encoding(java_file, encoding_override), stats)
         if not lines:
             continue
         for i, line in enumerate(lines, start=1):
@@ -993,6 +1055,7 @@ def _batch_track_combined(
                 usage_type = classify_usage(
                     code=code, filepath=filepath_str, lineno=i,
                     source_dir=source_dir, stats=stats,
+                    encoding_override=encoding_override,
                 )
                 gd = m.groupdict()
                 const_name = gd.get("const")
@@ -1035,6 +1098,8 @@ def _batch_track_constants(
     source_dir: Path,
     stats: ProcessStats,
     file_list: list[Path] | None = None,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """複数の定数をプロジェクト全体で一括追跡する。
 
@@ -1065,7 +1130,7 @@ def _batch_track_constants(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), encoding_override), stats)
         if not lines:
             continue
 
@@ -1082,6 +1147,7 @@ def _batch_track_constants(
                     lineno=i,
                     source_dir=source_dir,
                     stats=stats,
+                    encoding_override=encoding_override,
                 )
                 for origin in origins:
                     if filepath_str == origin.filepath and str(i) == origin.lineno:
@@ -1107,6 +1173,8 @@ def _batch_track_getters(
     source_dir: Path,
     stats: ProcessStats,
     file_list: list[Path] | None = None,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """複数のgetterをプロジェクト全体で一括追跡する。
 
@@ -1137,7 +1205,7 @@ def _batch_track_getters(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), encoding_override), stats)
         if not lines:
             continue
 
@@ -1154,6 +1222,7 @@ def _batch_track_getters(
                     lineno=i,
                     source_dir=source_dir,
                     stats=stats,
+                    encoding_override=encoding_override,
                 )
                 for origin in origins:
                     records.append(GrepRecord(
@@ -1177,6 +1246,8 @@ def _batch_track_setters(
     source_dir: Path,
     stats: ProcessStats,
     file_list: list[Path] | None = None,
+    *,
+    encoding_override: str | None = None,
 ) -> list[GrepRecord]:
     """複数のsetterをプロジェクト全体で一括追跡する。
 
@@ -1207,7 +1278,7 @@ def _batch_track_setters(
             filepath_str = str(java_file.relative_to(source_dir))
         except ValueError:
             filepath_str = filepath_abs
-        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), _encoding_override), stats)
+        lines = cached_file_lines(Path(filepath_abs), detect_encoding(Path(filepath_abs), encoding_override), stats)
         if not lines:
             continue
 
@@ -1224,6 +1295,7 @@ def _batch_track_setters(
                     lineno=i,
                     source_dir=source_dir,
                     stats=stats,
+                    encoding_override=encoding_override,
                 )
                 for origin in origins:
                     records.append(GrepRecord(
@@ -1304,11 +1376,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     """エントリーポイント。argparse でオプションを解析し、全処理を統括する。"""
-    global _encoding_override
     parser = build_parser()
     args = parser.parse_args()
 
-    _encoding_override = args.encoding
+    encoding_override: str | None = args.encoding
 
     source_dir = Path(args.source_dir)
     input_dir = Path(args.input_dir)
@@ -1353,7 +1424,7 @@ def main() -> None:
                     f"警告: {grep_path.name} のサイズが {file_size_mb:.1f}MB を超えています。処理に時間がかかる場合があります。",
                     file=sys.stderr,
                 )
-            enc = detect_encoding(grep_path, _encoding_override)
+            enc = detect_encoding(grep_path, encoding_override)
             direct_records = process_grep_lines(
                 iter_grep_lines(grep_path, enc),
                 keyword,
@@ -1361,6 +1432,7 @@ def main() -> None:
                 stats,
                 report_progress=file_size_mb > 50,
                 path_name=grep_path.name,
+                encoding_override=encoding_override,
             )
             all_records: list[GrepRecord] = list(direct_records)
 
@@ -1383,6 +1455,7 @@ def main() -> None:
                 scope = determine_scope(
                     record.usage_type, record.code,
                     record.filepath, source_dir, int(record.lineno),
+                    encoding_override=encoding_override,
                 )
 
                 if scope == "project":
@@ -1393,23 +1466,34 @@ def main() -> None:
                     # 第2段階: フィールドを同一クラス内で追跡
                     class_file = _resolve_java_file(record.filepath, source_dir)
                     if class_file:
-                        indirect = track_field(var_name, class_file, record, source_dir, stats)
+                        indirect = track_field(
+                            var_name, class_file, record, source_dir, stats,
+                            encoding_override=encoding_override,
+                        )
                         all_records.extend(indirect)
 
                         # getter/setter名を収集してバッチ追跡リストに積む
-                        for getter_name in find_getter_names(var_name, class_file):
+                        for getter_name in find_getter_names(
+                            var_name, class_file, encoding_override=encoding_override,
+                        ):
                             getter_tasks.setdefault(getter_name, []).append(record)
-                        for setter_name in find_setter_names(var_name, class_file):
+                        for setter_name in find_setter_names(
+                            var_name, class_file, encoding_override=encoding_override,
+                        ):
                             setter_tasks.setdefault(setter_name, []).append(record)
 
                 elif scope == "method":
                     # 第2段階: ローカル変数を同一メソッド内で追跡
                     method_scope = _get_method_scope(
-                        record.filepath, source_dir, int(record.lineno)
+                        record.filepath, source_dir, int(record.lineno),
+                        encoding_override=encoding_override,
                     )
                     if method_scope:
                         all_records.extend(
-                            track_local(var_name, method_scope, record, source_dir, stats)
+                            track_local(
+                                var_name, method_scope, record, source_dir, stats,
+                                encoding_override=encoding_override,
+                            )
                         )
 
             # 定数・getter・setter の事前フィルタを1回の rglob で共有し、
@@ -1428,6 +1512,7 @@ def main() -> None:
                     getter_tasks=getter_tasks,
                     setter_tasks=setter_tasks,
                     source_dir=source_dir, stats=stats, file_list=java_candidates,
+                    encoding_override=encoding_override,
                 ))
 
             # 出力
