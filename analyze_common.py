@@ -275,7 +275,7 @@ def cached_file_lines(
     _file_lines_cache[key] = lines
     _file_lines_cache_bytes += size
     while _file_lines_cache_bytes > _file_lines_cache_limit and len(_file_lines_cache) > 1:
-        old_key, old_lines = _file_lines_cache.popitem(last=False)
+        _, old_lines = _file_lines_cache.popitem(last=False)
         _file_lines_cache_bytes -= _estimate_lines_bytes(old_lines)
     return lines
 
@@ -330,7 +330,7 @@ def build_batch_scanner(patterns: list[str], threshold: int = 100) -> _BatchScan
     """
     if len(patterns) >= threshold:
         try:
-            import ahocorasick as _pyaho
+            import ahocorasick as _pyaho  # type: ignore[import-not-found]
             ac = _pyaho.Automaton()
             for p in patterns:
                 ac.add_word(p, p)
@@ -346,7 +346,7 @@ def build_batch_scanner(patterns: list[str], threshold: int = 100) -> _BatchScan
                             yield (start, p)
             return _BatchScanner(patterns, "ahocorasick", _Wrap())
         except ImportError:
-            from aho_corasick import AhoCorasick
+            from aho_corasick import AhoCorasick  # type: ignore[import-not-found]
             return _BatchScanner(patterns, "ahocorasick", AhoCorasick(patterns))
     combined = re.compile(r"\b(" + "|".join(re.escape(p) for p in patterns) + r")\b")
     return _BatchScanner(patterns, "regex", combined)
