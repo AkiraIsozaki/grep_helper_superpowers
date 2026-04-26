@@ -17,11 +17,14 @@ try:
 except ImportError:
     _JAVALANG_AVAILABLE = False
 
+from collections.abc import Iterable
+
 from analyze_common import (
     GrepRecord,
     ProcessStats,
     RefType,
     detect_encoding,
+    iter_grep_lines,
     parse_grep_line,
     write_tsv,
     grep_filter_files,
@@ -81,13 +84,75 @@ _java_files_cache: dict[str, list[Path]] = {}
 _method_starts_cache: dict[str, list[int]] = {}
 
 
+def process_grep_lines(
+    lines: Iterable[str],
+    keyword: str,
+    source_dir: Path,
+    stats: ProcessStats,
+    *,
+    report_progress: bool = False,
+    path_name: str = "",
+) -> list[GrepRecord]:
+    """grep行イテラブルを処理し、第1段階（直接参照）レコードのリストを返す。
+
+    Args:
+        lines:           処理する行のイテラブル（iter_grep_lines 等）
+        keyword:         検索文言（入力ファイル名から取得）
+        source_dir:      Javaソースコードのルートディレクトリ
+        stats:           処理統計（更新される）
+        report_progress: Trueのとき10万行ごとに進捗表示
+        path_name:       進捗表示に使うファイル名（report_progress=True時のみ使用）
+
+    Returns:
+        直接参照 GrepRecord のリスト
+    """
+    records: list[GrepRecord] = []
+    _PROGRESS_INTERVAL = 100_000  # 10万行ごとに進捗表示
+
+    for line in lines:
+        stats.total_lines += 1
+
+        if report_progress and stats.total_lines % _PROGRESS_INTERVAL == 0:
+            print(
+                f"  進捗: {path_name} {stats.total_lines:,} 行処理済み"
+                f" (有効: {stats.valid_lines:,})",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        parsed = parse_grep_line(line)
+        if parsed is None:
+            stats.skipped_lines += 1
+            continue
+
+        usage_type = classify_usage(
+            code=parsed["code"],
+            filepath=parsed["filepath"],
+            lineno=int(parsed["lineno"]),
+            source_dir=source_dir,
+            stats=stats,
+        )
+
+        records.append(GrepRecord(
+            keyword=keyword,
+            ref_type=RefType.DIRECT.value,
+            usage_type=usage_type,
+            filepath=parsed["filepath"],
+            lineno=parsed["lineno"],
+            code=parsed["code"],
+        ))
+        stats.valid_lines += 1
+
+    return records
+
+
 def process_grep_file(
     path: Path,
     keyword: str,
     source_dir: Path,
     stats: ProcessStats,
 ) -> list[GrepRecord]:
-    """grepファイル全行を処理し、第1段階（直接参照）レコードのリストを返す。
+    """grepファイル全行を処理し、第1段階（直接参照）レコードのリストを返す。後方互換ラッパー。
 
     Args:
         path:       処理する .grep ファイルのパス
@@ -106,46 +171,15 @@ def process_grep_file(
             f"警告: {path.name} のサイズが {file_size_mb:.1f}MB を超えています。処理に時間がかかる場合があります。",
             file=sys.stderr,
         )
-
-    records: list[GrepRecord] = []
-    _PROGRESS_INTERVAL = 100_000  # 10万行ごとに進捗表示
-
-    with open(path, encoding=detect_encoding(path, _encoding_override), errors="replace") as f:
-        for line in f:
-            stats.total_lines += 1
-
-            if report_progress and stats.total_lines % _PROGRESS_INTERVAL == 0:
-                print(
-                    f"  進捗: {path.name} {stats.total_lines:,} 行処理済み"
-                    f" (有効: {stats.valid_lines:,})",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-            parsed = parse_grep_line(line)
-            if parsed is None:
-                stats.skipped_lines += 1
-                continue
-
-            usage_type = classify_usage(
-                code=parsed["code"],
-                filepath=parsed["filepath"],
-                lineno=int(parsed["lineno"]),
-                source_dir=source_dir,
-                stats=stats,
-            )
-
-            records.append(GrepRecord(
-                keyword=keyword,
-                ref_type=RefType.DIRECT.value,
-                usage_type=usage_type,
-                filepath=parsed["filepath"],
-                lineno=parsed["lineno"],
-                code=parsed["code"],
-            ))
-            stats.valid_lines += 1
-
-    return records
+    enc = detect_encoding(path, _encoding_override)
+    return process_grep_lines(
+        iter_grep_lines(path, enc),
+        keyword,
+        source_dir,
+        stats,
+        report_progress=report_progress,
+        path_name=path.name,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1246,7 +1280,21 @@ def main() -> None:
             keyword = grep_path.stem  # 拡張子なしのファイル名 = 検索文言
 
             # 第1段階: 直接参照の取得と分類
-            direct_records = process_grep_file(grep_path, keyword, source_dir, stats)
+            file_size_mb = grep_path.stat().st_size / (1024 * 1024)
+            if file_size_mb > 500:
+                print(
+                    f"警告: {grep_path.name} のサイズが {file_size_mb:.1f}MB を超えています。処理に時間がかかる場合があります。",
+                    file=sys.stderr,
+                )
+            enc = detect_encoding(grep_path, _encoding_override)
+            direct_records = process_grep_lines(
+                iter_grep_lines(grep_path, enc),
+                keyword,
+                source_dir,
+                stats,
+                report_progress=file_size_mb > 50,
+                path_name=grep_path.name,
+            )
             all_records: list[GrepRecord] = list(direct_records)
 
             # 第2・第3段階: 間接参照・getter経由参照の追跡

@@ -7,7 +7,9 @@ import re
 import sys
 from pathlib import Path
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, parse_grep_line, write_tsv
+from collections.abc import Iterable
+
+from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
 
 _GROOVY_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bstatic\s+final\b'),                                              "static final定数定義"),
@@ -255,6 +257,32 @@ def _resolve_groovy_file(filepath: str, src_dir: Path) -> Path | None:
     return resolved if resolved.exists() else None
 
 
+def process_grep_lines(
+    lines: Iterable[str],
+    keyword: str,
+    source_dir: Path,
+    stats: ProcessStats,
+) -> list[GrepRecord]:
+    """grepファイル行イテラブルを処理し、直接参照レコードを返す。"""
+    records: list[GrepRecord] = []
+    for line in lines:
+        stats.total_lines += 1
+        parsed = parse_grep_line(line)
+        if parsed is None:
+            stats.skipped_lines += 1
+            continue
+        records.append(GrepRecord(
+            keyword=keyword,
+            ref_type=RefType.DIRECT.value,
+            usage_type=classify_usage_groovy(parsed["code"]),
+            filepath=parsed["filepath"],
+            lineno=parsed["lineno"],
+            code=parsed["code"],
+        ))
+        stats.valid_lines += 1
+    return records
+
+
 def process_grep_file(
     path: Path,
     keyword: str,
@@ -262,26 +290,9 @@ def process_grep_file(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> list[GrepRecord]:
-    """grepファイル全行を処理し、直接参照レコードを返す。"""
-    records: list[GrepRecord] = []
+    """grepファイル全行を処理し、直接参照レコードを返す。後方互換ラッパー。"""
     enc = detect_encoding(path, encoding_override)
-    with open(path, encoding=enc, errors="replace") as f:
-        for line in f:
-            stats.total_lines += 1
-            parsed = parse_grep_line(line)
-            if parsed is None:
-                stats.skipped_lines += 1
-                continue
-            records.append(GrepRecord(
-                keyword=keyword,
-                ref_type=RefType.DIRECT.value,
-                usage_type=classify_usage_groovy(parsed["code"]),
-                filepath=parsed["filepath"],
-                lineno=parsed["lineno"],
-                code=parsed["code"],
-            ))
-            stats.valid_lines += 1
-    return records
+    return process_grep_lines(iter_grep_lines(path, enc), keyword, source_dir, stats)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -317,7 +328,8 @@ def main() -> None:
     try:
         for grep_path in grep_files:
             keyword = grep_path.stem
-            direct_records = process_grep_file(grep_path, keyword, source_dir, stats, args.encoding)
+            enc = detect_encoding(grep_path, args.encoding)
+            direct_records = process_grep_lines(iter_grep_lines(grep_path, enc), keyword, source_dir, stats)
             all_records: list[GrepRecord] = list(direct_records)
 
             getter_tasks: dict[str, list[GrepRecord]] = {}
