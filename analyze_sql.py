@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from grep_helper.cli import run
 from grep_helper.languages import sql as _handler
-from grep_helper.languages.sql import (
+from grep_helper.languages.sql import (  # noqa: F401
     classify_usage as _classify_usage_new,
     extract_sql_variable_name,
     track_sql_variable,
@@ -28,10 +28,6 @@ classify_usage_sql = _classify_usage_new  # noqa: E305
 
 def process_grep_file(path, keyword, source_dir, stats, encoding_override=None):  # noqa: ANN001
     """後方互換ラッパー。"""
-    from analyze_common import detect_encoding, iter_grep_lines
-    from grep_helper.model import GrepRecord, RefType
-    from grep_helper.grep_input import parse_grep_line
-
     enc = detect_encoding(path, encoding_override)
     records = []
     for line in iter_grep_lines(path, enc):

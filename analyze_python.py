@@ -22,10 +22,6 @@ classify_usage_python = _classify_usage_new  # noqa: E305
 
 def process_grep_file(path, keyword, source_dir, stats, encoding_override=None):  # noqa: ANN001
     """後方互換ラッパー。"""
-    from analyze_common import detect_encoding, iter_grep_lines
-    from grep_helper.model import GrepRecord, RefType
-    from grep_helper.grep_input import parse_grep_line
-
     enc = detect_encoding(path, encoding_override)
     records = []
     for line in iter_grep_lines(path, enc):
