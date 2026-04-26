@@ -63,10 +63,23 @@ def run(handler: ModuleType, *, description: str | None = None) -> int:
                 grep_path, source_dir, handler,
                 keyword=keyword, encoding=args.encoding, stats=stats,
             )
+            indirect_fn = getattr(handler, "batch_track_indirect", None)
+            indirect_records: list = []
+            if indirect_fn is not None:
+                indirect_records = indirect_fn(
+                    direct_records, source_dir, args.encoding, workers=args.workers,
+                )
+            all_records = list(direct_records) + list(indirect_records)
             output_path = output_dir / f"{keyword}.tsv"
-            write_tsv(list(direct_records), output_path)
+            write_tsv(all_records, output_path)
             processed_files.append(grep_path.name)
-            print(f"  {grep_path.name} → {output_path} (直接: {len(direct_records)} 件)")
+            if indirect_records:
+                print(
+                    f"  {grep_path.name} → {output_path}"
+                    f" (直接: {len(direct_records)} 件, 間接: {len(indirect_records)} 件)"
+                )
+            else:
+                print(f"  {grep_path.name} → {output_path} (直接: {len(direct_records)} 件)")
     except Exception as e:
         print(f"予期しないエラー: {e}", file=sys.stderr)
         return 2
