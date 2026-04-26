@@ -1001,6 +1001,80 @@ def track_getter_calls(
 # バッチスキャン（プロジェクト全体を1パスで複数パターン検索）
 # ---------------------------------------------------------------------------
 
+def _scan_files_for_combined(
+    files: list[Path],
+    source_dir: Path,
+    encoding_override: str | None,
+    pattern_str: str,
+    const_tasks: dict[str, list[GrepRecord]],
+    getter_tasks: dict[str, list[GrepRecord]],
+    setter_tasks: dict[str, list[GrepRecord]],
+) -> list[GrepRecord]:
+    """ProcessPool worker: 渡されたファイル群を 1 パススキャンしてレコードを返す。
+
+    pickle 経由で worker に渡せるよう、引数は basic 型 / NamedTuple / Path のみ。
+    pattern オブジェクトの代わりに pattern 文字列を受け取り、worker 内で再コンパイルする。
+
+    注意: stats は worker プロセス内ではローカルなため、ここでは更新しない
+    （並列モードでは stats 追跡はしない）。
+    """
+    combined = re.compile(pattern_str)
+    # worker プロセス内専用の ProcessStats（呼び出し元へは伝播しない）。
+    local_stats = ProcessStats()
+    records: list[GrepRecord] = []
+    for java_file in files:
+        filepath_abs = str(java_file)
+        try:
+            filepath_str = str(java_file.relative_to(source_dir))
+        except ValueError:
+            filepath_str = filepath_abs
+        lines = cached_file_lines(java_file, detect_encoding(java_file, encoding_override), local_stats)
+        if not lines:
+            continue
+        for i, line in enumerate(lines, start=1):
+            for m in combined.finditer(line):
+                code = line.strip()
+                usage_type = classify_usage(
+                    code=code, filepath=filepath_str, lineno=i,
+                    source_dir=source_dir, stats=local_stats,
+                    encoding_override=encoding_override,
+                )
+                gd = m.groupdict()
+                const_name = gd.get("const")
+                getter_name = gd.get("getter")
+                setter_name = gd.get("setter")
+                if const_name:
+                    for origin in const_tasks[const_name]:
+                        if filepath_str == origin.filepath and str(i) == origin.lineno:
+                            continue
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=RefType.INDIRECT.value,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=const_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+                elif getter_name:
+                    for origin in getter_tasks[getter_name]:
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=RefType.GETTER.value,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=getter_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+                elif setter_name:
+                    for origin in setter_tasks[setter_name]:
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=RefType.SETTER.value,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=setter_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+    return records
+
+
 def _batch_track_combined(
     const_tasks: dict[str, list[GrepRecord]],
     getter_tasks: dict[str, list[GrepRecord]],
@@ -1010,10 +1084,14 @@ def _batch_track_combined(
     file_list: list[Path] | None = None,
     *,
     encoding_override: str | None = None,
+    workers: int = 1,
 ) -> list[GrepRecord]:
     """定数 / getter / setter を 1 パスで一括追跡する。
 
     file_list が指定された場合はそのリストをスキャン対象にする。
+    workers >= 2 を指定した場合、ファイルを n 等分して ProcessPoolExecutor で並列スキャンする。
+    並列モードでは AST キャッシュ・行キャッシュは worker 毎に再構築されるトレードオフがあり、
+    また stats は worker プロセス間で共有されないため更新されない（直列パスでのみ更新）。
     """
     if not const_tasks and not getter_tasks and not setter_tasks:
         return []
@@ -1034,8 +1112,27 @@ def _batch_track_combined(
         parts.append(r"\b(?P<getter>" + "|".join(re.escape(k) for k in getter_tasks) + r")\s*\(")
     if setter_tasks:
         parts.append(r"\b(?P<setter>" + "|".join(re.escape(k) for k in setter_tasks) + r")\s*\(")
-    combined = re.compile("|".join(parts))
+    pattern_str = "|".join(parts)
 
+    # 並列実行: ファイル数が十分多く、workers が 2 以上の場合。
+    if workers >= 2 and len(java_files) >= 2:
+        from concurrent.futures import ProcessPoolExecutor
+        chunks = [java_files[i::workers] for i in range(workers)]
+        results: list[GrepRecord] = []
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [
+                ex.submit(
+                    _scan_files_for_combined, chunk, source_dir, encoding_override,
+                    pattern_str, const_tasks, getter_tasks, setter_tasks,
+                )
+                for chunk in chunks if chunk
+            ]
+            for fut in futures:
+                results.extend(fut.result())
+        return results
+
+    # 直列実行（従来通り）: stats を更新し、進捗ログも出す。
+    combined = re.compile(pattern_str)
     records: list[GrepRecord] = []
     total = len(java_files)
     for idx, java_file in enumerate(java_files, 1):

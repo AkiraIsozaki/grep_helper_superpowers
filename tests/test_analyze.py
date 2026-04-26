@@ -1764,5 +1764,42 @@ class TestNoModuleGlobalEncoding(unittest.TestCase):
             "_encoding_override は引数化されたため削除されているべき")
 
 
+class TestParallelBatchTrack(unittest.TestCase):
+    def test_batch_track_combined_accepts_workers_arg(self):
+        """並列ワーカー数を指定できる。"""
+        import inspect, analyze
+        sig = inspect.signature(analyze._batch_track_combined)
+        self.assertIn("workers", sig.parameters)
+
+    def test_batch_track_combined_workers_2_returns_same_results(self):
+        """workers=2 で実行しても結果が一致する。"""
+        from analyze import _batch_track_combined
+        from analyze_common import ProcessStats, GrepRecord
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            for i in range(4):
+                (p / f"F{i}.java").write_text(
+                    f"class F{i} {{ static final String CODE = \"v\"; void use() {{ String c = CODE; }} }}\n",
+                    encoding="utf-8",
+                )
+            origin = GrepRecord("kw", "直接", "定数定義", "F0.java", "1", "...")
+            stats1 = ProcessStats()
+            r1 = _batch_track_combined(
+                const_tasks={"CODE": [origin]}, getter_tasks={}, setter_tasks={},
+                source_dir=p, stats=stats1, file_list=None, workers=1,
+            )
+            stats2 = ProcessStats()
+            r2 = _batch_track_combined(
+                const_tasks={"CODE": [origin]}, getter_tasks={}, setter_tasks={},
+                source_dir=p, stats=stats2, file_list=None, workers=2,
+            )
+            # 件数が一致し、内容セットも一致する
+            self.assertEqual(len(r1), len(r2))
+            self.assertEqual(
+                {(r.filepath, r.lineno, r.src_var) for r in r1},
+                {(r.filepath, r.lineno, r.src_var) for r in r2},
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
