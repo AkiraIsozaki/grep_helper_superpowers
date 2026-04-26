@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from analyze_common import (
     GrepRecord, ProcessStats, RefType,
     detect_encoding, parse_grep_line, write_tsv,
-    grep_filter_files, iter_grep_lines,
+    grep_filter_files, iter_grep_lines, resolve_file_cached,
 )
 
 # ---------------------------------------------------------------------------
@@ -219,17 +219,6 @@ from analyze_groovy import (
 )
 
 
-def _resolve_file(filepath: str, source_dir: Path) -> Path | None:
-    """ファイルパスを解決する（CWD相対 → source_dir相対の順）。"""
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = source_dir / filepath
-    return resolved if resolved.exists() else None
-
-
 _file_cache_all: dict[str, list[str]] = {}
 _MAX_FILE_CACHE_ALL = 800
 
@@ -268,7 +257,7 @@ def _batch_track_kotlin_const(
     for name, origins in tasks.items():
         ext_list = []
         for origin in origins:
-            def_path = _resolve_file(origin.filepath, src_dir)
+            def_path = resolve_file_cached(origin.filepath, src_dir)
             ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
         tasks_ext[name] = ext_list
 
@@ -325,7 +314,7 @@ def _batch_track_dotnet_const(
     for name, origins in tasks.items():
         ext_list = []
         for origin in origins:
-            def_path = _resolve_file(origin.filepath, src_dir)
+            def_path = resolve_file_cached(origin.filepath, src_dir)
             ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
         tasks_ext[name] = ext_list
 
@@ -382,7 +371,7 @@ def _batch_track_groovy_static_final(
     for name, origins in tasks.items():
         ext_list = []
         for origin in origins:
-            def_path = _resolve_file(origin.filepath, src_dir)
+            def_path = resolve_file_cached(origin.filepath, src_dir)
             ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
         tasks_ext[name] = ext_list
 
@@ -437,7 +426,7 @@ def _batch_track_define_c_all(
             is_primary = (scan_name == var_name)
             for record in records:
                 if is_primary:
-                    def_path = _resolve_file(record.filepath, src_dir)
+                    def_path = resolve_file_cached(record.filepath, src_dir)
                     def_resolved = def_path.resolve() if def_path else None
                     def_lineno = int(record.lineno)
                 else:
@@ -508,7 +497,7 @@ def _batch_track_define_proc_all(
             is_primary = (scan_name == var_name)
             for record in records:
                 if is_primary:
-                    def_path = _resolve_file(record.filepath, src_dir)
+                    def_path = resolve_file_cached(record.filepath, src_dir)
                     def_resolved = def_path.resolve() if def_path else None
                     def_lineno = int(record.lineno)
                 else:
@@ -632,7 +621,7 @@ def _apply_indirect_tracking(
             elif record.usage_type == "変数代入":
                 var_name = extract_variable_name_c(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(_track_variable_c(
                             var_name, candidate, int(record.lineno),
@@ -648,7 +637,7 @@ def _apply_indirect_tracking(
             elif record.usage_type == "変数代入":
                 var_name = extract_variable_name_proc(record.code) or extract_host_var_name(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(_track_variable_proc(
                             var_name, candidate, int(record.lineno),
@@ -660,7 +649,7 @@ def _apply_indirect_tracking(
             if record.usage_type in ("変数代入", "環境変数エクスポート"):
                 var_name = extract_sh_variable_name(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(track_sh_variable(
                             var_name, candidate, int(record.lineno),
@@ -672,7 +661,7 @@ def _apply_indirect_tracking(
             if record.usage_type == "定数・変数定義":
                 var_name = extract_sql_variable_name(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(track_sql_variable(
                             var_name, candidate, int(record.lineno),
@@ -696,7 +685,7 @@ def _apply_indirect_tracking(
                 m = re.search(r'(\w+)\s*[=;]', record.code.strip())
                 if m:
                     fname = m.group(1)
-                    src_file = _resolve_file(record.filepath, source_dir)
+                    src_file = resolve_file_cached(record.filepath, source_dir)
                     if src_file:
                         result.extend(track_field_groovy(
                             fname, src_file, record, source_dir, stats, encoding,

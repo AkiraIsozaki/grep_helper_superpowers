@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
 
 _SH_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bexport\b|\bsetenv\b'), "環境変数エクスポート"),
@@ -42,16 +42,6 @@ def _get_cached_lines(
                 stats.encoding_errors.add(key)
             _file_cache[key] = []
     return _file_cache[key]
-
-
-def _resolve_source_file(filepath: str, src_dir: Path) -> Path | None:
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = src_dir / filepath
-    return resolved if resolved.exists() else None
 
 
 def classify_usage_sh(code: str) -> str:
@@ -195,7 +185,7 @@ def main() -> None:
                 if record.usage_type in ("変数代入", "環境変数エクスポート"):
                     var_name = extract_sh_variable_name(record.code)
                     if var_name:
-                        resolved = _resolve_source_file(record.filepath, source_dir)
+                        resolved = resolve_file_cached(record.filepath, source_dir)
                         if resolved:
                             all_records.extend(
                                 track_sh_variable(var_name, resolved,

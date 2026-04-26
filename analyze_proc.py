@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
 from analyze_c import classify_usage_c, _collect_define_aliases
 
 # ---------------------------------------------------------------------------
@@ -52,19 +52,6 @@ def _get_cached_lines(
                 stats.encoding_errors.add(key)
             _file_cache[key] = []
     return _file_cache[key]
-
-
-def _resolve_source_file(filepath: str, src_dir: Path) -> Path | None:
-    """ファイルパスを解決する。CWD相対→src_dir相対の順で試みる。"""
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = src_dir / filepath
-    if resolved.exists():
-        return resolved
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +153,7 @@ def track_define(
 ) -> list[GrepRecord]:
     """#define マクロ名の使用箇所を src_dir 配下の全 .pc/.c/.h ファイルでスキャンする（多段解決）。"""
     results: list[GrepRecord] = []
-    def_file = _resolve_source_file(record.filepath, src_dir)
+    def_file = resolve_file_cached(record.filepath, src_dir)
 
     pc_files = (sorted(src_dir.rglob("*.pc"))
                 + sorted(src_dir.rglob("*.c"))
@@ -335,7 +322,7 @@ def main() -> None:
                     if not var_name:
                         var_name = extract_host_var_name(record.code)
                     if var_name:
-                        candidate = _resolve_source_file(record.filepath, source_dir)
+                        candidate = resolve_file_cached(record.filepath, source_dir)
                         if candidate:
                             all_records.extend(
                                 track_variable(var_name, candidate,

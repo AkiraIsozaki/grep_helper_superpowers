@@ -9,7 +9,7 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
 
 _KOTLIN_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bconst\s+val\s+\w+\s*='),              "const定数定義"),
@@ -44,16 +44,6 @@ def _get_cached_lines(
     return _file_cache[key]
 
 
-def _resolve_source_file(filepath: str, src_dir: Path) -> Path | None:
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = src_dir / filepath
-    return resolved if resolved.exists() else None
-
-
 def classify_usage_kotlin(code: str) -> str:
     """Kotlinコード行の使用タイプを分類する（7種）。"""
     stripped = code.strip()
@@ -82,7 +72,7 @@ def track_const(
     """const val 定数の使用箇所を src_dir 配下の .kt/.kts ファイルでスキャンする。"""
     results: list[GrepRecord] = []
     pattern = re.compile(r'\b' + re.escape(const_name) + r'\b')
-    def_file = _resolve_source_file(record.filepath, src_dir)
+    def_file = resolve_file_cached(record.filepath, src_dir)
 
     src_files = sorted(src_dir.rglob("*.kt")) + sorted(src_dir.rglob("*.kts"))
     for src_file in src_files:
