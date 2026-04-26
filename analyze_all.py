@@ -178,9 +178,6 @@ from analyze import (
 )
 from analyze import _resolve_java_file  # type: ignore[attr-defined]
 from analyze import _get_method_scope   # type: ignore[attr-defined]
-from analyze import _batch_track_constants  # type: ignore[attr-defined]
-from analyze import _batch_track_getters    # type: ignore[attr-defined]
-from analyze import _batch_track_setters    # type: ignore[attr-defined]
 from analyze import _batch_track_combined   # type: ignore[attr-defined]
 
 # Kotlin

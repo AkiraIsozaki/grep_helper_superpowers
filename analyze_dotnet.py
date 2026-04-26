@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, write_tsv
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, iter_source_files, parse_grep_line, write_tsv
 
 _DOTNET_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bconst\b|\bConst\b|\breadonly\b'),                           "定数定義(Const/readonly)"),
@@ -62,9 +61,7 @@ def track_const_dotnet(
     pattern = re.compile(r'\b' + re.escape(const_name) + r'\b')
     def_file = Path(record.filepath)
 
-    src_files: list[Path] = []
-    for ext in _DOTNET_EXTENSIONS:
-        src_files.extend(sorted(src_dir.rglob(f"*{ext}")))
+    src_files = iter_source_files(src_dir, list(_DOTNET_EXTENSIONS))
 
     for src_file in src_files:
         try:
@@ -130,15 +127,14 @@ def process_grep_file(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="C#/VB.NET grep結果 自動分類・使用箇所洗い出しツール")
+    parser = argparse.ArgumentParser(
+        description="C#/VB.NET grep結果 自動分類・使用箇所洗い出しツール。"
+                    "並列実行は analyze_all.py --workers を使用してください。"
+    )
     parser.add_argument("--source-dir", required=True, help="C#/VB.NETソースのルートディレクトリ")
     parser.add_argument("--input-dir",  default="input")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--encoding",   default=None, help="文字コード強制指定（省略時は自動検出）")
-    parser.add_argument(
-        "--workers", type=int, default=1,
-        help=f"並列ワーカー数（デフォルト: 1, 推奨: {os.cpu_count() or 4}）",
-    )
     return parser
 
 

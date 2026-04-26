@@ -28,6 +28,7 @@ from analyze_common import (
     cached_file_lines,
     detect_encoding,
     iter_grep_lines,
+    iter_source_files,
     parse_grep_line,
     write_tsv,
     grep_filter_files,
@@ -72,9 +73,6 @@ _ast_cache: dict[str, object | None] = {}
 # AST行インデックス: filepath → {lineno: (usage_type | None, scope | None)}
 # usage_type: UsageType.value, scope: "class" | "method" | None
 _ast_line_index: dict[str, dict[int, tuple[str | None, str | None]]] = {}
-
-# Javaファイルリストキャッシュ: source_dir → sorted list of .java paths
-_java_files_cache: dict[str, list[Path]] = {}
 
 # メソッド開始行キャッシュ: filepath → sorted list of method start line numbers
 _method_starts_cache: dict[str, list[int]] = {}
@@ -636,14 +634,10 @@ def _search_in_lines(
 def _get_java_files(source_dir: Path) -> list[Path]:
     """source_dir 配下の .java ファイルリストをキャッシュ付きで返す。
 
-    rglob は呼び出しごとにディスクスキャンを行うため、同一 source_dir に対しては
-    1回だけ実行してキャッシュする。_batch_track_constants / _batch_track_getters /
-    track_constant / track_getter_calls で共有することで I/O を大幅に削減する。
+    共通の `_source_files_cache` を経由するため、他の解析モジュールと
+    キャッシュを共有しつつ rglob のディスクスキャン回数を削減する。
     """
-    key = str(source_dir)
-    if key not in _java_files_cache:
-        _java_files_cache[key] = sorted(source_dir.rglob("*.java"))
-    return _java_files_cache[key]
+    return iter_source_files(source_dir, [".java"])
 
 
 def track_constant(
