@@ -1,7 +1,10 @@
 import sys, unittest, unittest.mock
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from analyze_common import GrepRecord, ProcessStats, RefType, parse_grep_line, write_tsv, grep_filter_files
+from grep_helper.model import GrepRecord, ProcessStats, RefType
+from grep_helper.grep_input import parse_grep_line
+from grep_helper.tsv_output import write_tsv
+from grep_helper.source_files import grep_filter_files
 import tempfile, csv
 
 class TestCommonImports(unittest.TestCase):
@@ -139,20 +142,29 @@ class TestGrepFilterFiles(unittest.TestCase):
 class TestDetectEncodingStreaming(unittest.TestCase):
     def test_read_bytesを呼ばない(self):
         """巨大ファイルでも先頭 4KB だけ読む（read_bytes は使わない）。"""
-        from analyze_common import detect_encoding
+        from grep_helper.encoding import detect_encoding
         from unittest.mock import patch
+        # chardet のモデル遅延ロードが read_bytes を使うため、先に初期化しておく
+        try:
+            import chardet as _cd
+            _cd.detect(b"warmup")
+        except Exception:
+            pass
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "f.txt"
             p.write_bytes(b"hello world\n" * 100)
-            def boom(self):
-                raise AssertionError("read_bytes should not be called")
+            orig_read_bytes = Path.read_bytes
+            def boom(self_path):
+                if str(self_path) == str(p):
+                    raise AssertionError("read_bytes should not be called on target file")
+                return orig_read_bytes(self_path)
             with patch.object(Path, "read_bytes", boom):
                 enc = detect_encoding(p)
                 self.assertIsInstance(enc, str)
 
     def test_最大4KBまでしか読まない(self):
         """4096 バイト以下しか read しない。"""
-        from analyze_common import detect_encoding
+        from grep_helper.encoding import detect_encoding
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "big.txt"
             p.write_bytes(b"A" * 100_000)
@@ -166,8 +178,8 @@ class TestDetectEncodingStreaming(unittest.TestCase):
                     return orig_read(n)
                 f.read = read
                 return f
-            import analyze_common
-            with unittest.mock.patch.object(analyze_common, "open", tracking_open, create=True):
+            import grep_helper.encoding
+            with unittest.mock.patch.object(grep_helper.encoding, "open", tracking_open, create=True):
                 detect_encoding(p)
             self.assertTrue(len(sizes) > 0, "tracking_open was never called")
             self.assertTrue(all(n <= 4096 for n in sizes), sizes)
@@ -176,7 +188,7 @@ class TestDetectEncodingStreaming(unittest.TestCase):
 class TestIterGrepLines(unittest.TestCase):
     def test_全行をロードせずにジェネレータで返す(self):
         """iter_grep_lines はジェネレータで返る（list 化されない）。"""
-        from analyze_common import iter_grep_lines
+        from grep_helper.grep_input import iter_grep_lines
         import types
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "x.grep"
@@ -187,7 +199,7 @@ class TestIterGrepLines(unittest.TestCase):
 
     def test_デコードエラーを置換して継続する(self):
         """不正バイトは errors=replace で継続。"""
-        from analyze_common import iter_grep_lines
+        from grep_helper.grep_input import iter_grep_lines
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "x.grep"
             p.write_bytes(b"good\n\xff\xfe\xfd\nmore\n")
@@ -197,7 +209,7 @@ class TestIterGrepLines(unittest.TestCase):
 class TestIterSourceFiles(unittest.TestCase):
     def test_拡張子セットごとにキャッシュする(self):
         """同じ (src_dir, extensions) は二度目はディスクを読まない。"""
-        from analyze_common import iter_source_files, _source_files_cache_clear
+        from grep_helper.source_files import iter_source_files, _source_files_cache_clear
         _source_files_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -212,7 +224,7 @@ class TestIterSourceFiles(unittest.TestCase):
 
     def test_拡張子が異なればキャッシュも別になる(self):
         """異なる拡張子セットはそれぞれ独立にキャッシュされる。"""
-        from analyze_common import iter_source_files, _source_files_cache_clear
+        from grep_helper.source_files import iter_source_files, _source_files_cache_clear
         _source_files_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -226,7 +238,7 @@ class TestIterSourceFiles(unittest.TestCase):
 class TestResolveFileCached(unittest.TestCase):
     def test_src_dirからの相対パスを解決できる(self):
         """サブディレクトリ内のファイルを相対パスから解決する。"""
-        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        from grep_helper.source_files import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -237,14 +249,14 @@ class TestResolveFileCached(unittest.TestCase):
 
     def test_存在しないファイルはNoneを返す(self):
         """対象ファイルが存在しないときは None が返る。"""
-        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        from grep_helper.source_files import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             self.assertIsNone(resolve_file_cached("missing.txt", Path(d)))
 
     def test_解決結果がキャッシュされる(self):
         """一度解決した結果はファイル削除後もキャッシュから返る。"""
-        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        from grep_helper.source_files import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -259,7 +271,7 @@ class TestResolveFileCached(unittest.TestCase):
 class TestCachedFileLines(unittest.TestCase):
     def test_行リストを返す(self):
         """cached_file_lines はファイルを行ごとのリストとして返す。"""
-        from analyze_common import cached_file_lines, _file_lines_cache_clear
+        from grep_helper.file_cache import cached_file_lines, _file_lines_cache_clear
         _file_lines_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "f.txt"
@@ -268,7 +280,7 @@ class TestCachedFileLines(unittest.TestCase):
 
     def test_サイズ上限内ならキャッシュされる(self):
         """サイズ上限内のファイルは内部キャッシュに保持される。"""
-        from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache
+        from grep_helper.file_cache import cached_file_lines, _file_lines_cache_clear, _file_lines_cache
         _file_lines_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "f.txt"
@@ -278,7 +290,9 @@ class TestCachedFileLines(unittest.TestCase):
 
     def test_合計サイズが上限超過で古いものを破棄する(self):
         """合計バイト数が上限を超えたら最古のエントリを破棄。"""
-        from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache, set_file_lines_cache_limit
+        from grep_helper.file_cache import (
+            cached_file_lines, _file_lines_cache_clear, _file_lines_cache, set_file_lines_cache_limit,
+        )
         _file_lines_cache_clear()
         set_file_lines_cache_limit(100)  # 100 byte 上限
         with tempfile.TemporaryDirectory() as d:
@@ -295,19 +309,19 @@ class TestCachedFileLines(unittest.TestCase):
 class TestBatchScannerSelector(unittest.TestCase):
     def test_パターン数が多いとAhoCorasickを選ぶ(self):
         """パターン数が閾値超えで Aho-Corasick が選択される。"""
-        from analyze_common import build_batch_scanner
+        from grep_helper.scanner import build_batch_scanner
         scanner = build_batch_scanner([f"NAME{i:04d}" for i in range(200)])
         self.assertEqual(scanner.backend, "ahocorasick")
 
     def test_パターン数が少ないとregexを選ぶ(self):
         """パターン数が少ない場合は regex バックエンドが選ばれる。"""
-        from analyze_common import build_batch_scanner
+        from grep_helper.scanner import build_batch_scanner
         scanner = build_batch_scanner(["A", "B", "C"])
         self.assertEqual(scanner.backend, "regex")
 
     def test_findallが単語境界でマッチする(self):
         """findall は単語境界を考慮し FOOBAR にはマッチしない。"""
-        from analyze_common import build_batch_scanner
+        from grep_helper.scanner import build_batch_scanner
         scanner = build_batch_scanner(["FOO"])
         line = "x = FOO + FOOBAR;"
         results = [name for _, name in scanner.findall(line)]

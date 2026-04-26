@@ -72,3 +72,30 @@ def track_sql_variable(
                 src_lineno=record.lineno,
             ))
     return results
+
+
+def batch_track_indirect(
+    direct_records: list[GrepRecord],
+    src_dir: Path,
+    encoding: str | None,
+    *,
+    workers: int = 1,
+) -> list[GrepRecord]:
+    """直接参照レコードから SQL 変数定義を追跡して間接参照を返す。"""
+    from grep_helper.source_files import resolve_file_cached
+
+    results: list[GrepRecord] = []
+    stats = ProcessStats()
+    for record in direct_records:
+        if Path(record.filepath).suffix.lower() not in EXTENSIONS:
+            continue
+        if record.usage_type == "定数・変数定義":
+            var_name = extract_sql_variable_name(record.code)
+            if var_name:
+                candidate = resolve_file_cached(record.filepath, src_dir)
+                if candidate:
+                    results.extend(track_sql_variable(
+                        var_name, candidate, int(record.lineno),
+                        src_dir, record, stats, encoding,
+                    ))
+    return results

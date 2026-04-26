@@ -6,12 +6,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import analyze_proc  # noqa: E402
+from grep_helper.languages import proc as _proc_handler  # noqa: E402
 import grep_helper.languages.proc_define_map  # noqa: E402
 
 
 def main() -> None:
-    assert analyze_proc._define_map_cache is grep_helper.languages.proc_define_map._define_map_cache, \
+    assert _proc_handler._define_map_cache is grep_helper.languages.proc_define_map._define_map_cache, \
         "_define_map_cache (proc) identity broken"
     print("Phase 5 cache identity: OK")
 

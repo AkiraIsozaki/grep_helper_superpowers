@@ -6,12 +6,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import analyze_c  # noqa: E402
+from grep_helper.languages import c as _c_handler  # noqa: E402
 import grep_helper.languages.c  # noqa: E402
 
 
 def main() -> None:
-    assert analyze_c._define_map_cache is grep_helper.languages.c._define_map_cache, \
+    assert _c_handler._define_map_cache is grep_helper.languages.c._define_map_cache, \
         "_define_map_cache (c) identity broken"
     print("Phase 4 cache identity: OK")
 

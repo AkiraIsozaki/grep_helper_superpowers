@@ -5,13 +5,11 @@ import re
 import sys
 from pathlib import Path
 
-from analyze_common import (
-    GrepRecord, RefType,
-    build_batch_scanner,
-    cached_file_lines, detect_encoding,
-    grep_filter_files, iter_source_files, resolve_file_cached,
-)
-from grep_helper.model import ClassifyContext, ProcessStats
+from grep_helper.model import ClassifyContext, GrepRecord, ProcessStats, RefType
+from grep_helper.scanner import build_batch_scanner
+from grep_helper.file_cache import cached_file_lines
+from grep_helper.encoding import detect_encoding
+from grep_helper.source_files import grep_filter_files, iter_source_files, resolve_file_cached
 
 EXTENSIONS: tuple[str, ...] = (".cs", ".vb")
 

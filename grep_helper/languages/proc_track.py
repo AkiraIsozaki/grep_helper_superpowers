@@ -4,8 +4,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from analyze_common import GrepRecord, RefType
-from grep_helper.model import ProcessStats
+from grep_helper.model import GrepRecord, ProcessStats, RefType
 from grep_helper.encoding import detect_encoding
 from grep_helper.file_cache import cached_file_lines
 from grep_helper.source_files import iter_source_files, resolve_file_cached

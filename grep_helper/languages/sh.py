@@ -81,3 +81,48 @@ def track_sh_variable(
                 src_lineno=record.lineno,
             ))
     return results
+
+
+def batch_track_indirect(
+    direct_records: list[GrepRecord],
+    src_dir: Path,
+    encoding: str | None,
+    *,
+    workers: int = 1,
+) -> list[GrepRecord]:
+    """直接参照レコードから sh 変数代入・エクスポートを追跡して間接参照を返す。"""
+    from grep_helper.source_files import resolve_file_cached
+
+    results: list[GrepRecord] = []
+    stats = ProcessStats()
+    for record in direct_records:
+        if Path(record.filepath).suffix.lower() not in EXTENSIONS and \
+                not _is_sh_shebang(record.filepath, src_dir):
+            continue
+        if record.usage_type in ("変数代入", "環境変数エクスポート"):
+            var_name = extract_sh_variable_name(record.code)
+            if var_name:
+                candidate = resolve_file_cached(record.filepath, src_dir)
+                if candidate:
+                    results.extend(track_sh_variable(
+                        var_name, candidate, int(record.lineno),
+                        src_dir, record, stats, encoding,
+                    ))
+    return results
+
+
+def _is_sh_shebang(filepath: str, src_dir: Path) -> bool:
+    """拡張子なしのファイルがシェルスクリプトのシェバンを持つか確認する。"""
+    if Path(filepath).suffix:
+        return False
+    from grep_helper.source_files import resolve_file_cached
+    candidate = resolve_file_cached(filepath, src_dir)
+    if candidate is None:
+        return False
+    try:
+        first = candidate.read_text(encoding="utf-8", errors="replace").splitlines()[0]
+        import re as _re
+        m = _re.match(r'^#!\s*(?:.*/)?(?:env\s+)?(\S+)', first)
+        return bool(m and m.group(1).lower() in SHEBANGS)
+    except Exception:
+        return False

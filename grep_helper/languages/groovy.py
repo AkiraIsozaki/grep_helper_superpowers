@@ -5,11 +5,8 @@ import re
 import sys
 from pathlib import Path
 
-from analyze_common import (
-    GrepRecord, RefType,
-    iter_source_files,
-)
-from grep_helper.model import ClassifyContext, ProcessStats
+from grep_helper.model import ClassifyContext, GrepRecord, ProcessStats, RefType
+from grep_helper.source_files import iter_source_files
 from grep_helper.scanner import build_batch_scanner
 from grep_helper.source_files import grep_filter_files, resolve_file_cached
 from grep_helper.file_cache import cached_file_lines

@@ -11,35 +11,65 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import analyze
-import analyze_common
-from analyze import (
-    GrepRecord,
-    ProcessStats,
-    RefType,
-    UsageType,
-    _ast_cache,
-    _batch_track_setters,
 
-    _get_method_scope,
-    _resolve_java_file,
-    _search_in_lines,
-    build_parser,
-    classify_usage,
+# Java-specific CLI (analyze.py shim / grep_helper.languages.java)
+import analyze
+from grep_helper.languages.java import build_parser, print_report
+
+# Canonical grep_helper imports
+from grep_helper.model import GrepRecord, ProcessStats, RefType
+from grep_helper.grep_input import parse_grep_line
+from grep_helper.tsv_output import write_tsv
+from grep_helper.file_cache import _file_lines_cache_clear
+from grep_helper.languages.java_ast import (
+    _JAVALANG_AVAILABLE,
+    _ast_cache,
+    get_ast,
+)
+from grep_helper.languages.java_classify import (
+    UsageType,
     classify_usage_regex,
     determine_scope,
     extract_variable_name,
-    find_getter_names,
-    find_setter_names,
-    parse_grep_line,
-    print_report,
-    process_grep_file,
+)
+from grep_helper.languages.java_track import (
+    _resolve_java_file,
+    _get_method_scope,
+    _search_in_lines,
     track_constant,
     track_field,
-    track_getter_calls,
     track_local,
-    write_tsv,
+    find_getter_names,
+    find_setter_names,
+    track_getter_calls,
+    _batch_track_combined,
+    _batch_track_setters,
 )
+from grep_helper.pipeline import process_grep_file as _pgf
+from grep_helper.languages import java as _java_handler
+from grep_helper.model import ClassifyContext
+
+
+def _process_grep_file(path, keyword, source_dir, stats, encoding_override=None):
+    """旧 API compat wrapper."""
+    return _pgf(path, source_dir, _java_handler, keyword=keyword,
+                encoding=encoding_override, stats=stats)
+
+
+def classify_usage(code, filepath, lineno, source_dir, stats, *, encoding_override=None):
+    """旧シグネチャ互換ラッパー。"""
+    ctx = ClassifyContext(
+        filepath=filepath,
+        lineno=lineno,
+        source_dir=source_dir,
+        stats=stats,
+        encoding_override=encoding_override,
+    )
+    return _java_handler.classify_usage(code, ctx=ctx)
+
+
+# Alias for process_grep_file (old positional API)
+process_grep_file = _process_grep_file
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +537,6 @@ class TestGetAst(unittest.TestCase):
 
     def test_有効なJavaファイルはASTツリーを返す(self):
         """有効なJavaファイルはASTツリーを返すこと。"""
-        from analyze import get_ast, _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         tree = get_ast("Constants.java", self.JAVA_DIR)
@@ -515,13 +544,11 @@ class TestGetAst(unittest.TestCase):
 
     def test_get_astは存在しないファイルでNoneを返す(self):
         """存在しないファイルはNoneを返すこと。"""
-        from analyze import get_ast
         result = get_ast("nonexistent/Foo.java", self.JAVA_DIR)
         self.assertIsNone(result)
 
     def test_2回目の呼び出しはキャッシュから取得し再パースしない(self):
         """2回目の呼び出しはキャッシュから取得すること（再パース不要）。"""
-        from analyze import get_ast, _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         filepath = "Constants.java"
@@ -531,7 +558,6 @@ class TestGetAst(unittest.TestCase):
 
     def test_存在しないファイルはNoneとしてキャッシュされる(self):
         """存在しないファイルはNoneとしてキャッシュされること。"""
-        from analyze import get_ast, _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         get_ast("ghost.java", self.JAVA_DIR)
@@ -556,7 +582,6 @@ class TestClassifyUsage(unittest.TestCase):
 
     def test_AST使用時に定数定義を正しく分類する(self):
         """ASTが使えるファイルで定数定義を正しく分類すること。"""
-        from analyze import _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -571,7 +596,6 @@ class TestClassifyUsage(unittest.TestCase):
 
     def test_AST使用時に条件判定を正しく分類する(self):
         """ASTが使えるファイルで条件判定を正しく分類すること。"""
-        from analyze import _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -598,7 +622,6 @@ class TestClassifyUsage(unittest.TestCase):
 
     def test_AST使用時にreturn文を正しく分類する(self):
         """ASTが使えるファイルでreturn文を正しく分類すること。"""
-        from analyze import _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -613,7 +636,6 @@ class TestClassifyUsage(unittest.TestCase):
 
     def test_フォールバック発生時にstats_fallback_filesに記録される(self):
         """フォールバック発生時にstats.fallback_filesに記録されること。"""
-        from analyze import _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -676,7 +698,6 @@ class TestGetMethodScope(unittest.TestCase):
 
     def test_メソッド内の行番号からスタートとエンドのタプルが返る(self):
         """メソッド内の行番号を渡すと (start, end) タプルが返ること。"""
-        from analyze import _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         # Constants.java: isSample メソッドは12行目から始まる（source_dir基準の相対パス）
@@ -693,7 +714,6 @@ class TestGetMethodScope(unittest.TestCase):
 
     def test_メソッドより前の行はNoneを返す(self):
         """メソッドより前の行はNoneを返すこと。"""
-        from analyze import _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         result = _get_method_scope("Constants.java", self.JAVA_DIR, 1)
@@ -981,7 +1001,6 @@ class TestFindGetterNames(unittest.TestCase):
 
     def test_ASTベースのgetter検出でgetTypeが見つかる(self):
         """Entity.javaの `return type;` から getType が見つかること。"""
-        from analyze import _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         entity_file = self.JAVA_DIR / "Entity.java"
@@ -1247,7 +1266,6 @@ class TestGetAstExceptionHandling(unittest.TestCase):
 
     def test_構文エラーのJavaファイルはNoneを返しキャッシュされる(self):
         """構文エラーのあるJavaファイルはNoneを返しキャッシュされること。"""
-        from analyze import get_ast, _JAVALANG_AVAILABLE
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         bad_file = Path(self.tmp_dir) / "Bad.java"
@@ -1388,17 +1406,7 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_直接参照レコードが6種類以上の使用タイプを網羅する(self):
-        """ORDER_TYPE_NORMAL.grep から 6 種類以上の使用タイプが検出されること。
-
-        期待する使用タイプ:
-        - アノテーション (@ConditionalOnExpression 行)
-        - 定数定義       (AppConstants.java の static final 行)
-        - 条件判定       (if (...) 行、.equals() 行)
-        - return文       (return findByOrderType(...) 行)
-        - 変数代入       (String normalType = ... 行)
-        - メソッド引数   (sendAlert(AppConstants.ORDER_TYPE_NORMAL) 行)
-        - その他         (AppConstants.ORDER_TYPE_NORMAL, だけの行)
-        """
+        """ORDER_TYPE_NORMAL.grep から 6 種類以上の使用タイプが検出されること。"""
         direct_records, _, _ = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
 
         usage_types_found = {r.usage_type for r in direct_records}
@@ -1417,11 +1425,7 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_バイナリ行と空行がskipped_linesに計上されvalid_linesに含まれない(self):
-        """バイナリ行・空行が skipped_lines に計上され valid_lines に含まれないこと。
-
-        ORDER_TYPE_NORMAL.grep:  バイナリ 3行 + 空行 2行 = 5行スキップ
-        orderStatus.grep:        バイナリ 2行 + 空行 1行 = 3行スキップ
-        """
+        """バイナリ行・空行が skipped_lines に計上され valid_lines に含まれないこと。"""
         # ORDER_TYPE_NORMAL.grep の検証
         _, _, stats_n = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
         self.assertGreater(stats_n.skipped_lines, 0, "スキップ行が 0 件")
@@ -1441,11 +1445,7 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_定数の間接参照が複数ファイルにわたって検出される(self):
-        """ORDER_TYPE_NORMAL（static final 定数）の間接参照が複数の異なるファイルにわたって検出されること。
-
-        AppConstants.java:12 が 'project' スコープとなり、
-        track_constant() によって全 .java ファイルが検索される。
-        """
+        """ORDER_TYPE_NORMAL（static final 定数）の間接参照が複数の異なるファイルにわたって検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
 
         # 定数定義レコードが存在すること
@@ -1467,7 +1467,6 @@ class TestIntenseE2E(unittest.TestCase):
         )
 
         # 間接参照に src_var="ORDER_TYPE_NORMAL" が含まれること
-        # （ローカル変数経由の二次追跡レコードが混在する場合があるため、少なくとも1件を確認）
         self.assertTrue(
             any(r.src_var == "ORDER_TYPE_NORMAL" for r in indirect_records),
             "src_var='ORDER_TYPE_NORMAL' の間接参照が見つからない",
@@ -1484,11 +1483,7 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_フィールドの間接参照が同一クラス内で検出される(self):
-        """orderStatus（private フィールド）の間接参照が Order.java クラス内で検出されること。
-
-        Order.java:13 が 'class' スコープとなり、
-        track_field() によって Order.java 内が検索される。
-        """
+        """orderStatus（private フィールド）の間接参照が Order.java クラス内で検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("orderStatus.grep")
 
         # フィールド定義レコードが存在すること
@@ -1519,18 +1514,13 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_getter経由参照が検出される(self):
-        """orderStatus フィールドの getter 経由参照が検出されること。
-
-        find_getter_names("orderStatus", Order.java) が 'getOrderStatus' を候補として返し、
-        track_getter_calls() が ValidationService.java 内の呼び出しを検出する。
-        """
+        """orderStatus フィールドの getter 経由参照が検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("orderStatus.grep")
 
         getter_records = [r for r in all_records if r.ref_type == RefType.GETTER.value]
         self.assertGreater(len(getter_records), 0, "getter 経由参照レコードが見つからない")
 
         # 命名規則由来の getter getOrderStatus が少なくとも1件検出されること
-        # （return文解析で fetchStatus 等の非標準getter も検出されるため any() で確認）
         self.assertTrue(
             any("getOrderStatus" in r.src_var for r in getter_records),
             "getOrderStatus を src_var に持つ getter 経由参照が見つからない",
@@ -1585,11 +1575,7 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_処理統計が正確に集計される(self):
-        """処理統計（total, valid, skipped）が正確に集計されること。
-
-        total_lines == valid_lines + skipped_lines が常に成立すること。
-        両ファイルを処理しても統計が正確に累積されること。
-        """
+        """処理統計（total, valid, skipped）が正確に集計されること。"""
         grep_path_n = self.GREP_DIR / "ORDER_TYPE_NORMAL.grep"
         grep_path_s = self.GREP_DIR / "orderStatus.grep"
         stats = ProcessStats()
@@ -1606,12 +1592,9 @@ class TestIntenseE2E(unittest.TestCase):
         )
 
         # バイナリ行・空行がスキップされていること
-        # ORDER_TYPE_NORMAL.grep: バイナリ3行+空行2行=5
-        # orderStatus.grep: バイナリ2行+空行1行=3
         self.assertGreaterEqual(stats.skipped_lines, 8, "スキップ行数が期待より少ない")
 
         # 有効行が十分存在すること
-        # ORDER_TYPE_NORMAL: 15行, orderStatus: 18行
         self.assertGreaterEqual(stats.valid_lines, 25, "有効行数が期待より少ない")
 
     # ------------------------------------------------------------------
@@ -1619,12 +1602,7 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_間接参照が大量かつ複数ファイルにわたって検出される(self):
-        """間接参照が大量かつ複数ファイルにわたって検出されること（定数が広く参照されているため）。
-
-        direct 参照は grep ファイルの行数に依存するが、indirect は実際の Java ファイルを
-        全件検索するため、プロジェクト全体に定数が行き渡るほど多くなる。
-        少なくとも 8 件以上、かつ 4 ファイル以上から検出されることを確認する。
-        """
+        """間接参照が大量かつ複数ファイルにわたって検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
 
         indirect_records = [r for r in all_records if r.ref_type == RefType.INDIRECT.value]
@@ -1645,14 +1623,7 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_CLI経由で2つのTSVファイルが正常出力される(self):
-        """CLI（main()）を通じて 2 つの TSV ファイルが正常出力されること。
-
-        - 終了コード 0
-        - ORDER_TYPE_NORMAL.tsv および orderStatus.tsv が生成される
-        - 各 TSV にヘッダー＋データ行が存在する
-        - 'direct' 参照と 'indirect' 参照が両方含まれる（ORDER_TYPE_NORMAL）
-        - stdout に '処理完了' が出力される
-        """
+        """CLI（main()）を通じて 2 つの TSV ファイルが正常出力されること。"""
         rc, out, err = self._run_main([
             "--source-dir", str(self.JAVA_DIR),
             "--input-dir",  str(self.GREP_DIR),
@@ -1714,7 +1685,7 @@ class TestBatchTrackSetters(unittest.TestCase):
                 code='private String type = "TARGET";',
             )
             stats = ProcessStats()
-            analyze_common._file_lines_cache_clear()
+            _file_lines_cache_clear()
             results = _batch_track_setters({"setType": [origin]}, src_dir, stats)
             self.assertTrue(any("Service.java" in r.filepath for r in results))
             self.assertTrue(all(r.ref_type == RefType.SETTER.value for r in results))
@@ -1723,13 +1694,11 @@ class TestBatchTrackSetters(unittest.TestCase):
 class TestBatchTrackOnePass(unittest.TestCase):
     def test_batch_track_combinedが1パスで定数とgetterとsetterを処理する(self):
         """定数+getter+setter を 1 パスで処理する _batch_track_combined を提供。"""
-        import analyze
-        self.assertTrue(hasattr(analyze, "_batch_track_combined"))
+        from grep_helper.languages import java_track
+        self.assertTrue(hasattr(java_track, "_batch_track_combined"))
 
     def test_combinedが定数とgetterとsetterのレコードを混合で返す(self):
         """combined は constant / getter / setter のレコードを混合で返す。"""
-        from analyze import _batch_track_combined
-        from analyze_common import ProcessStats, GrepRecord
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
             (p / "Foo.java").write_text(
@@ -1759,7 +1728,6 @@ class TestBatchTrackOnePass(unittest.TestCase):
 class TestNoModuleGlobalEncoding(unittest.TestCase):
     def test_encoding_overrideモジュールグローバルは廃止されている(self):
         """_encoding_override モジュールグローバルは廃止されている。"""
-        import analyze
         self.assertFalse(hasattr(analyze, "_encoding_override"),
             "_encoding_override は引数化されたため削除されているべき")
 
@@ -1767,14 +1735,12 @@ class TestNoModuleGlobalEncoding(unittest.TestCase):
 class TestParallelBatchTrack(unittest.TestCase):
     def test_batch_track_combinedはworkers引数を受け取る(self):
         """並列ワーカー数を指定できる。"""
-        import inspect, analyze
-        sig = inspect.signature(analyze._batch_track_combined)
+        import inspect
+        sig = inspect.signature(_batch_track_combined)
         self.assertIn("workers", sig.parameters)
 
     def test_workers2でも結果が単一ワーカーと一致する(self):
         """workers=2 で実行しても結果が一致する。"""
-        from analyze import _batch_track_combined
-        from analyze_common import ProcessStats, GrepRecord
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
             for i in range(4):
