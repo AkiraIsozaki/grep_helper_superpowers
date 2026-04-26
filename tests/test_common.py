@@ -239,5 +239,39 @@ class TestResolveFileCached(unittest.TestCase):
             self.assertEqual(r1, r2)  # キャッシュから同じ結果が返る
 
 
+class TestCachedFileLines(unittest.TestCase):
+    def test_returns_lines(self):
+        from analyze_common import cached_file_lines, _file_lines_cache_clear
+        _file_lines_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "f.txt"
+            p.write_text("a\nb\nc\n", encoding="utf-8")
+            self.assertEqual(cached_file_lines(p, "utf-8"), ["a", "b", "c"])
+
+    def test_caches_within_size_limit(self):
+        from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache
+        _file_lines_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "f.txt"
+            p.write_text("a\n", encoding="utf-8")
+            cached_file_lines(p, "utf-8")
+            self.assertIn(str(p), _file_lines_cache)
+
+    def test_evicts_when_total_size_exceeds_limit(self):
+        """合計バイト数が上限を超えたら最古のエントリを破棄。"""
+        from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache, set_file_lines_cache_limit
+        _file_lines_cache_clear()
+        set_file_lines_cache_limit(100)  # 100 byte 上限
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            for i in range(5):
+                f = p / f"f{i}.txt"
+                f.write_text("X" * 50, encoding="utf-8")
+                cached_file_lines(f, "utf-8")
+            # 合計 250 byte 入れたら最初の 3 ファイル分は追い出されているはず
+            self.assertLessEqual(len(_file_lines_cache), 3)
+        set_file_lines_cache_limit(256 * 1024 * 1024)  # 復元
+
+
 if __name__ == "__main__":
     unittest.main()
