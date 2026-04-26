@@ -180,6 +180,7 @@ from analyze import _get_method_scope   # type: ignore[attr-defined]
 from analyze import _batch_track_constants  # type: ignore[attr-defined]
 from analyze import _batch_track_getters    # type: ignore[attr-defined]
 from analyze import _batch_track_setters    # type: ignore[attr-defined]
+from analyze import _batch_track_combined   # type: ignore[attr-defined]
 
 # Kotlin
 
@@ -686,8 +687,8 @@ def _apply_indirect_tracking(
 
         # ts / python / perl / plsql / other: 間接追跡なし
 
-    # Java バッチ処理: 定数・getter・setter の事前フィルタを1回の rglob で共有
-    java_candidates: list[Path] | None = None
+    # Java バッチ処理: 定数・getter・setter の事前フィルタを1回の rglob で共有し、
+    # 1 パスで定数/getter/setter を統合追跡する。
     if java_project_tasks or java_getter_tasks or java_setter_tasks:
         all_java_names = list(dict.fromkeys(
             list(java_project_tasks.keys())
@@ -697,12 +698,12 @@ def _apply_indirect_tracking(
         java_candidates = grep_filter_files(
             all_java_names, source_dir, [".java"], label="Java追跡",
         )
-    if java_project_tasks:
-        result.extend(_batch_track_constants(java_project_tasks, source_dir, stats, file_list=java_candidates))
-    if java_getter_tasks:
-        result.extend(_batch_track_getters(java_getter_tasks, source_dir, stats, file_list=java_candidates))
-    if java_setter_tasks:
-        result.extend(_batch_track_setters(java_setter_tasks, source_dir, stats, file_list=java_candidates))
+        result.extend(_batch_track_combined(
+            const_tasks=java_project_tasks,
+            getter_tasks=java_getter_tasks,
+            setter_tasks=java_setter_tasks,
+            source_dir=source_dir, stats=stats, file_list=java_candidates,
+        ))
 
     # Kotlin / .NET / Groovy static final / C #define / Pro*C #define バッチ処理
     result.extend(_batch_track_kotlin_const(kotlin_const_tasks, source_dir, stats, encoding))

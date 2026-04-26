@@ -941,6 +941,95 @@ def track_getter_calls(
 # バッチスキャン（プロジェクト全体を1パスで複数パターン検索）
 # ---------------------------------------------------------------------------
 
+def _batch_track_combined(
+    const_tasks: dict[str, list[GrepRecord]],
+    getter_tasks: dict[str, list[GrepRecord]],
+    setter_tasks: dict[str, list[GrepRecord]],
+    source_dir: Path,
+    stats: ProcessStats,
+    file_list: list[Path] | None = None,
+) -> list[GrepRecord]:
+    """定数 / getter / setter を 1 パスで一括追跡する。
+
+    file_list が指定された場合はそのリストをスキャン対象にする。
+    """
+    if not const_tasks and not getter_tasks and not setter_tasks:
+        return []
+
+    all_names = list(dict.fromkeys(
+        list(const_tasks.keys()) + list(getter_tasks.keys()) + list(setter_tasks.keys())
+    ))
+    java_files = file_list if file_list is not None else grep_filter_files(
+        all_names, source_dir, [".java"], label="Java追跡(統合)",
+    )
+    if not java_files:
+        return []
+
+    parts: list[str] = []
+    if const_tasks:
+        parts.append(r"\b(?P<const>" + "|".join(re.escape(k) for k in const_tasks) + r")\b(?!\s*\()")
+    if getter_tasks:
+        parts.append(r"\b(?P<getter>" + "|".join(re.escape(k) for k in getter_tasks) + r")\s*\(")
+    if setter_tasks:
+        parts.append(r"\b(?P<setter>" + "|".join(re.escape(k) for k in setter_tasks) + r")\s*\(")
+    combined = re.compile("|".join(parts))
+
+    records: list[GrepRecord] = []
+    total = len(java_files)
+    for idx, java_file in enumerate(java_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            print(f"  [Java追跡] {idx}/{total} ファイル処理済み", file=sys.stderr, flush=True)
+        filepath_abs = str(java_file)
+        try:
+            filepath_str = str(java_file.relative_to(source_dir))
+        except ValueError:
+            filepath_str = filepath_abs
+        lines = cached_file_lines(java_file, detect_encoding(java_file, _encoding_override), stats)
+        if not lines:
+            continue
+        for i, line in enumerate(lines, start=1):
+            for m in combined.finditer(line):
+                code = line.strip()
+                usage_type = classify_usage(
+                    code=code, filepath=filepath_str, lineno=i,
+                    source_dir=source_dir, stats=stats,
+                )
+                gd = m.groupdict()
+                const_name = gd.get("const")
+                getter_name = gd.get("getter")
+                setter_name = gd.get("setter")
+                if const_name:
+                    for origin in const_tasks[const_name]:
+                        if filepath_str == origin.filepath and str(i) == origin.lineno:
+                            continue
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=RefType.INDIRECT.value,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=const_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+                elif getter_name:
+                    for origin in getter_tasks[getter_name]:
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=RefType.GETTER.value,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=getter_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+                elif setter_name:
+                    for origin in setter_tasks[setter_name]:
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=RefType.SETTER.value,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=setter_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+    return records
+
+
 def _batch_track_constants(
     tasks: dict[str, list[GrepRecord]],
     source_dir: Path,
@@ -1323,8 +1412,8 @@ def main() -> None:
                             track_local(var_name, method_scope, record, source_dir, stats)
                         )
 
-            # 定数・getter・setter の事前フィルタを1回の rglob で共有
-            java_candidates: list[Path] | None = None
+            # 定数・getter・setter の事前フィルタを1回の rglob で共有し、
+            # 1 パスで定数/getter/setter を統合追跡する。
             if project_scope_tasks or getter_tasks or setter_tasks:
                 all_java_names = list(dict.fromkeys(
                     list(project_scope_tasks.keys())
@@ -1334,19 +1423,12 @@ def main() -> None:
                 java_candidates = grep_filter_files(
                     all_java_names, source_dir, [".java"], label="Java追跡",
                 )
-
-            if project_scope_tasks:
-                all_records.extend(
-                    _batch_track_constants(project_scope_tasks, source_dir, stats, file_list=java_candidates)
-                )
-            if getter_tasks:
-                all_records.extend(
-                    _batch_track_getters(getter_tasks, source_dir, stats, file_list=java_candidates)
-                )
-            if setter_tasks:
-                all_records.extend(
-                    _batch_track_setters(setter_tasks, source_dir, stats, file_list=java_candidates)
-                )
+                all_records.extend(_batch_track_combined(
+                    const_tasks=project_scope_tasks,
+                    getter_tasks=getter_tasks,
+                    setter_tasks=setter_tasks,
+                    source_dir=source_dir, stats=stats, file_list=java_candidates,
+                ))
 
             # 出力
             output_path = output_dir / f"{keyword}.tsv"

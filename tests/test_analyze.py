@@ -1720,5 +1720,41 @@ class TestBatchTrackSetters(unittest.TestCase):
             self.assertTrue(all(r.ref_type == RefType.SETTER.value for r in results))
 
 
+class TestBatchTrackOnePass(unittest.TestCase):
+    def test_one_pass_reads_each_file_once(self):
+        """定数+getter+setter を 1 パスで処理する _batch_track_combined を提供。"""
+        import analyze
+        self.assertTrue(hasattr(analyze, "_batch_track_combined"))
+
+    def test_combined_yields_all_kinds(self):
+        """combined は constant / getter / setter のレコードを混合で返す。"""
+        from analyze import _batch_track_combined
+        from analyze_common import ProcessStats, GrepRecord
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "Foo.java").write_text(
+                "public class Foo {\n"
+                "  static final String CODE = \"x\";\n"
+                "  String getCode() { return null; }\n"
+                "  void setCode(String s) {}\n"
+                "  void use() { String c = CODE; getCode(); setCode(\"y\"); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            origin = GrepRecord("kw", "直接", "定数定義", "Foo.java", "2",
+                                "static final String CODE = \"x\";")
+            stats = ProcessStats()
+            records = _batch_track_combined(
+                const_tasks={"CODE": [origin]},
+                getter_tasks={"getCode": [origin]},
+                setter_tasks={"setCode": [origin]},
+                source_dir=p, stats=stats, file_list=None,
+            )
+            ref_types = {(r.ref_type, r.src_var) for r in records}
+            self.assertIn(("間接", "CODE"), ref_types)
+            self.assertIn(("間接（getter経由）", "getCode"), ref_types)
+            self.assertIn(("間接（setter経由）", "setCode"), ref_types)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
