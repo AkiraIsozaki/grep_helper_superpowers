@@ -1,7 +1,7 @@
 # ツール概要説明書
 
 **対象読者**: プログラムの実装詳細を把握していない管理者・業務担当者  
-**更新日**: 2026-04-19（2026-04-19 改訂：Groovy / C# / VB.NET / TypeScript / Python / Perl 対応追加、setter追跡追加、呼び出し順序セクション追加）
+**更新日**: 2026-04-26（2026-04-26 改訂：性能改善に伴うキャッシュインフラ説明・`--workers` 並列処理オプション・バッチスキャナの Aho-Corasick 自動選択を追記。2026-04-19：Groovy / C# / VB.NET / TypeScript / Python / Perl 対応追加、setter追跡追加、呼び出し順序セクション追加）
 
 ---
 
@@ -264,9 +264,8 @@ flowchart TD
 
 このツールでは以下の方針でファイルを読み込む。
 
-- Javaソースファイル：Shift-JIS（日本語を含むレガシーJavaシステムで一般的）
-- grep結果ファイル：CP932（Windows日本語環境でのgrepで一般的）
-- Kotlin / PL/SQL / TypeScript / Python / Perl / C# / VB.NET / Groovy：`chardet` ライブラリによる自動検出（検出できない場合はCP932）。`--encoding` オプションで明示指定も可能
+- ソースファイル全般（全言語共通）：`chardet` ライブラリによる自動検出（先頭4096バイトのみ読む。信頼度が低い／検出できない場合はCP932にフォールバック）。`--encoding` オプションで明示指定も可能
+- grep結果ファイル：上記と同じ自動検出ロジック（Windows日本語環境でgrepした場合、CP932が選択されることが多い）
 - 出力TSVファイル：UTF-8 BOM付き（WindowsのExcelで文字化けなく開くために必要）
 
 読み込み時にデコードエラーが発生した場合は、処理を中断せず文字化け状態で読み込みを継続し、エラーが発生したファイル名を処理完了後のレポートに記録する。
@@ -334,9 +333,9 @@ sequenceDiagram
     participant Track as 追跡処理（言語別）
     participant TSV as write_tsv()
 
-    CLI->>Main: python analyze_XXX.py --source-dir ... --input-dir ...
+    CLI->>Main: python analyze_XXX.py --source-dir ... --input-dir ... [--workers N]
     Main->>Parser: CLIオプションを解析
-    Parser-->>Main: source_dir / input_dir / output_dir / encoding
+    Parser-->>Main: source_dir / input_dir / output_dir / encoding / workers
     loop input_dir内の .grep ファイルを1件ずつ処理
         Main->>GPF: grep結果ファイルを1行ずつ読み込む
         GPF-->>Main: 直接参照レコード一覧（参照種別=直接）
@@ -430,7 +429,21 @@ sequenceDiagram
 
 第2〜第4段階の追跡処理では、同じソースファイルを繰り返し読む可能性がある（例：同一ファイルに複数の定数があれば、そのファイルが追跡対象として複数回登場する）。
 
-この重複読み込みを回避するため、全アナライザーは「一度読み込んだファイルの内容をメモリ上に保持する（キャッシュする）」仕組みを持つ。キャッシュの上限は800ファイルであり、上限に達した場合は最も古いキャッシュを破棄してから新しいファイルを読み込む（FIFO方式）。
+この重複読み込みを回避するため、全アナライザーは「一度読み込んだファイルの内容をメモリ上に保持する（キャッシュする）」仕組みを共有している（`analyze_common.py` の `cached_file_lines`）。キャッシュはサイズベースの LRU 方式で、合計バイト数の上限はデフォルト 256MB。上限を超えると最も古くアクセスされていないエントリから順に破棄される。
+
+加えて、定数・getter・setter のように「同じ名前のリストをプロジェクト全体で照合する」処理では、複数の名前を1パスで一括検出するバッチスキャナを使う。名前の数が多い場合（しきい値: 100件以上）は Aho-Corasick アルゴリズム（`pyahocorasick` パッケージが利用可能ならそれを、無ければ純Python実装にフォールバック）に自動的に切り替わり、件数に対してほぼ線形の処理時間で走査できる。
+
+### 9-5. 並列処理（`--workers`）
+
+`analyze.py`（Java）と `analyze_all.py`（全言語ディスパッチャー）は、第2〜第4段階のバッチ追跡をプロセス並列で実行する `--workers` オプションを持つ。デフォルトは `1`（直列）で、CPUコア数を指定すると追跡対象ファイルがチャンク分割され、`ProcessPoolExecutor` で並列スキャンされる。
+
+例：
+
+```
+python analyze_all.py --source-dir /path/to/src --workers 4
+```
+
+第1段階（grep行の分類）は並列化対象外であり、第2段階以降のスキャン処理のみが高速化される。
 
 ---
 

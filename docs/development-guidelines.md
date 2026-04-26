@@ -50,6 +50,10 @@ class UsageType(Enum):
 ```
 # 共通インフラ
 analyze_common.py
+aho_corasick.py    # Aho-Corasick 多パターンスキャナ
+
+# 統合エントリ
+analyze_all.py     # 拡張子から言語を判定して各アナライザーに委譲
 
 # 言語別アナライザー: analyze_[言語].py
 analyze.py       # Java（言語名を省略）
@@ -69,6 +73,8 @@ analyze_ts.py    # TypeScript/JavaScript
 tests/test_analyze.py       # Java
 tests/test_analyze_proc.py  # Pro*C
 tests/test_common.py        # 共通インフラ
+tests/test_aho_corasick.py  # Aho-Corasick スキャナ
+tests/test_all_analyzer.py  # analyze_all.py（言語判定）
 tests/test_c_analyzer.py
 tests/test_dotnet_analyzer.py
 tests/test_groovy_analyzer.py
@@ -272,7 +278,7 @@ feature/* / fix/* / refactor/*
 **マージ条件**:
 - レビュアー1名以上の承認
 - 全テストパス（`python -m pytest tests/ -v`）
-- コードスタイル準拠（`python -m flake8 analyze.py`）
+- コードスタイル準拠（`python -m flake8 analyze*.py tests/`）
 - `feature/*` / `fix/*` → `develop` へマージ後、ブランチを削除する
 - `develop` → `main` はリリース時のみ（`vX.Y.Z` タグを付与）
 
@@ -313,8 +319,8 @@ Closes #12
 
 **作成前のチェック（作成者）**:
 - [ ] 全てのテストがパス（`python -m pytest tests/ -v`）
-- [ ] 構文エラーがない（`python -m py_compile analyze.py`）
-- [ ] コードスタイル準拠（`python -m flake8 analyze.py`）
+- [ ] 構文エラーがない（`python -m py_compile analyze*.py`）
+- [ ] コードスタイル準拠（`python -m flake8 analyze*.py tests/`）
 - [ ] 型ヒントが適切に付与されている
 - [ ] `USAGE_PATTERNS` 等の定数がモジュールレベルで定義されている
 
@@ -339,8 +345,10 @@ import unittest
 from pathlib import Path
 
 class TestGrepParser(unittest.TestCase):
+    """F-01: parse_grep_line() のテスト。"""
 
-    def test_parse_valid_line_returns_dict(self):
+    def test_正常なgrep行をパースして辞書を返す(self):
+        """正常なgrep行をパースして辞書を返すこと。"""
         # Arrange
         line = "src/main/java/Constants.java:10:    public static final String CODE = \"TARGET\";"
 
@@ -353,11 +361,13 @@ class TestGrepParser(unittest.TestCase):
         self.assertEqual(result["lineno"], "10")
         self.assertIn("CODE", result["code"])
 
-    def test_parse_binary_notice_line_returns_none(self):
+    def test_バイナリ通知行はNoneを返す(self):
+        """バイナリ通知行はNoneを返すこと。"""
         line = "Binary file src/main/resources/logo.png matches"
         self.assertIsNone(parse_grep_line(line))
 
-    def test_parse_empty_line_returns_none(self):
+    def test_空行や空白のみの行はNoneを返す(self):
+        """空行・空白のみの行はNoneを返すこと。"""
         self.assertIsNone(parse_grep_line(""))
         self.assertIsNone(parse_grep_line("   "))
 ```
@@ -368,32 +378,40 @@ class TestGrepParser(unittest.TestCase):
 
 ```python
 class TestUsageClassifier(unittest.TestCase):
+    """F-02: classify_usage_regex() の7種分類テスト。"""
 
-    def test_classify_constant_definition(self):
+    def test_static_final定数定義を正しく分類する(self):
+        """static final定数定義を正しく分類すること。"""
         code = 'public static final String CODE = "TARGET";'
         self.assertEqual(classify_usage_regex(code), "定数定義")
 
-    def test_classify_condition_equals(self):
+    def test_equalsを含む行を条件判定として分類する(self):
+        """.equals() を含む行を条件判定と分類すること。"""
         code = 'if (someVar.equals(CODE)) {'
         self.assertEqual(classify_usage_regex(code), "条件判定")
 
-    def test_classify_annotation(self):
+    def test_アノテーション行を正しく分類する(self):
+        """アノテーション行を正しく分類すること。"""
         code = '@RequestMapping("TARGET")'
         self.assertEqual(classify_usage_regex(code), "アノテーション")
 
-    def test_classify_return(self):
+    def test_return文を正しく分類する(self):
+        """return文を正しく分類すること。"""
         code = 'return CODE;'
         self.assertEqual(classify_usage_regex(code), "return文")
 
-    def test_classify_method_argument(self):
+    def test_メソッド引数を正しく分類する(self):
+        """メソッド引数を正しく分類すること。"""
         code = 'someService.process(CODE);'
         self.assertEqual(classify_usage_regex(code), "メソッド引数")
 
-    def test_classify_variable_assignment(self):
+    def test_変数代入を正しく分類する(self):
+        """変数代入を正しく分類すること。"""
         code = 'String msg = CODE;'
         self.assertEqual(classify_usage_regex(code), "変数代入")
 
-    def test_classify_comment_as_other(self):
+    def test_コメント行をその他に分類する(self):
+        """コメント行をその他に分類すること。"""
         code = '// TARGET はここで使われる'
         self.assertEqual(classify_usage_regex(code), "その他")
 ```
@@ -424,8 +442,14 @@ tests/
 │   ├── input/  src/  expected/
 ├── dotnet/           # C#/VB.NET（tests/test_dotnet_analyzer.py用）
 │   ├── input/  src/  expected/
-└── groovy/           # Groovy（tests/test_groovy_analyzer.py用）
-    ├── input/  src/  expected/
+├── groovy/           # Groovy（tests/test_groovy_analyzer.py用）
+│   ├── input/  src/  expected/
+├── kotlin/           # Kotlin（tests/test_kotlin_analyzer.py用）
+│   ├── input/  src/  expected/
+├── plsql/            # PL/SQL（tests/test_plsql_analyzer.py用）
+│   ├── input/  src/  expected/
+└── all/              # analyze_all.py（tests/test_all_analyzer.py用）
+    ├── input/  src/
 ```
 
 **expected/*.tsv の管理**:
@@ -434,19 +458,34 @@ tests/
 
 ### テスト命名規則
 
-**パターン**: `test_[対象関数]_[条件]_[期待結果]`
+**パターン**: `test_<日本語の自然な文>`（メソッド名・docstringともに日本語で記述する）
+
+テストメソッド名は「何をテストするか」を日本語の自然な文で表現する。
+あわせて docstring にも日本語で振る舞いを記述する（pytest 出力での可読性向上のため）。
 
 ```python
-# 良い例
-def test_parse_valid_line_returns_dict(self): ...
-def test_parse_binary_notice_line_returns_none(self): ...
-def test_classify_static_final_as_constant_definition(self): ...
-def test_write_tsv_encoding_is_utf8_bom(self): ...
+# 良い例: 日本語の自然な文 + 日本語docstring
+def test_正常なgrep行をパースして辞書を返す(self):
+    """正常なgrep行をパースして辞書を返すこと。"""
+    ...
+
+def test_バイナリ通知行はNoneを返す(self):
+    """バイナリ通知行はNoneを返すこと。"""
+    ...
+
+def test_static_final定数定義を正しく分類する(self):
+    """static final定数定義を正しく分類すること。"""
+    ...
+
+def test_UTF8_BOM付きで出力されExcelで文字化けしない(self):
+    """write_tsv が UTF-8 BOM 付きで出力されること。"""
+    ...
 
 # 悪い例
 def test1(self): ...
 def test_parse(self): ...
 def test_ok(self): ...
+def test_parse_valid_line_returns_dict(self): ...  # 英語のみは不可
 ```
 
 ### テスト実行
@@ -518,7 +557,7 @@ exclude =
     dist,
     .steering
 ```
-プロジェクトルートの `.flake8` で設定済み。`python -m flake8 analyze.py` で実行する。
+プロジェクトルートの `.flake8` で設定済み。`python -m flake8 analyze*.py tests/` で実行する。
 
 ### セットアップ手順
 
