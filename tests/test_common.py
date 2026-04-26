@@ -1,4 +1,4 @@
-import sys, unittest
+import sys, unittest, unittest.mock
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from analyze_common import GrepRecord, ProcessStats, RefType, parse_grep_line, write_tsv, grep_filter_files
@@ -121,6 +121,42 @@ class TestGrepFilterFiles(unittest.TestCase):
                 _sys.stderr = old
             self.assertIn("テスト", buf.getvalue())
             self.assertIn("事前フィルタ完了", buf.getvalue())
+
+
+class TestDetectEncodingStreaming(unittest.TestCase):
+    def test_does_not_call_read_bytes(self):
+        """巨大ファイルでも先頭 4KB だけ読む（read_bytes は使わない）。"""
+        from analyze_common import detect_encoding
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "f.txt"
+            p.write_bytes(b"hello world\n" * 100)
+            def boom(self):
+                raise AssertionError("read_bytes should not be called")
+            with patch.object(Path, "read_bytes", boom):
+                enc = detect_encoding(p)
+                self.assertIsInstance(enc, str)
+
+    def test_reads_at_most_4kb(self):
+        """4096 バイト以下しか read しない。"""
+        from analyze_common import detect_encoding
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "big.txt"
+            p.write_bytes(b"A" * 100_000)
+            sizes: list[int] = []
+            real_open = open
+            def tracking_open(*args, **kwargs):
+                f = real_open(*args, **kwargs)
+                orig_read = f.read
+                def read(n=-1):
+                    sizes.append(n if n >= 0 else 10**12)
+                    return orig_read(n)
+                f.read = read
+                return f
+            import analyze_common
+            with unittest.mock.patch.object(analyze_common, "open", tracking_open, create=True):
+                detect_encoding(p)
+            self.assertTrue(all(n <= 4096 for n in sizes), sizes)
 
 
 if __name__ == "__main__":

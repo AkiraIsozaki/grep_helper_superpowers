@@ -63,11 +63,15 @@ _EXTERNAL_SORT_THRESHOLD = 1_000_000
 
 
 def detect_encoding(path: Path, override: str | None = None) -> str:
-    """ファイルの文字コードを検出する。overrideがあればそのまま返す。"""
+    """ファイルの文字コードを検出する。overrideがあればそのまま返す。
+
+    巨大ファイル対策として先頭 4096 バイトのみを読む。
+    """
     if override is not None:
         return override
     try:
-        raw = path.read_bytes()[:4096]
+        with open(path, "rb") as f:
+            raw = f.read(4096)
     except OSError:
         return "cp932"
     if not _CHARDET_AVAILABLE:
