@@ -201,28 +201,17 @@ def grep_filter_files(
 ) -> list[Path]:
     """mmap によるバイト列検索でスキャン対象ファイルを絞り込む。
 
-    names に含まれる識別子（ASCII）を1つでも含むファイルのみ返す。
+    iter_source_files で取得した (キャッシュ済み) ファイルリストに対し
+    mmap.find で names の含有を判定する。
     エラー時は安全側（スキャン対象に含める）でフォールバック。
-    Solaris 10 / Windows を含む全 OS で動作する（標準ライブラリのみ）。
-
-    label が指定された場合は事前フィルタ結果を stderr に出力する。
     """
+    candidates = iter_source_files(src_dir, extensions)
     patterns = [n.encode("ascii") for n in names if n.isascii()]
-    ext_set = {e.lower() for e in extensions}
-
     if not patterns:
-        result: list[Path] = []
-        for f in src_dir.rglob("*"):
-            if f.suffix.lower() in ext_set:
-                result.append(f)
-        return sorted(result)
+        return candidates
 
-    total = 0
-    result = []
-    for f in src_dir.rglob("*"):
-        if f.suffix.lower() not in ext_set:
-            continue
-        total += 1
+    result: list[Path] = []
+    for f in candidates:
         try:
             if f.stat().st_size == 0:
                 continue
@@ -235,8 +224,8 @@ def grep_filter_files(
 
     if label:
         print(
-            f"  [{label}] 事前フィルタ完了: {total} → {len(result)} ファイルに絞り込み",
+            f"  [{label}] 事前フィルタ完了: {len(candidates)} → {len(result)} ファイルに絞り込み",
             file=sys.stderr, flush=True,
         )
 
-    return sorted(result)
+    return result
