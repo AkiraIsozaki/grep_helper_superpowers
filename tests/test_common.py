@@ -160,5 +160,26 @@ class TestDetectEncodingStreaming(unittest.TestCase):
             self.assertTrue(all(n <= 4096 for n in sizes), sizes)
 
 
+class TestIterGrepLines(unittest.TestCase):
+    def test_yields_lines_without_loading_all(self):
+        """iter_grep_lines はジェネレータで返る（list 化されない）。"""
+        from analyze_common import iter_grep_lines
+        import types
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "x.grep"
+            p.write_text("a:1:foo\nb:2:bar\n", encoding="utf-8")
+            it = iter_grep_lines(p, "utf-8")
+            self.assertIsInstance(it, types.GeneratorType)
+            self.assertEqual(list(it), ["a:1:foo", "b:2:bar"])
+
+    def test_handles_decode_errors(self):
+        """不正バイトは errors=replace で継続。"""
+        from analyze_common import iter_grep_lines
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "x.grep"
+            p.write_bytes(b"good\n\xff\xfe\xfd\nmore\n")
+            self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["good", "���", "more"])
+
+
 if __name__ == "__main__":
     unittest.main()
