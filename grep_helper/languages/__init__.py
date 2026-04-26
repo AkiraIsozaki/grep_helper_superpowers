@@ -42,7 +42,8 @@ from grep_helper.languages import (  # noqa: E402
     sql as _sql,
     kotlin as _kotlin,
     dotnet as _dotnet,
+    groovy as _groovy,
 )
 
-for _h in (_python, _perl, _ts, _plsql, _sh, _sql, _kotlin, _dotnet, _none):
+for _h in (_python, _perl, _ts, _plsql, _sh, _sql, _kotlin, _dotnet, _groovy, _none):
     _register(_h)
