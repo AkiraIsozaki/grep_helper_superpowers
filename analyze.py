@@ -24,6 +24,7 @@ from analyze_common import (
     GrepRecord,
     ProcessStats,
     RefType,
+    build_batch_scanner,
     cached_file_lines,
     detect_encoding,
     iter_grep_lines,
@@ -1006,7 +1007,7 @@ def _scan_files_for_combined(
     files: list[Path],
     source_dir: Path,
     encoding_override: str | None,
-    pattern_str: str,
+    all_names: list[str],
     const_tasks: dict[str, list[GrepRecord]],
     getter_tasks: dict[str, list[GrepRecord]],
     setter_tasks: dict[str, list[GrepRecord]],
@@ -1014,12 +1015,12 @@ def _scan_files_for_combined(
     """ProcessPool worker: 渡されたファイル群を 1 パススキャンしてレコードを返す。
 
     pickle 経由で worker に渡せるよう、引数は basic 型 / NamedTuple / Path のみ。
-    pattern オブジェクトの代わりに pattern 文字列を受け取り、worker 内で再コンパイルする。
+    パターンの代わりに名前リストを受け取り、worker 内で build_batch_scanner で再構築する。
 
     注意: stats は worker プロセス内ではローカルなため、ここでは更新しない
     （並列モードでは stats 追跡はしない）。
     """
-    combined = re.compile(pattern_str)
+    scanner = build_batch_scanner(all_names)
     # worker プロセス内専用の ProcessStats（呼び出し元へは伝播しない）。
     local_stats = ProcessStats()
     records: list[GrepRecord] = []
@@ -1033,19 +1034,43 @@ def _scan_files_for_combined(
         if not lines:
             continue
         for i, line in enumerate(lines, start=1):
-            for m in combined.finditer(line):
-                code = line.strip()
-                usage_type = classify_usage(
-                    code=code, filepath=filepath_str, lineno=i,
-                    source_dir=source_dir, stats=local_stats,
-                    encoding_override=encoding_override,
-                )
-                gd = m.groupdict()
-                const_name = gd.get("const")
-                getter_name = gd.get("getter")
-                setter_name = gd.get("setter")
-                if const_name:
-                    for origin in const_tasks[const_name]:
+            for pos, name in scanner.findall(line):
+                end = pos + len(name)
+                followed_by_paren = line[end:].lstrip().startswith("(")
+                # 分類: '(' 後続なら getter/setter（getter 優先）、なければ const
+                if followed_by_paren:
+                    if name in getter_tasks:
+                        ref_type = RefType.GETTER.value
+                        origins = getter_tasks[name]
+                    elif name in setter_tasks:
+                        ref_type = RefType.SETTER.value
+                        origins = setter_tasks[name]
+                    else:
+                        continue
+                    code = line.strip()
+                    usage_type = classify_usage(
+                        code=code, filepath=filepath_str, lineno=i,
+                        source_dir=source_dir, stats=local_stats,
+                        encoding_override=encoding_override,
+                    )
+                    for origin in origins:
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=ref_type,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+                else:
+                    if name not in const_tasks:
+                        continue
+                    code = line.strip()
+                    usage_type = classify_usage(
+                        code=code, filepath=filepath_str, lineno=i,
+                        source_dir=source_dir, stats=local_stats,
+                        encoding_override=encoding_override,
+                    )
+                    for origin in const_tasks[name]:
                         if filepath_str == origin.filepath and str(i) == origin.lineno:
                             continue
                         records.append(GrepRecord(
@@ -1053,25 +1078,7 @@ def _scan_files_for_combined(
                             ref_type=RefType.INDIRECT.value,
                             usage_type=usage_type,
                             filepath=filepath_str, lineno=str(i), code=code,
-                            src_var=const_name, src_file=origin.filepath, src_lineno=origin.lineno,
-                        ))
-                elif getter_name:
-                    for origin in getter_tasks[getter_name]:
-                        records.append(GrepRecord(
-                            keyword=origin.keyword,
-                            ref_type=RefType.GETTER.value,
-                            usage_type=usage_type,
-                            filepath=filepath_str, lineno=str(i), code=code,
-                            src_var=getter_name, src_file=origin.filepath, src_lineno=origin.lineno,
-                        ))
-                elif setter_name:
-                    for origin in setter_tasks[setter_name]:
-                        records.append(GrepRecord(
-                            keyword=origin.keyword,
-                            ref_type=RefType.SETTER.value,
-                            usage_type=usage_type,
-                            filepath=filepath_str, lineno=str(i), code=code,
-                            src_var=setter_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                            src_var=name, src_file=origin.filepath, src_lineno=origin.lineno,
                         ))
     return records
 
@@ -1106,15 +1113,6 @@ def _batch_track_combined(
     if not java_files:
         return []
 
-    parts: list[str] = []
-    if const_tasks:
-        parts.append(r"\b(?P<const>" + "|".join(re.escape(k) for k in const_tasks) + r")\b(?!\s*\()")
-    if getter_tasks:
-        parts.append(r"\b(?P<getter>" + "|".join(re.escape(k) for k in getter_tasks) + r")\s*\(")
-    if setter_tasks:
-        parts.append(r"\b(?P<setter>" + "|".join(re.escape(k) for k in setter_tasks) + r")\s*\(")
-    pattern_str = "|".join(parts)
-
     # 並列実行: ファイル数が十分多く、workers が 2 以上の場合。
     if workers >= 2 and len(java_files) >= 2:
         from concurrent.futures import ProcessPoolExecutor
@@ -1124,7 +1122,7 @@ def _batch_track_combined(
             futures = [
                 ex.submit(
                     _scan_files_for_combined, chunk, source_dir, encoding_override,
-                    pattern_str, const_tasks, getter_tasks, setter_tasks,
+                    all_names, const_tasks, getter_tasks, setter_tasks,
                 )
                 for chunk in chunks if chunk
             ]
@@ -1133,7 +1131,8 @@ def _batch_track_combined(
         return results
 
     # 直列実行（従来通り）: stats を更新し、進捗ログも出す。
-    combined = re.compile(pattern_str)
+    # build_batch_scanner は閾値以上で AC バックエンドに自動切替する。
+    scanner = build_batch_scanner(all_names)
     records: list[GrepRecord] = []
     total = len(java_files)
     for idx, java_file in enumerate(java_files, 1):
@@ -1148,19 +1147,43 @@ def _batch_track_combined(
         if not lines:
             continue
         for i, line in enumerate(lines, start=1):
-            for m in combined.finditer(line):
-                code = line.strip()
-                usage_type = classify_usage(
-                    code=code, filepath=filepath_str, lineno=i,
-                    source_dir=source_dir, stats=stats,
-                    encoding_override=encoding_override,
-                )
-                gd = m.groupdict()
-                const_name = gd.get("const")
-                getter_name = gd.get("getter")
-                setter_name = gd.get("setter")
-                if const_name:
-                    for origin in const_tasks[const_name]:
+            for pos, name in scanner.findall(line):
+                end = pos + len(name)
+                followed_by_paren = line[end:].lstrip().startswith("(")
+                # 分類: '(' 後続なら getter/setter（getter 優先）、なければ const
+                if followed_by_paren:
+                    if name in getter_tasks:
+                        ref_type = RefType.GETTER.value
+                        origins = getter_tasks[name]
+                    elif name in setter_tasks:
+                        ref_type = RefType.SETTER.value
+                        origins = setter_tasks[name]
+                    else:
+                        continue
+                    code = line.strip()
+                    usage_type = classify_usage(
+                        code=code, filepath=filepath_str, lineno=i,
+                        source_dir=source_dir, stats=stats,
+                        encoding_override=encoding_override,
+                    )
+                    for origin in origins:
+                        records.append(GrepRecord(
+                            keyword=origin.keyword,
+                            ref_type=ref_type,
+                            usage_type=usage_type,
+                            filepath=filepath_str, lineno=str(i), code=code,
+                            src_var=name, src_file=origin.filepath, src_lineno=origin.lineno,
+                        ))
+                else:
+                    if name not in const_tasks:
+                        continue
+                    code = line.strip()
+                    usage_type = classify_usage(
+                        code=code, filepath=filepath_str, lineno=i,
+                        source_dir=source_dir, stats=stats,
+                        encoding_override=encoding_override,
+                    )
+                    for origin in const_tasks[name]:
                         if filepath_str == origin.filepath and str(i) == origin.lineno:
                             continue
                         records.append(GrepRecord(
@@ -1168,25 +1191,7 @@ def _batch_track_combined(
                             ref_type=RefType.INDIRECT.value,
                             usage_type=usage_type,
                             filepath=filepath_str, lineno=str(i), code=code,
-                            src_var=const_name, src_file=origin.filepath, src_lineno=origin.lineno,
-                        ))
-                elif getter_name:
-                    for origin in getter_tasks[getter_name]:
-                        records.append(GrepRecord(
-                            keyword=origin.keyword,
-                            ref_type=RefType.GETTER.value,
-                            usage_type=usage_type,
-                            filepath=filepath_str, lineno=str(i), code=code,
-                            src_var=getter_name, src_file=origin.filepath, src_lineno=origin.lineno,
-                        ))
-                elif setter_name:
-                    for origin in setter_tasks[setter_name]:
-                        records.append(GrepRecord(
-                            keyword=origin.keyword,
-                            ref_type=RefType.SETTER.value,
-                            usage_type=usage_type,
-                            filepath=filepath_str, lineno=str(i), code=code,
-                            src_var=setter_name, src_file=origin.filepath, src_lineno=origin.lineno,
+                            src_var=name, src_file=origin.filepath, src_lineno=origin.lineno,
                         ))
     return records
 
@@ -1213,9 +1218,7 @@ def _batch_track_constants(
     if not java_files:
         return []
 
-    combined = re.compile(
-        r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\b"
-    )
+    scanner = build_batch_scanner(list(tasks.keys()))
     records: list[GrepRecord] = []
     total = len(java_files)
 
@@ -1233,8 +1236,7 @@ def _batch_track_constants(
             continue
 
         for i, line in enumerate(lines, start=1):
-            for m in combined.finditer(line):
-                matched_name = m.group(1)
+            for _pos, matched_name in scanner.findall(line):
                 origins = tasks.get(matched_name)
                 if not origins:
                     continue
@@ -1288,9 +1290,7 @@ def _batch_track_getters(
     if not java_files:
         return []
 
-    combined = re.compile(
-        r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\s*\("
-    )
+    scanner = build_batch_scanner(list(tasks.keys()))
     records: list[GrepRecord] = []
     total = len(java_files)
 
@@ -1308,8 +1308,10 @@ def _batch_track_getters(
             continue
 
         for i, line in enumerate(lines, start=1):
-            for m in combined.finditer(line):
-                getter_name = m.group(1)
+            for pos, getter_name in scanner.findall(line):
+                end = pos + len(getter_name)
+                if not line[end:].lstrip().startswith("("):
+                    continue
                 origins = tasks.get(getter_name)
                 if not origins:
                     continue
@@ -1361,9 +1363,7 @@ def _batch_track_setters(
     if not java_files:
         return []
 
-    combined = re.compile(
-        r"\b(" + "|".join(re.escape(k) for k in tasks) + r")\s*\("
-    )
+    scanner = build_batch_scanner(list(tasks.keys()))
     records: list[GrepRecord] = []
     total = len(java_files)
 
@@ -1381,8 +1381,10 @@ def _batch_track_setters(
             continue
 
         for i, line in enumerate(lines, start=1):
-            for m in combined.finditer(line):
-                setter_name = m.group(1)
+            for pos, setter_name in scanner.findall(line):
+                end = pos + len(setter_name)
+                if not line[end:].lstrip().startswith("("):
+                    continue
                 origins = tasks.get(setter_name)
                 if not origins:
                     continue
