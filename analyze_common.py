@@ -23,7 +23,8 @@ from grep_helper.grep_input import (  # noqa: F401
 # TSV 出力
 from grep_helper.tsv_output import write_tsv, _TSV_HEADERS, _EXTERNAL_SORT_THRESHOLD  # noqa: F401
 
-# ソースファイル探索（dict 同一性保持のため `as` で参照のまま再 export）
+# ソースファイル探索（`as _Y` は PEP 484 の意図的 re-export マーカー。
+# dict 同一性はソースモジュールでの再代入がないことで保証される）
 from grep_helper.source_files import (  # noqa: F401
     iter_source_files, grep_filter_files, resolve_file_cached,
     _source_files_cache_clear, _resolve_file_cache_clear,
@@ -31,7 +32,7 @@ from grep_helper.source_files import (  # noqa: F401
     _resolve_file_cache as _resolve_file_cache,
 )
 
-# ファイル行 LRU キャッシュ（dict 同一性保持）
+# ファイル行 LRU キャッシュ（同一性保証は上記 source_files セクションのコメント参照）
 from grep_helper.file_cache import (  # noqa: F401
     cached_file_lines, set_file_lines_cache_limit, _file_lines_cache_clear,
     _file_lines_cache as _file_lines_cache,

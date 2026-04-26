@@ -5,9 +5,16 @@ shim と新パッケージの両方から取得した dict が同一オブジェ
 """
 from __future__ import annotations
 
-import analyze_common
-import grep_helper.file_cache
-import grep_helper.source_files
+import sys
+from pathlib import Path
+
+# プロジェクトルートを sys.path に追加（`python scripts/check_cache_identity_phase1.py`
+# 形式での起動でも analyze_common を import できるようにする）。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import analyze_common  # noqa: E402
+import grep_helper.file_cache  # noqa: E402
+import grep_helper.source_files  # noqa: E402
 
 
 def main() -> None:
