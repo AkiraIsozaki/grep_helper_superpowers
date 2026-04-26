@@ -273,5 +273,25 @@ class TestCachedFileLines(unittest.TestCase):
         set_file_lines_cache_limit(256 * 1024 * 1024)  # 復元
 
 
+class TestBatchScannerSelector(unittest.TestCase):
+    def test_uses_aho_corasick_for_many_patterns(self):
+        """パターン数が閾値超えで Aho-Corasick が選択される。"""
+        from analyze_common import build_batch_scanner
+        scanner = build_batch_scanner([f"NAME{i:04d}" for i in range(200)])
+        self.assertEqual(scanner.backend, "ahocorasick")
+
+    def test_uses_regex_for_few_patterns(self):
+        from analyze_common import build_batch_scanner
+        scanner = build_batch_scanner(["A", "B", "C"])
+        self.assertEqual(scanner.backend, "regex")
+
+    def test_findall_word_boundary(self):
+        from analyze_common import build_batch_scanner
+        scanner = build_batch_scanner(["FOO"])
+        line = "x = FOO + FOOBAR;"
+        results = [name for _, name in scanner.findall(line)]
+        self.assertEqual(results, ["FOO"])
+
+
 if __name__ == "__main__":
     unittest.main()
