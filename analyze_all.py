@@ -7,6 +7,8 @@ import re
 import sys
 from pathlib import Path
 
+from collections.abc import Iterable
+
 from analyze_common import (
     GrepRecord, ProcessStats, RefType,
     detect_encoding, parse_grep_line, write_tsv,
@@ -132,7 +134,7 @@ def _classify_for_lang(
 
 
 def process_grep_lines_all(
-    lines: list[str],
+    lines: Iterable[str],
     keyword: str,
     source_dir: Path,
     stats: ProcessStats,

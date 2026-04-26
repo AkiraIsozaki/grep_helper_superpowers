@@ -378,5 +378,17 @@ class TestE2EAll(unittest.TestCase):
         self.assertNotEqual(cleanup_records[0].usage_type, "その他")
 
 
+class TestProcessGrepLinesAllIterable(unittest.TestCase):
+    def test_accepts_generator(self):
+        """list ではなくジェネレータも受け取れる。"""
+        from analyze_all import process_grep_lines_all
+        from analyze_common import ProcessStats
+        def gen():
+            yield "Foo.java:1:public class Foo {}"
+        stats = ProcessStats()
+        records = process_grep_lines_all(gen(), "kw", Path("/tmp"), stats, None)
+        self.assertEqual(len(records), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
