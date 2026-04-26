@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -66,6 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-dir",  default="input")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--encoding",   default=None, help="文字コード強制指定（省略時は自動検出）")
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help=f"並列ワーカー数（デフォルト: 1, 推奨: {os.cpu_count() or 4}）",
+    )
     return parser
 def main() -> None:
     parser = build_parser()

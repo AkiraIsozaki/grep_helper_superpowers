@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -847,6 +848,7 @@ def _apply_indirect_tracking(
     source_dir: Path,
     stats: ProcessStats,
     encoding: str | None,
+    workers: int = 1,
 ) -> list[GrepRecord]:
     """直接参照レコードから言語別間接追跡を行い、追加レコードを返す。"""
     result: list[GrepRecord] = []
@@ -1014,14 +1016,15 @@ def _apply_indirect_tracking(
             setter_tasks=java_setter_tasks,
             source_dir=source_dir, stats=stats, file_list=java_candidates,
             encoding_override=encoding,
+            workers=workers,
         ))
 
     # Kotlin / .NET / Groovy static final / C #define / Pro*C #define バッチ処理
-    result.extend(_batch_track_kotlin_const(kotlin_const_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_dotnet_const(dotnet_const_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_groovy_static_final(groovy_sf_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_define_c_all(c_define_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_define_proc_all(proc_define_tasks, source_dir, stats, encoding))
+    result.extend(_batch_track_kotlin_const(kotlin_const_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_dotnet_const(dotnet_const_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_groovy_static_final(groovy_sf_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_define_c_all(c_define_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_define_proc_all(proc_define_tasks, source_dir, stats, encoding, workers=workers))
 
     # Groovy getter/setter バッチ処理
     result.extend(_batch_track_getter_setter_groovy(
@@ -1043,6 +1046,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-dir",  default="input",  help="grep結果ファイルのディレクトリ")
     parser.add_argument("--output-dir", default="output", help="TSV出力先ディレクトリ")
     parser.add_argument("--encoding",   default=None,     help="文字コード強制指定（例: utf-8, cp932）")
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help=f"並列ワーカー数（デフォルト: 1, 推奨: {os.cpu_count() or 4}）",
+    )
     return parser
 
 
@@ -1080,7 +1087,7 @@ def main() -> None:
             )
             all_records = list(direct_records)
             all_records.extend(
-                _apply_indirect_tracking(direct_records, source_dir, stats, args.encoding)
+                _apply_indirect_tracking(direct_records, source_dir, stats, args.encoding, workers=args.workers)
             )
 
             output_path = output_dir / f"{keyword}.tsv"
