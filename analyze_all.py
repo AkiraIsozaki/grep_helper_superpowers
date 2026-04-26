@@ -79,7 +79,7 @@ def detect_language(filepath: str, source_dir: Path) -> str:
 
 from collections.abc import Callable
 
-import analyze as _java_mod
+from grep_helper.languages import java as _java_mod
 from analyze_kotlin  import classify_usage_kotlin
 from analyze_c       import classify_usage_c
 from analyze_proc    import classify_usage_proc
@@ -118,14 +118,15 @@ def _classify_for_lang(
 ) -> str:
     """言語キーに対応する classify_usage 関数を呼び出す。"""
     if lang == "java":
-        return _java_mod.classify_usage(
-            code=code,
+        from grep_helper.model import ClassifyContext  # noqa: PLC0415
+        ctx = ClassifyContext(
             filepath=filepath,
             lineno=int(lineno),
             source_dir=source_dir,
             stats=stats,
             encoding_override=encoding,
         )
+        return _java_mod.classify_usage(code, ctx=ctx)
     if lang == "other":
         return "その他"
     classifier = _SIMPLE_CLASSIFIERS.get(lang)
@@ -171,14 +172,15 @@ def process_grep_lines_all(
 # ---------------------------------------------------------------------------
 
 # Java
-from analyze import (
+from grep_helper.languages.java_classify import (  # noqa: F401
     UsageType, extract_variable_name, determine_scope,
+)
+from grep_helper.languages.java_track import (  # noqa: F401
     track_field, track_local,
     find_getter_names, find_setter_names,
+    _resolve_java_file, _get_method_scope,
+    _batch_track_combined,
 )
-from analyze import _resolve_java_file  # type: ignore[attr-defined]
-from analyze import _get_method_scope   # type: ignore[attr-defined]
-from analyze import _batch_track_combined   # type: ignore[attr-defined]
 
 # Kotlin
 
