@@ -233,119 +233,17 @@ def _batch_track_kotlin_const(tasks, src_dir, stats, encoding, *, workers=1):
     return _batch_track_kotlin_const_new(tasks, src_dir, stats, encoding, workers=workers)
 
 
-def _scan_files_for_dotnet_const(
-    files: list[Path],
-    src_dir: Path,
-    encoding: str | None,
-    names: list[str],
-    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]],
-) -> list[GrepRecord]:
-    """ProcessPool worker: .NET const/static readonly を一括スキャン。"""
-    scanner = build_batch_scanner(names)
-    results: list[GrepRecord] = []
-    for src_file in files:
-        try:
-            filepath_str = str(src_file.relative_to(src_dir))
-        except ValueError:
-            filepath_str = str(src_file)
-        src_resolved = src_file.resolve()
-        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
-        for i, line in enumerate(lines, 1):
-            code = line.strip()
-            for _pos, name in scanner.findall(line):
-                for origin, def_resolved, def_lineno in tasks_ext[name]:
-                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
-                        continue
-                    results.append(GrepRecord(
-                        keyword=origin.keyword,
-                        ref_type=RefType.INDIRECT.value,
-                        usage_type=classify_usage_dotnet(code),
-                        filepath=filepath_str,
-                        lineno=str(i),
-                        code=code,
-                        src_var=name,
-                        src_file=origin.filepath,
-                        src_lineno=origin.lineno,
-                    ))
-    return results
+# Phase 4: dotnet 移植により、ここはハンドラ呼び出しに委譲。
+# Phase 7 のクリーンアップで dispatcher.apply_indirect_tracking に統合される。
+from grep_helper.languages.dotnet import (
+    _batch_track_dotnet_const as _batch_track_dotnet_const_new,
+    _scan_files_for_dotnet_const,  # noqa: F401
+)
 
 
-def _batch_track_dotnet_const(
-    tasks: dict[str, list[GrepRecord]],
-    src_dir: Path,
-    stats: ProcessStats,
-    encoding: str | None,
-    *,
-    workers: int = 1,
-) -> list[GrepRecord]:
-    """.NET const/static readonly をプロジェクト全体に対して1パスでバッチスキャンする。
-
-    workers >= 2 のとき ProcessPoolExecutor で並列化する。
-    """
-    if not tasks:
-        return []
-    names = list(tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".cs", ".vb"], label=".NET定数追跡")
-    if not src_files:
-        return []
-    total = len(src_files)
-
-    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]] = {}
-    for name, origins in tasks.items():
-        ext_list = []
-        for origin in origins:
-            def_path = resolve_file_cached(origin.filepath, src_dir)
-            ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
-        tasks_ext[name] = ext_list
-
-    # 並列実行
-    if workers >= 2 and total >= 2:
-        from concurrent.futures import ProcessPoolExecutor
-        chunks = [src_files[i::workers] for i in range(workers)]
-        results: list[GrepRecord] = []
-        with ProcessPoolExecutor(max_workers=workers) as ex:
-            futures = [
-                ex.submit(_scan_files_for_dotnet_const, chunk, src_dir, encoding, names, tasks_ext)
-                for chunk in chunks if chunk
-            ]
-            for fut in futures:
-                results.extend(fut.result())
-        print(f"  [.NET定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
-        return results
-
-    # 直列実行
-    scanner = build_batch_scanner(names)
-    results = []
-    for idx, src_file in enumerate(src_files, 1):
-        if total >= 100 and idx % 100 == 0:
-            pct = idx * 100 // total
-            print(f"  [.NET定数追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
-        try:
-            filepath_str = str(src_file.relative_to(src_dir))
-        except ValueError:
-            filepath_str = str(src_file)
-        src_resolved = src_file.resolve()
-        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
-        for i, line in enumerate(lines, 1):
-            code = line.strip()
-            for _pos, name in scanner.findall(line):
-                for origin, def_resolved, def_lineno in tasks_ext[name]:
-                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
-                        continue
-                    results.append(GrepRecord(
-                        keyword=origin.keyword,
-                        ref_type=RefType.INDIRECT.value,
-                        usage_type=classify_usage_dotnet(code),
-                        filepath=filepath_str,
-                        lineno=str(i),
-                        code=code,
-                        src_var=name,
-                        src_file=origin.filepath,
-                        src_lineno=origin.lineno,
-                    ))
-
-    print(f"  [.NET定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
-    return results
+def _batch_track_dotnet_const(tasks, src_dir, stats, encoding, *, workers=1):
+    """旧 API 互換ラッパ。Phase 7 で削除予定。"""
+    return _batch_track_dotnet_const_new(tasks, src_dir, stats, encoding, workers=workers)
 
 
 def _scan_files_for_groovy_static_final(
