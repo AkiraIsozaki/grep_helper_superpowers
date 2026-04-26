@@ -9,8 +9,8 @@ from pathlib import Path
 
 from collections.abc import Iterable
 
-from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
-from analyze_c import classify_usage_c, _collect_define_aliases
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, iter_source_files, parse_grep_line, resolve_file_cached, write_tsv
+from analyze_c import classify_usage_c, _collect_define_aliases, _build_reverse_define_map
 
 # ---------------------------------------------------------------------------
 # 使用タイプ分類パターン（優先度順）
@@ -29,7 +29,7 @@ _PROC_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
 # ファイル行キャッシュ
 # ---------------------------------------------------------------------------
 
-_define_map_cache: dict[tuple[str, str], dict[str, str]] = {}
+_define_map_cache: dict[tuple[str, str], tuple[dict[str, str], dict[str, list[str]]]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -78,21 +78,29 @@ def _build_define_map(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> dict[str, str]:
-    """src_dir配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。"""
+    """src_dir 配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。
+    内部キャッシュには forward と reverse map のタプルを保持する。
+    """
     cache_key = (str(src_dir), encoding_override or "")
-    if cache_key in _define_map_cache:
-        return _define_map_cache[cache_key]
+    cached = _define_map_cache.get(cache_key)
+    if cached is not None:
+        return cached[0]
     define_map: dict[str, str] = {}
-    pc_files = (sorted(src_dir.rglob("*.pc"))
-                + sorted(src_dir.rglob("*.c"))
-                + sorted(src_dir.rglob("*.h")))
-    for pc_file in pc_files:
-        for line in cached_file_lines(Path(pc_file), detect_encoding(Path(pc_file), encoding_override), stats):
+    src_files = iter_source_files(src_dir, [".pc", ".c", ".h"])
+    for src_file in src_files:
+        enc = detect_encoding(src_file, encoding_override)
+        for line in cached_file_lines(src_file, enc, stats):
             m = _DEFINE_ALIAS_PAT.match(line.strip())
             if m:
                 define_map[m.group(1)] = m.group(2)
-    _define_map_cache[cache_key] = define_map
+    _define_map_cache[cache_key] = (define_map, _build_reverse_define_map(define_map))
     return define_map
+
+
+def _get_reverse_define_map(src_dir: Path, encoding_override: str | None) -> dict[str, list[str]]:
+    cache_key = (str(src_dir), encoding_override or "")
+    cached = _define_map_cache.get(cache_key)
+    return cached[1] if cached is not None else {}
 
 
 def extract_define_name(code: str) -> str | None:
@@ -138,7 +146,7 @@ def track_define(
                 + sorted(src_dir.rglob("*.h")))
 
     define_map = _build_define_map(src_dir, stats, encoding_override)
-    aliases = _collect_define_aliases(var_name, define_map)
+    aliases = _collect_define_aliases(var_name, define_map, reverse=_get_reverse_define_map(src_dir, encoding_override))
     scan_names = [var_name] + aliases
 
     for scan_name in scan_names:

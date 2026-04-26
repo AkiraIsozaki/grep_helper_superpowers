@@ -189,6 +189,7 @@ from analyze_c import (
     extract_variable_name_c,
     track_variable as _track_variable_c,
     _collect_define_aliases,
+    _get_reverse_define_map as _get_reverse_define_map_c,
 )
 from analyze_c import _build_define_map as _build_define_map_c  # type: ignore[attr-defined]
 
@@ -198,6 +199,7 @@ from analyze_proc import (
     extract_variable_name_proc,
     extract_host_var_name,
     track_variable as _track_variable_proc,
+    _get_reverse_define_map as _get_reverse_define_map_proc,
 )
 from analyze_proc import _build_define_map as _build_define_map_proc  # type: ignore[attr-defined]
 
@@ -402,10 +404,11 @@ def _batch_track_define_c_all(
     if not tasks:
         return []
     define_map = _build_define_map_c(src_dir, stats, encoding)
+    reverse_map = _get_reverse_define_map_c(src_dir, encoding)
 
     scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]] = {}
     for var_name, records in tasks.items():
-        aliases = _collect_define_aliases(var_name, define_map)
+        aliases = _collect_define_aliases(var_name, define_map, reverse=reverse_map)
         for scan_name in [var_name] + aliases:
             is_primary = (scan_name == var_name)
             for record in records:
@@ -473,10 +476,11 @@ def _batch_track_define_proc_all(
     if not tasks:
         return []
     define_map = _build_define_map_proc(src_dir, stats, encoding)
+    reverse_map = _get_reverse_define_map_proc(src_dir, encoding)
 
     scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]] = {}
     for var_name, records in tasks.items():
-        aliases = _collect_define_aliases(var_name, define_map)
+        aliases = _collect_define_aliases(var_name, define_map, reverse=reverse_map)
         for scan_name in [var_name] + aliases:
             is_primary = (scan_name == var_name)
             for record in records:

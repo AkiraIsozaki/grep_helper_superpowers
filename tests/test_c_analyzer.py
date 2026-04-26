@@ -182,5 +182,37 @@ class TestE2EC(unittest.TestCase):
             )
 
 
+class TestDefineMapWithReverse(unittest.TestCase):
+    def test_collect_aliases_reuses_reverse_map(self):
+        """_collect_define_aliases を多数回呼んでも reverse 構築は 1 回。"""
+        import analyze_c
+        from analyze_c import _collect_define_aliases, _build_define_map, _define_map_cache
+        _define_map_cache.clear()
+        from analyze_common import ProcessStats
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "a.h").write_text("#define A1 X\n#define A2 X\n", encoding="utf-8")
+            stats = ProcessStats()
+            _build_define_map(p, stats)
+            calls = {"n": 0}
+            orig = analyze_c._build_reverse_define_map  # 新規 API
+            def counter(m):
+                calls["n"] += 1
+                return orig(m)
+            analyze_c._build_reverse_define_map = counter
+            try:
+                for _ in range(50):
+                    _collect_define_aliases(
+                        "X",
+                        _build_define_map(p, stats),
+                        reverse=analyze_c._get_reverse_define_map(p, None),
+                    )
+                self.assertEqual(calls["n"], 0,
+                    "reverse map はキャッシュから取得されるはずで、再構築されない")
+            finally:
+                analyze_c._build_reverse_define_map = orig
+
+
 if __name__ == "__main__":
     unittest.main()
