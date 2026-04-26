@@ -209,5 +209,35 @@ class TestIterSourceFiles(unittest.TestCase):
             self.assertEqual(len(iter_source_files(p, [".java", ".kt"])), 2)
 
 
+class TestResolveFileCached(unittest.TestCase):
+    def test_resolves_relative_to_src_dir(self):
+        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        _resolve_file_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "sub").mkdir()
+            f = p / "sub" / "x.txt"
+            f.write_text("x")
+            self.assertEqual(resolve_file_cached("sub/x.txt", p), f)
+
+    def test_returns_none_for_missing(self):
+        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        _resolve_file_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(resolve_file_cached("missing.txt", Path(d)))
+
+    def test_caches_result(self):
+        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        _resolve_file_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            f = p / "x.txt"
+            f.write_text("x")
+            r1 = resolve_file_cached("x.txt", p)
+            f.unlink()  # ファイル削除
+            r2 = resolve_file_cached("x.txt", p)
+            self.assertEqual(r1, r2)  # キャッシュから同じ結果が返る
+
+
 if __name__ == "__main__":
     unittest.main()

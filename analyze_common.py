@@ -229,3 +229,29 @@ def grep_filter_files(
         )
 
     return result
+
+
+_resolve_file_cache: dict[tuple[str, str], Path | None] = {}
+
+
+def _resolve_file_cache_clear() -> None:
+    """テスト用: resolve_file キャッシュをクリア。"""
+    _resolve_file_cache.clear()
+
+
+def resolve_file_cached(filepath: str, src_dir: Path) -> Path | None:
+    """ファイルパスを解決する（CWD 相対 → src_dir 相対の順）。結果はキャッシュ。"""
+    key = (filepath, str(src_dir))
+    if key in _resolve_file_cache:
+        return _resolve_file_cache[key]
+    candidate = Path(filepath)
+    result: Path | None
+    if candidate.is_absolute():
+        result = candidate if candidate.exists() else None
+    elif candidate.exists():
+        result = candidate
+    else:
+        resolved = src_dir / filepath
+        result = resolved if resolved.exists() else None
+    _resolve_file_cache[key] = result
+    return result
