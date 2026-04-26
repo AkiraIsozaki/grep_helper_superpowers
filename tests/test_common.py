@@ -181,5 +181,33 @@ class TestIterGrepLines(unittest.TestCase):
             self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["good", "���", "more"])
 
 
+class TestIterSourceFiles(unittest.TestCase):
+    def test_caches_per_extension_set(self):
+        """同じ (src_dir, extensions) は二度目はディスクを読まない。"""
+        from analyze_common import iter_source_files, _source_files_cache_clear
+        _source_files_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "a.java").write_text("x")
+            (p / "b.kt").write_text("x")
+            r1 = iter_source_files(p, [".java"])
+            (p / "c.java").write_text("x")  # 後から追加
+            r2 = iter_source_files(p, [".java"])
+            self.assertEqual(r1, r2)         # 2 回目もキャッシュから返る
+            self.assertEqual(len(r1), 1)     # b.java は無いので 1 件
+            self.assertNotIn(p / "c.java", r2)
+
+    def test_different_extensions_separate_cache(self):
+        from analyze_common import iter_source_files, _source_files_cache_clear
+        _source_files_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "a.java").write_text("x")
+            (p / "b.kt").write_text("x")
+            self.assertEqual(len(iter_source_files(p, [".java"])), 1)
+            self.assertEqual(len(iter_source_files(p, [".kt"])), 1)
+            self.assertEqual(len(iter_source_files(p, [".java", ".kt"])), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

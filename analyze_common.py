@@ -169,6 +169,30 @@ def write_tsv(records: list[GrepRecord], output_path: Path) -> None:
             p.unlink(missing_ok=True)
 
 
+_source_files_cache: dict[tuple[str, tuple[str, ...]], list[Path]] = {}
+
+
+def _source_files_cache_clear() -> None:
+    """テスト用: source_files キャッシュをクリア。"""
+    _source_files_cache.clear()
+
+
+def iter_source_files(src_dir: Path, extensions: list[str]) -> list[Path]:
+    """src_dir 配下で extensions のいずれかにマッチするファイル一覧を返す。
+
+    rglob は呼び出し毎にディスクを再走査するため、(src_dir, extensions) 単位で
+    キャッシュする。同一プロセス内で複数言語を横断して再利用される。
+    """
+    key = (str(src_dir), tuple(sorted(e.lower() for e in extensions)))
+    cached = _source_files_cache.get(key)
+    if cached is not None:
+        return cached
+    ext_set = set(key[1])
+    result = sorted(f for f in src_dir.rglob("*") if f.suffix.lower() in ext_set)
+    _source_files_cache[key] = result
+    return result
+
+
 def grep_filter_files(
     names: list[str],
     src_dir: Path,
