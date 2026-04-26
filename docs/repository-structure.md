@@ -29,7 +29,7 @@
 ├── tests/test_plsql_analyzer.py   # PL/SQLアナライザーのユニットテスト・統合テスト
 ├── tests/test_python_analyzer.py  # Pythonアナライザーのユニットテスト・統合テスト
 ├── tests/test_ts_analyzer.py      # TypeScript/JSアナライザーのユニットテスト・統合テスト
-├── requirements.txt     # 本番依存ライブラリ（javalang のみ）
+├── requirements.txt     # 本番依存ライブラリ（javalang / chardet / pyahocorasick）
 ├── requirements-dev.txt # 開発用依存ライブラリ（pytest）
 ├── README.md            # 利用者向け手順書（日本語）
 ├── CLAUDE.md            # Claude Code設定（AIアシスタントへの指示・技術スタック）
@@ -118,7 +118,7 @@
 │   └── superpowers/     # superpowers スキルが利用するプラン・スペック等
 │       ├── plans/
 │       └── specs/
-├── wheelhouse/          # オフライン環境向けの wheel パッケージ群（pytest, javalang, chardet 等）
+├── wheelhouse/          # オフライン環境向けの wheel パッケージ群（requirements.txt + requirements-dev.txt の全依存を同梱：javalang / chardet / pyahocorasick / pytest 他）
 ├── .claude/             # Claude Code設定・スキル定義
 ├── .devcontainer/       # VS Code Dev Containers設定
 └── .steering/           # 作業単位のステアリングファイル（作業時に生成）
@@ -137,7 +137,7 @@
 - `RefType`（Enum）: 参照種別（直接/間接/間接（getter経由）/間接（setter経由））
 - `parse_grep_line()`: grep結果1行のパース（全言語共通）
 - `write_tsv()`: UTF-8 BOM付きTSV出力（100万件超は外部ソート）
-- `detect_encoding()`: ファイルの文字コード自動検出（chardetオプション使用）
+- `detect_encoding()`: ファイルの文字コード自動検出（`chardet` 利用）
 - `iter_grep_lines()`: grep結果ファイルを1行ずつ返すジェネレータ
 - `iter_source_files()`: src_dir 配下を拡張子で絞り込んだファイル一覧（rglob 結果のキャッシュあり）
 - `grep_filter_files()`: mmap によるバイト列検索でスキャン対象ファイルを事前絞り込み
@@ -147,10 +147,10 @@
 - `build_batch_scanner()`: 名前リストから単語境界一致スキャナを生成（閾値以上で Aho-Corasick、未満は combined regex）
 
 **依存関係**:
-- 依存可能: `re`, `csv`, `argparse`, `pathlib`, `sys`, `dataclasses`, `enum`, `heapq`, `tempfile`, `mmap`, `collections.OrderedDict`
-- オプション依存:
-  - `chardet`（文字コード自動検出。未インストール時は cp932 フォールバック）
-  - `pyahocorasick`（`build_batch_scanner` 内で優先使用。未インストール時は同梱の `aho_corasick.py` にフォールバック）
+- 標準ライブラリ: `re`, `csv`, `argparse`, `pathlib`, `sys`, `dataclasses`, `enum`, `heapq`, `tempfile`, `mmap`, `collections.OrderedDict`
+- 外部依存（`requirements.txt` 必須・`wheelhouse/` 同梱）:
+  - `chardet`（文字コード自動検出）— コード側は try/except で防御。万一未インストールなら cp932 フォールバック
+  - `pyahocorasick`（`build_batch_scanner` 内で優先使用）— 万一未インストールなら同梱の `aho_corasick.py` 純Python実装にフォールバック
 - 依存禁止: `javalang`（Javaアナライザー専用のため）
 
 ---

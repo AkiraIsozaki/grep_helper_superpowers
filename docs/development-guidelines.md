@@ -546,6 +546,8 @@ coverage html  # htmlcov/index.html で視覚的に確認
 | Python | 3.12以上 | devcontainer に含まれる |
 | venv | Python標準 | Python 3.12+ に同梱 |
 | javalang | >=0.13.0,<1.0.0 | `pip install -r requirements.txt` |
+| chardet | >=5.0.0,<6.0.0 | `pip install -r requirements.txt` |
+| pyahocorasick | >=2.0.0,<3.0.0 | `pip install -r requirements.txt` |
 
 **flake8設定** (`.flake8`):
 ```ini

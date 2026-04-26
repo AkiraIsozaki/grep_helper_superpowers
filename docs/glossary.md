@@ -317,12 +317,11 @@ public String fetchOrderType() { return type; }
 
 ### chardet
 
-**定義**: ファイルの文字コードを自動検出するPythonライブラリ（オプション依存）
+**定義**: ファイルの文字コードを自動検出するPythonライブラリ（`requirements.txt` の本番依存）
 
 **本プロジェクトでの用途**:
-`analyze_common.detect_encoding()` 内でオプション使用。`pip install chardet` でインストール可能。
-インストールされている場合、ファイル先頭4096バイトを読んで confidence ≥ 0.6 の場合に検出された文字コードを採用する。
-未インストール時は `cp932` にフォールバックする。全言語アナライザー（Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）から共通利用される。
+`analyze_common.detect_encoding()` から利用。ファイル先頭4096バイトを読み、confidence ≥ 0.6 の場合に検出された文字コードを採用、それ以外は `cp932` にフォールバックする。全言語アナライザー（Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）から共通利用される。
+`wheelhouse/` に wheel を同梱しているのでオフライン install 可。コード側は防御的に `try/except ImportError` を備えており、万一インポート不可の場合も cp932 フォールバックで動作する。
 
 **関連ドキュメント**: [アーキテクチャ設計書](./architecture.md)
 
@@ -393,7 +392,7 @@ AST解析より精度は低いが、処理を中断せずに継続できる。
 - `GrepRecord`（NamedTuple）、`ProcessStats`（dataclass）、`RefType`（Enum）: データモデル
 - `parse_grep_line()`: grep行パーサー（全言語共通）
 - `write_tsv()`: UTF-8 BOM付きTSV出力（100万件超は外部マージソート）
-- `detect_encoding()`: ファイルの文字コード検出（chardetオプション使用。未インストール時は cp932 フォールバック）
+- `detect_encoding()`: ファイルの文字コード検出（`chardet` 利用。万一未インストールの場合は cp932 フォールバック）
 - `iter_grep_lines()`: grep結果ファイルを1行ずつ返すジェネレータ
 - `cached_file_lines()`: ソースファイル行リストの LRU キャッシュ（読み込みエラーは `stats.encoding_errors` に記録）
 - `iter_source_files()` / `grep_filter_files()` / `resolve_file_cached()`: ファイル列挙・mmap 事前フィルタ・パス解決の共通ユーティリティ（呼び出し結果はキャッシュ）
@@ -419,9 +418,9 @@ AST解析より精度は低いが、処理を中断せずに継続できる。
 **定義**: Pythonの標準仮想環境機能
 
 **本プロジェクトでの用途**:
-外部依存（`javalang` 必須、`chardet` 任意）をシステムのPython環境に影響なくインストールするために使用。
+外部依存（`javalang` / `chardet` / `pyahocorasick`）をシステムのPython環境に影響なくインストールするために使用。
 `python -m venv .venv` で作成し、`source .venv/bin/activate`（Windows: `.venv\Scripts\activate`）で有効化したうえで `pip install -r requirements.txt` を実行する。
-オフライン環境では同梱の `wheelhouse/` から `pip install --no-index --find-links=./wheelhouse javalang chardet` でインストールできる。
+オフライン環境では同梱の `wheelhouse/` から `pip install --no-index --find-links=./wheelhouse -r requirements.txt -r requirements-dev.txt` で全依存をインストールできる。
 
 **バージョン**: Python 3.12+ 同梱
 

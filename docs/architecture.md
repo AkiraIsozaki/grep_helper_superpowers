@@ -14,8 +14,8 @@
 | 技術 | バージョン | 用途 | 選定理由 |
 |------|-----------|------|----------|
 | javalang | >=0.13.0,<1.0.0 | Java AST解析（`analyze.py` のみ） | Java 7以上のソースをPythonからAST解析できる唯一の実績あるライブラリ。C/SQL/Shell/Kotlin/PL/SQL は正規表現のみで不要 |
-| chardet | 任意（pip install chardet） | 文字コード自動検出（`analyze_common.detect_encoding`） | Kotlin/PL/SQL等の新言語アナライザーで利用。未インストール時は cp932 フォールバック |
-| pyahocorasick | 任意（pip install pyahocorasick） | Aho-Corasick 多パターンスキャン（`analyze_common.build_batch_scanner`） | パターン数 ≥ 100 の場合に自動使用。未インストール時は re.search にフォールバック |
+| chardet | >=5.0.0,<6.0.0 | 文字コード自動検出（`analyze_common.detect_encoding`） | 全アナライザー共通で利用。`requirements.txt` の必須依存（コード側は try/except でフォールバックあり：未インストール時は cp932） |
+| pyahocorasick | >=2.0.0,<3.0.0 | Aho-Corasick 多パターンスキャン（`analyze_common.build_batch_scanner`） | パターン数 ≥ 100 の場合に自動使用。`requirements.txt` の必須依存（コード側はフォールバックあり：未インストール時は同梱の `aho_corasick.py` 純Python実装に切替） |
 | re | 標準ライブラリ | grep行パース・全言語の正規表現分類 | 外部依存不要。C/SQL/Shell/Kotlin/PL/SQL はこれのみで分類完結 |
 | csv | 標準ライブラリ | UTF-8 BOM付きTSV出力（`analyze_common.py`） | `encoding='utf-8-sig'` でBOM付き出力をネイティブサポート |
 | heapq | 標準ライブラリ | 大規模TSVの外部マージソート（`analyze_common.py`） | 100万件超のレコードをメモリ効率よくソートするためにチャンク分割+ヒープマージを使用 |
@@ -242,8 +242,8 @@ python analyze_all.py --source-dir ./src --workers 4
 - **Python**: 3.12以上
 - **最小メモリ**: 512MB（小規模処理）、2GB推奨（大規模処理）
 - **必要ディスク容量**: 入力の10倍程度
-- **外部依存**: `javalang` のみ（`pip install -r requirements.txt` でインストール）
-- **入力文字コード（ソースファイル / grep結果ファイル）**: `analyze_common.detect_encoding` で自動検出（`chardet` がインストールされている場合のみ）。未インストール時または信頼度 < 0.6 の場合は `cp932` にフォールバック。`--encoding` で強制指定も可能。読み込みは常に `errors='replace'`
+- **外部依存**: `javalang` / `chardet` / `pyahocorasick`（`pip install -r requirements.txt` でインストール。すべて `wheelhouse/` に同梱しオフライン install 可）
+- **入力文字コード（ソースファイル / grep結果ファイル）**: `analyze_common.detect_encoding` で自動検出（`chardet`）。信頼度 < 0.6 または万一 `chardet` 未インストール時は `cp932` にフォールバック。`--encoding` で強制指定も可能。読み込みは常に `errors='replace'`
 - **出力文字コード（TSV）**: UTF-8 BOM付き（`encoding='utf-8-sig'`）— Excelで文字化けなく開くため
 
 ### パフォーマンス制約
@@ -262,11 +262,14 @@ python analyze_all.py --source-dir ./src --workers 4
 | ライブラリ | 用途 | バージョン管理方針 |
 |-----------|------|-------------------|
 | javalang | Java AST解析（`analyze.py` のみ） | `>=0.13.0,<1.0.0`（バグ修正のみ自動適用） |
-| chardet | 文字コード自動検出（任意） | 任意インストール（`pip install chardet`）。未インストール時は cp932 にフォールバック |
+| chardet | 文字コード自動検出（全アナライザー共通） | `>=5.0.0,<6.0.0`。コード側は try/except で防御。未インストール時は cp932 フォールバック |
+| pyahocorasick | Aho-Corasick 多パターンスキャン | `>=2.0.0,<3.0.0`。コード側はフォールバックあり：未インストール時は同梱の `aho_corasick.py` 純Python実装に切替 |
 
 **`requirements.txt`**（本番依存）:
 ```
 javalang>=0.13.0,<1.0.0
+chardet>=5.0.0,<6.0.0
+pyahocorasick>=2.0.0,<3.0.0
 ```
 
 **`requirements-dev.txt`**（開発用依存）:
@@ -275,7 +278,7 @@ pytest>=9.0.0,<10.0.0
 ```
 
 **方針**:
-- 必須外部依存は `javalang` 1本のみを維持する（C/SQL/Shell/Kotlin/PL/SQL/TypeScript・JS/Python/Perl/C#・VB.NET/Groovy は標準ライブラリのみで完結）
-- `chardet` はオプション依存。インストール時のみ文字コード自動検出が有効になる
+- 本番依存は `javalang` / `chardet` / `pyahocorasick` の3本。すべて `wheelhouse/` に wheel を同梱しているので `pip install --no-index --find-links wheelhouse -r requirements.txt` でオフラインインストール可能
+- C/SQL/Shell/Kotlin/PL/SQL/TypeScript・JS/Python/Perl/C#・VB.NET/Groovy のパース処理自体は標準ライブラリ（`re`）のみで完結
 - `python3 -m venv .venv` で venv を作成し `pip install -r requirements.txt` を実行
 - `pip list --outdated` で定期的に確認

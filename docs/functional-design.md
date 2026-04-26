@@ -67,8 +67,8 @@ graph TB
 | 言語 | Python 3.12+ | 標準ライブラリが充実。venvによる軽量zip配布が可能 |
 | AST解析 | javalang（`analyze.py` のみ） | Java 7以上のソースをPythonからAST解析できる唯一の実績あるライブラリ |
 | 言語別分類 | re（標準ライブラリ） | Java 以外（C/Pro*C/SQL/Shell/Kotlin/PL/SQL/TS/Python/Perl/.NET/Groovy）はすべて正規表現のみで分類完結。外部依存不要 |
-| 文字コード推定 | chardet（任意） | grep 結果 / ソースファイルの文字コード自動検出。未インストール時は cp932 にフォールバック |
-| 多パターン検索 | pyahocorasick（任意） + 同梱純Python実装 | 一括追跡時のパターン数 ≥ 100 で Aho-Corasick に自動切替（`aho_corasick.py`） |
+| 文字コード推定 | chardet（`requirements.txt` 必須） | grep 結果 / ソースファイルの文字コード自動検出。万一未インストールなら cp932 フォールバック |
+| 多パターン検索 | pyahocorasick（`requirements.txt` 必須） + 同梱純Python実装 | 一括追跡時のパターン数 ≥ 100 で Aho-Corasick に自動切替。万一未インストールなら同梱の `aho_corasick.py` 純Python実装にフォールバック |
 | TSV出力 | csv（標準ライブラリ） | タブ区切り・BOM付きUTF-8出力をネイティブサポート |
 | 大規模ソート | heapq（標準ライブラリ） | 100万件超のレコードをチャンク分割+ヒープマージで外部ソート |
 | CLIパース | argparse（標準ライブラリ） | --source-dir等のオプション解析に十分 |
