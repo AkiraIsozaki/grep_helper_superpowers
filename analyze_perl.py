@@ -8,12 +8,7 @@ from grep_helper.languages.perl import classify_usage as _classify_usage_new
 # analyze_common から後方互換シンボルを再エクスポート
 from analyze_common import (  # noqa: F401
     ProcessStats,
-    GrepRecord,
-    RefType,
     write_tsv,
-    detect_encoding,
-    iter_grep_lines,
-    parse_grep_line,
 )
 
 # 旧 API 互換 (Phase 7 で削除予定)
@@ -22,24 +17,8 @@ classify_usage_perl = _classify_usage_new  # noqa: E305
 
 def process_grep_file(path, keyword, source_dir, stats, encoding_override=None):  # noqa: ANN001
     """後方互換ラッパー。"""
-    enc = detect_encoding(path, encoding_override)
-    records = []
-    for line in iter_grep_lines(path, enc):
-        stats.total_lines += 1
-        parsed = parse_grep_line(line)
-        if parsed is None:
-            stats.skipped_lines += 1
-            continue
-        records.append(GrepRecord(
-            keyword=keyword,
-            ref_type=RefType.DIRECT.value,
-            usage_type=classify_usage_perl(parsed["code"]),
-            filepath=parsed["filepath"],
-            lineno=parsed["lineno"],
-            code=parsed["code"],
-        ))
-        stats.valid_lines += 1
-    return records
+    from grep_helper.pipeline import process_grep_file as _pgf
+    return _pgf(path, source_dir, _handler, keyword=keyword, encoding=encoding_override, stats=stats)
 
 
 if __name__ == "__main__":
