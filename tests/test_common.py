@@ -156,6 +156,7 @@ class TestDetectEncodingStreaming(unittest.TestCase):
             import analyze_common
             with unittest.mock.patch.object(analyze_common, "open", tracking_open, create=True):
                 detect_encoding(p)
+            self.assertTrue(len(sizes) > 0, "tracking_open was never called")
             self.assertTrue(all(n <= 4096 for n in sizes), sizes)
 
 
