@@ -193,14 +193,16 @@ from grep_helper.languages.c import (
 )
 
 # Pro*C
-from analyze_proc import (
+from grep_helper.languages.proc_track import (
     extract_define_name as _extract_define_name_proc,
     extract_variable_name_proc,
     extract_host_var_name,
     track_variable as _track_variable_proc,
+)
+from grep_helper.languages.proc_define_map import (
+    _build_define_map as _build_define_map_proc,
     _get_reverse_define_map as _get_reverse_define_map_proc,
 )
-from analyze_proc import _build_define_map as _build_define_map_proc  # type: ignore[attr-defined]
 
 # Shell
 from analyze_sh import extract_sh_variable_name, track_sh_variable
@@ -272,138 +274,17 @@ def _batch_track_define_c_all(tasks, src_dir, stats, encoding, *, workers=1):
     return _batch_track_define_c_all_new(tasks, src_dir, stats, encoding, workers=workers)
 
 
-def _scan_files_for_define_proc_all(
-    files: list[Path],
-    src_dir: Path,
-    encoding: str | None,
-    names: list[str],
-    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]],
-) -> list[GrepRecord]:
-    """ProcessPool worker: Pro*C #define エイリアス込みで一括スキャン。"""
-    scanner = build_batch_scanner(names)
-    results: list[GrepRecord] = []
-    for src_file in files:
-        try:
-            filepath_str = str(src_file.relative_to(src_dir))
-        except ValueError:
-            filepath_str = str(src_file)
-        src_resolved = src_file.resolve()
-        ext = src_file.suffix.lower()
-        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
-        for i, line in enumerate(lines, 1):
-            code = line.strip()
-            usage_fn = classify_usage_c if ext in (".c", ".h") else classify_usage_proc
-            for _pos, scan_name in scanner.findall(line):
-                for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
-                    if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
-                        continue
-                    results.append(GrepRecord(
-                        keyword=origin.keyword,
-                        ref_type=RefType.INDIRECT.value,
-                        usage_type=usage_fn(code),
-                        filepath=filepath_str,
-                        lineno=str(i),
-                        code=code,
-                        src_var=scan_name,
-                        src_file=origin.filepath,
-                        src_lineno=origin.lineno,
-                    ))
-    return results
+# Phase 5: proc 移植により、ここはハンドラ呼び出しに委譲。
+# Phase 7 のクリーンアップで dispatcher.apply_indirect_tracking に統合される。
+from grep_helper.languages.proc import (  # noqa: F401, E402
+    _batch_track_define_proc_all as _batch_track_define_proc_all_new,
+    _scan_files_for_define_proc_all,
+)
 
 
-def _batch_track_define_proc_all(
-    tasks: dict[str, list[GrepRecord]],
-    src_dir: Path,
-    stats: ProcessStats,
-    encoding: str | None,
-    *,
-    workers: int = 1,
-) -> list[GrepRecord]:
-    """Pro*C #define をエイリアス解決込みで1パスでバッチスキャンする。
-
-    workers >= 2 のとき ProcessPoolExecutor で並列化する。
-    """
-    if not tasks:
-        return []
-    define_map = _build_define_map_proc(src_dir, stats, encoding)
-    reverse_map = _get_reverse_define_map_proc(src_dir, encoding)
-
-    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]] = {}
-    for var_name, records in tasks.items():
-        aliases = _collect_define_aliases(var_name, define_map, reverse=reverse_map)
-        for scan_name in [var_name] + aliases:
-            is_primary = (scan_name == var_name)
-            for record in records:
-                if is_primary:
-                    def_path = resolve_file_cached(record.filepath, src_dir)
-                    def_resolved = def_path.resolve() if def_path else None
-                    def_lineno = int(record.lineno)
-                else:
-                    def_resolved = None
-                    def_lineno = 0
-                scan_tasks.setdefault(scan_name, []).append(
-                    (is_primary, var_name, record, def_resolved, def_lineno)
-                )
-
-    if not scan_tasks:
-        return []
-
-    names = list(scan_tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".pc", ".c", ".h"], label="Pro*C #define追跡")
-    if not src_files:
-        return []
-    total = len(src_files)
-
-    # 並列実行
-    if workers >= 2 and total >= 2:
-        from concurrent.futures import ProcessPoolExecutor
-        chunks = [src_files[i::workers] for i in range(workers)]
-        results: list[GrepRecord] = []
-        with ProcessPoolExecutor(max_workers=workers) as ex:
-            futures = [
-                ex.submit(_scan_files_for_define_proc_all, chunk, src_dir, encoding, names, scan_tasks)
-                for chunk in chunks if chunk
-            ]
-            for fut in futures:
-                results.extend(fut.result())
-        print(f"  [Pro*C #define追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
-        return results
-
-    # 直列実行
-    scanner = build_batch_scanner(names)
-    results = []
-    for idx, src_file in enumerate(src_files, 1):
-        if total >= 100 and idx % 100 == 0:
-            pct = idx * 100 // total
-            print(f"  [Pro*C #define追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
-        try:
-            filepath_str = str(src_file.relative_to(src_dir))
-        except ValueError:
-            filepath_str = str(src_file)
-        src_resolved = src_file.resolve()
-        ext = src_file.suffix.lower()
-        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
-        for i, line in enumerate(lines, 1):
-            code = line.strip()
-            usage_fn = classify_usage_c if ext in (".c", ".h") else classify_usage_proc
-            for _pos, scan_name in scanner.findall(line):
-                for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
-                    if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
-                        continue
-                    results.append(GrepRecord(
-                        keyword=origin.keyword,
-                        ref_type=RefType.INDIRECT.value,
-                        usage_type=usage_fn(code),
-                        filepath=filepath_str,
-                        lineno=str(i),
-                        code=code,
-                        src_var=scan_name,
-                        src_file=origin.filepath,
-                        src_lineno=origin.lineno,
-                    ))
-
-    print(f"  [Pro*C #define追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
-    return results
+def _batch_track_define_proc_all(tasks, src_dir, stats, encoding, *, workers=1):
+    """旧 API 互換ラッパ。Phase 7 で削除予定。"""
+    return _batch_track_define_proc_all_new(tasks, src_dir, stats, encoding, workers=workers)
 
 
 def _apply_indirect_tracking(

@@ -44,7 +44,8 @@ from grep_helper.languages import (  # noqa: E402
     dotnet as _dotnet,
     groovy as _groovy,
     c as _c,
+    proc as _proc,
 )
 
-for _h in (_python, _perl, _ts, _plsql, _sh, _sql, _kotlin, _dotnet, _groovy, _c, _none):
+for _h in (_python, _perl, _ts, _plsql, _sh, _sql, _kotlin, _dotnet, _groovy, _c, _proc, _none):
     _register(_h)
