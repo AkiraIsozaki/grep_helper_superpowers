@@ -378,5 +378,26 @@ class TestE2EAll(unittest.TestCase):
         self.assertNotEqual(cleanup_records[0].usage_type, "その他")
 
 
+class TestProcessGrepLinesAllIterable(unittest.TestCase):
+    def test_accepts_generator(self):
+        """list ではなくジェネレータも受け取れる。"""
+        from analyze_all import process_grep_lines_all
+        from analyze_common import ProcessStats
+        def gen():
+            yield "Foo.java:1:public class Foo {}"
+        stats = ProcessStats()
+        records = process_grep_lines_all(gen(), "kw", Path("/tmp"), stats, None)
+        self.assertEqual(len(records), 1)
+
+
+class TestMainStreaming(unittest.TestCase):
+    def test_main_does_not_load_full_grep_file(self):
+        """main は grep_path.read_text(...).splitlines() を使わない。"""
+        import analyze_all, inspect
+        src = inspect.getsource(analyze_all.main)
+        self.assertNotIn("read_text(encoding=enc, errors=\"replace\").splitlines()", src)
+        self.assertIn("iter_grep_lines", src)
+
+
 if __name__ == "__main__":
     unittest.main()

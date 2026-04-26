@@ -176,7 +176,42 @@ except Exception:
 
 ### パフォーマンス
 
-**ASTキャッシュの必須使用**:
+**キャッシュは `analyze_common.py` に集約する（最重要）**:
+
+すべてのファイル I/O キャッシュ・ファイル列挙キャッシュ・パス解決キャッシュは `analyze_common.py` に実装済みである。新規アナライザーを追加する場合も、モジュールスコープで独自の `_file_cache` / `_source_files` 等のキャッシュ辞書を作ってはならない。代わりに以下の共通 API を使うこと。
+
+| 共通 API | 用途 |
+|---------|------|
+| `iter_grep_lines(path, encoding)` | grep ファイルのストリーミング読み込み。全行をリストに展開しない |
+| `iter_source_files(src_dir, extensions)` | ソースファイル列挙（rglob 結果をキャッシュ） |
+| `cached_file_lines(path, encoding, stats)` | ソースファイル行のサイズベース LRU キャッシュ（256MB） |
+| `resolve_file_cached(filepath, src_dir)` | ファイルパス解決のキャッシュ |
+| `build_batch_scanner(patterns)` | 多パターンスキャナ（Aho-Corasick / regex 自動選択） |
+
+```python
+# 良い例: 共通 API を使う
+from analyze_common import (
+    iter_source_files, cached_file_lines, resolve_file_cached, build_batch_scanner
+)
+
+def _track_constants(names: list[str], src_dir: Path, stats) -> list:
+    scanner = build_batch_scanner(names)          # ≥100 パターンで自動 AC 選択
+    for path in iter_source_files(src_dir, [".kt"]):
+        lines = cached_file_lines(path, "utf-8", stats)  # LRU キャッシュから取得
+        for i, line in enumerate(lines, 1):
+            if scanner.search(line):
+                ...
+
+# 悪い例: 独自キャッシュを定義する（絶対にやらない）
+_my_file_cache: dict[str, list[str]] = {}  # NG: analyze_common のキャッシュと二重管理になる
+
+def _read_lines(path: Path) -> list[str]:
+    if str(path) not in _my_file_cache:
+        _my_file_cache[str(path)] = path.read_text().splitlines()
+    return _my_file_cache[str(path)]
+```
+
+**ASTキャッシュ（Java のみ）**:
 ```python
 # 良い例: キャッシュを使って再解析を省略
 _ast_cache: dict[str, object | None] = {}
@@ -445,7 +480,10 @@ coverage html  # htmlcov/index.html で視覚的に確認
 - [ ] 複雑なロジックにコメントがあるか
 
 **パフォーマンス**:
-- [ ] ASTキャッシュを使用しているか
+- [ ] ファイル I/O に `cached_file_lines` / `iter_source_files` / `resolve_file_cached` を使用しているか（独自 `_file_cache` を定義していないか）
+- [ ] grep ファイルの読み込みに `iter_grep_lines` を使用しているか（全行をリストに展開していないか）
+- [ ] 多パターンスキャンに `build_batch_scanner` を使用しているか
+- [ ] ASTキャッシュ（Java）を使用しているか
 - [ ] 正規表現がモジュールレベルでプリコンパイルされているか
 - [ ] 不要な計算・ループがないか
 
@@ -528,7 +566,8 @@ python analyze.py --source-dir /path/to/sample/java
 - [ ] 型ヒントが適切に定義されている
 - [ ] 関数が単一の責務を持っている（20〜50行を目安）
 - [ ] `USAGE_PATTERNS` 等の定数がモジュールレベルで定義されている
-- [ ] ASTキャッシュが適切に使われている
+- [ ] ASTキャッシュが適切に使われている（Java のみ）
+- [ ] ファイル I/O キャッシュは `analyze_common.py` の共通 API を使っている（独自 `_file_cache` を定義していない）
 
 ### 網羅性（最重要）
 - [ ] 分類できないものは「その他」で出力している（スキップしていない）

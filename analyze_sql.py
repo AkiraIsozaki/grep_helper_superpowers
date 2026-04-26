@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, parse_grep_line, write_tsv
+from collections.abc import Iterable
+
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, parse_grep_line, resolve_file_cached, write_tsv
 
 _SQL_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bRAISE_APPLICATION_ERROR\b|\bEXCEPTION\b', re.IGNORECASE), "例外・エラー処理"),
@@ -17,39 +20,6 @@ _SQL_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bINSERT\b|\bUPDATE\b.*\bSET\b|\bVALUES\s*\(', re.IGNORECASE), "INSERT/UPDATE値"),
     (re.compile(r'\bSELECT\b|\bINTO\b', re.IGNORECASE),                      "SELECT/INTO"),
 ]
-
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
-
-
-def _resolve_source_file(filepath: str, src_dir: Path) -> Path | None:
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = src_dir / filepath
-    return resolved if resolved.exists() else None
 
 
 def classify_usage_sql(code: str) -> str:
@@ -87,7 +57,7 @@ def track_sql_variable(
     except ValueError:
         filepath_str = str(filepath)
 
-    lines = _get_cached_lines(filepath, stats, encoding_override)
+    lines = cached_file_lines(Path(filepath), detect_encoding(Path(filepath), encoding_override), stats)
     for i, line in enumerate(lines, 1):
         if i == def_lineno:
             continue
@@ -106,6 +76,32 @@ def track_sql_variable(
     return results
 
 
+def process_grep_lines(
+    lines: Iterable[str],
+    keyword: str,
+    source_dir: Path,
+    stats: ProcessStats,
+) -> list[GrepRecord]:
+    """grepファイル行イテラブルを処理し、直接参照レコードを返す。"""
+    records: list[GrepRecord] = []
+    for line in lines:
+        stats.total_lines += 1
+        parsed = parse_grep_line(line)
+        if parsed is None:
+            stats.skipped_lines += 1
+            continue
+        records.append(GrepRecord(
+            keyword=keyword,
+            ref_type=RefType.DIRECT.value,
+            usage_type=classify_usage_sql(parsed["code"]),
+            filepath=parsed["filepath"],
+            lineno=parsed["lineno"],
+            code=parsed["code"],
+        ))
+        stats.valid_lines += 1
+    return records
+
+
 def process_grep_file(
     path: Path,
     keyword: str,
@@ -113,25 +109,9 @@ def process_grep_file(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> list[GrepRecord]:
-    records: list[GrepRecord] = []
+    """grepファイル全行を処理し、直接参照レコードを返す。後方互換ラッパー。"""
     enc = detect_encoding(path, encoding_override)
-    with open(path, encoding=enc, errors="replace") as f:
-        for line in f:
-            stats.total_lines += 1
-            parsed = parse_grep_line(line)
-            if parsed is None:
-                stats.skipped_lines += 1
-                continue
-            records.append(GrepRecord(
-                keyword=keyword,
-                ref_type=RefType.DIRECT.value,
-                usage_type=classify_usage_sql(parsed["code"]),
-                filepath=parsed["filepath"],
-                lineno=parsed["lineno"],
-                code=parsed["code"],
-            ))
-            stats.valid_lines += 1
-    return records
+    return process_grep_lines(iter_grep_lines(path, enc), keyword, source_dir, stats)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -140,6 +120,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-dir",  default="input")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--encoding",   default=None, help="文字コード強制指定（省略時は自動検出）")
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help=f"並列ワーカー数（デフォルト: 1, 推奨: {os.cpu_count() or 4}）",
+    )
     return parser
 
 
@@ -167,14 +151,15 @@ def main() -> None:
     try:
         for grep_path in grep_files:
             keyword = grep_path.stem
-            direct_records = process_grep_file(grep_path, keyword, source_dir, stats, args.encoding)
+            enc = detect_encoding(grep_path, args.encoding)
+            direct_records = process_grep_lines(iter_grep_lines(grep_path, enc), keyword, source_dir, stats)
             all_records: list[GrepRecord] = list(direct_records)
 
             for record in direct_records:
                 if record.usage_type == "定数・変数定義":
                     var_name = extract_sql_variable_name(record.code)
                     if var_name:
-                        resolved = _resolve_source_file(record.filepath, source_dir)
+                        resolved = resolve_file_cached(record.filepath, source_dir)
                         if resolved:
                             all_records.extend(
                                 track_sql_variable(var_name, resolved,

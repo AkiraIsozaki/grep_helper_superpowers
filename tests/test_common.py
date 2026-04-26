@@ -1,4 +1,4 @@
-import sys, unittest
+import sys, unittest, unittest.mock
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from analyze_common import GrepRecord, ProcessStats, RefType, parse_grep_line, write_tsv, grep_filter_files
@@ -121,6 +121,176 @@ class TestGrepFilterFiles(unittest.TestCase):
                 _sys.stderr = old
             self.assertIn("テスト", buf.getvalue())
             self.assertIn("事前フィルタ完了", buf.getvalue())
+
+
+class TestDetectEncodingStreaming(unittest.TestCase):
+    def test_does_not_call_read_bytes(self):
+        """巨大ファイルでも先頭 4KB だけ読む（read_bytes は使わない）。"""
+        from analyze_common import detect_encoding
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "f.txt"
+            p.write_bytes(b"hello world\n" * 100)
+            def boom(self):
+                raise AssertionError("read_bytes should not be called")
+            with patch.object(Path, "read_bytes", boom):
+                enc = detect_encoding(p)
+                self.assertIsInstance(enc, str)
+
+    def test_reads_at_most_4kb(self):
+        """4096 バイト以下しか read しない。"""
+        from analyze_common import detect_encoding
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "big.txt"
+            p.write_bytes(b"A" * 100_000)
+            sizes: list[int] = []
+            real_open = open
+            def tracking_open(*args, **kwargs):
+                f = real_open(*args, **kwargs)
+                orig_read = f.read
+                def read(n=-1):
+                    sizes.append(n if n >= 0 else 10**12)
+                    return orig_read(n)
+                f.read = read
+                return f
+            import analyze_common
+            with unittest.mock.patch.object(analyze_common, "open", tracking_open, create=True):
+                detect_encoding(p)
+            self.assertTrue(len(sizes) > 0, "tracking_open was never called")
+            self.assertTrue(all(n <= 4096 for n in sizes), sizes)
+
+
+class TestIterGrepLines(unittest.TestCase):
+    def test_yields_lines_without_loading_all(self):
+        """iter_grep_lines はジェネレータで返る（list 化されない）。"""
+        from analyze_common import iter_grep_lines
+        import types
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "x.grep"
+            p.write_text("a:1:foo\nb:2:bar\n", encoding="utf-8")
+            it = iter_grep_lines(p, "utf-8")
+            self.assertIsInstance(it, types.GeneratorType)
+            self.assertEqual(list(it), ["a:1:foo", "b:2:bar"])
+
+    def test_handles_decode_errors(self):
+        """不正バイトは errors=replace で継続。"""
+        from analyze_common import iter_grep_lines
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "x.grep"
+            p.write_bytes(b"good\n\xff\xfe\xfd\nmore\n")
+            self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["good", "���", "more"])
+
+
+class TestIterSourceFiles(unittest.TestCase):
+    def test_caches_per_extension_set(self):
+        """同じ (src_dir, extensions) は二度目はディスクを読まない。"""
+        from analyze_common import iter_source_files, _source_files_cache_clear
+        _source_files_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "a.java").write_text("x")
+            (p / "b.kt").write_text("x")
+            r1 = iter_source_files(p, [".java"])
+            (p / "c.java").write_text("x")  # 後から追加
+            r2 = iter_source_files(p, [".java"])
+            self.assertEqual(r1, r2)         # 2 回目もキャッシュから返る
+            self.assertEqual(len(r1), 1)     # b.java は無いので 1 件
+            self.assertNotIn(p / "c.java", r2)
+
+    def test_different_extensions_separate_cache(self):
+        from analyze_common import iter_source_files, _source_files_cache_clear
+        _source_files_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "a.java").write_text("x")
+            (p / "b.kt").write_text("x")
+            self.assertEqual(len(iter_source_files(p, [".java"])), 1)
+            self.assertEqual(len(iter_source_files(p, [".kt"])), 1)
+            self.assertEqual(len(iter_source_files(p, [".java", ".kt"])), 2)
+
+
+class TestResolveFileCached(unittest.TestCase):
+    def test_resolves_relative_to_src_dir(self):
+        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        _resolve_file_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "sub").mkdir()
+            f = p / "sub" / "x.txt"
+            f.write_text("x")
+            self.assertEqual(resolve_file_cached("sub/x.txt", p), f)
+
+    def test_returns_none_for_missing(self):
+        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        _resolve_file_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(resolve_file_cached("missing.txt", Path(d)))
+
+    def test_caches_result(self):
+        from analyze_common import resolve_file_cached, _resolve_file_cache_clear
+        _resolve_file_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            f = p / "x.txt"
+            f.write_text("x")
+            r1 = resolve_file_cached("x.txt", p)
+            f.unlink()  # ファイル削除
+            r2 = resolve_file_cached("x.txt", p)
+            self.assertEqual(r1, r2)  # キャッシュから同じ結果が返る
+
+
+class TestCachedFileLines(unittest.TestCase):
+    def test_returns_lines(self):
+        from analyze_common import cached_file_lines, _file_lines_cache_clear
+        _file_lines_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "f.txt"
+            p.write_text("a\nb\nc\n", encoding="utf-8")
+            self.assertEqual(cached_file_lines(p, "utf-8"), ["a", "b", "c"])
+
+    def test_caches_within_size_limit(self):
+        from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache
+        _file_lines_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "f.txt"
+            p.write_text("a\n", encoding="utf-8")
+            cached_file_lines(p, "utf-8")
+            self.assertIn(str(p), _file_lines_cache)
+
+    def test_evicts_when_total_size_exceeds_limit(self):
+        """合計バイト数が上限を超えたら最古のエントリを破棄。"""
+        from analyze_common import cached_file_lines, _file_lines_cache_clear, _file_lines_cache, set_file_lines_cache_limit
+        _file_lines_cache_clear()
+        set_file_lines_cache_limit(100)  # 100 byte 上限
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            for i in range(5):
+                f = p / f"f{i}.txt"
+                f.write_text("X" * 50, encoding="utf-8")
+                cached_file_lines(f, "utf-8")
+            # 合計 250 byte 入れたら最初の 3 ファイル分は追い出されているはず
+            self.assertLessEqual(len(_file_lines_cache), 3)
+        set_file_lines_cache_limit(256 * 1024 * 1024)  # 復元
+
+
+class TestBatchScannerSelector(unittest.TestCase):
+    def test_uses_aho_corasick_for_many_patterns(self):
+        """パターン数が閾値超えで Aho-Corasick が選択される。"""
+        from analyze_common import build_batch_scanner
+        scanner = build_batch_scanner([f"NAME{i:04d}" for i in range(200)])
+        self.assertEqual(scanner.backend, "ahocorasick")
+
+    def test_uses_regex_for_few_patterns(self):
+        from analyze_common import build_batch_scanner
+        scanner = build_batch_scanner(["A", "B", "C"])
+        self.assertEqual(scanner.backend, "regex")
+
+    def test_findall_word_boundary(self):
+        from analyze_common import build_batch_scanner
+        scanner = build_batch_scanner(["FOO"])
+        line = "x = FOO + FOOBAR;"
+        results = [name for _, name in scanner.findall(line)]
+        self.assertEqual(results, ["FOO"])
 
 
 if __name__ == "__main__":

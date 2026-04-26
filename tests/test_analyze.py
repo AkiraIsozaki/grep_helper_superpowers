@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import analyze
+import analyze_common
 from analyze import (
     GrepRecord,
     ProcessStats,
@@ -19,7 +20,7 @@ from analyze import (
     UsageType,
     _ast_cache,
     _batch_track_setters,
-    _file_lines_cache,
+
     _get_method_scope,
     _resolve_java_file,
     _search_in_lines,
@@ -1713,10 +1714,91 @@ class TestBatchTrackSetters(unittest.TestCase):
                 code='private String type = "TARGET";',
             )
             stats = ProcessStats()
-            _file_lines_cache.clear()
+            analyze_common._file_lines_cache_clear()
             results = _batch_track_setters({"setType": [origin]}, src_dir, stats)
             self.assertTrue(any("Service.java" in r.filepath for r in results))
             self.assertTrue(all(r.ref_type == RefType.SETTER.value for r in results))
+
+
+class TestBatchTrackOnePass(unittest.TestCase):
+    def test_one_pass_reads_each_file_once(self):
+        """定数+getter+setter を 1 パスで処理する _batch_track_combined を提供。"""
+        import analyze
+        self.assertTrue(hasattr(analyze, "_batch_track_combined"))
+
+    def test_combined_yields_all_kinds(self):
+        """combined は constant / getter / setter のレコードを混合で返す。"""
+        from analyze import _batch_track_combined
+        from analyze_common import ProcessStats, GrepRecord
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "Foo.java").write_text(
+                "public class Foo {\n"
+                "  static final String CODE = \"x\";\n"
+                "  String getCode() { return null; }\n"
+                "  void setCode(String s) {}\n"
+                "  void use() { String c = CODE; getCode(); setCode(\"y\"); }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            origin = GrepRecord("kw", "直接", "定数定義", "Foo.java", "2",
+                                "static final String CODE = \"x\";")
+            stats = ProcessStats()
+            records = _batch_track_combined(
+                const_tasks={"CODE": [origin]},
+                getter_tasks={"getCode": [origin]},
+                setter_tasks={"setCode": [origin]},
+                source_dir=p, stats=stats, file_list=None,
+            )
+            ref_types = {(r.ref_type, r.src_var) for r in records}
+            self.assertIn(("間接", "CODE"), ref_types)
+            self.assertIn(("間接（getter経由）", "getCode"), ref_types)
+            self.assertIn(("間接（setter経由）", "setCode"), ref_types)
+
+
+class TestNoModuleGlobalEncoding(unittest.TestCase):
+    def test_no_encoding_override_module_global(self):
+        """_encoding_override モジュールグローバルは廃止されている。"""
+        import analyze
+        self.assertFalse(hasattr(analyze, "_encoding_override"),
+            "_encoding_override は引数化されたため削除されているべき")
+
+
+class TestParallelBatchTrack(unittest.TestCase):
+    def test_batch_track_combined_accepts_workers_arg(self):
+        """並列ワーカー数を指定できる。"""
+        import inspect, analyze
+        sig = inspect.signature(analyze._batch_track_combined)
+        self.assertIn("workers", sig.parameters)
+
+    def test_batch_track_combined_workers_2_returns_same_results(self):
+        """workers=2 で実行しても結果が一致する。"""
+        from analyze import _batch_track_combined
+        from analyze_common import ProcessStats, GrepRecord
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            for i in range(4):
+                (p / f"F{i}.java").write_text(
+                    f"class F{i} {{ static final String CODE = \"v\"; void use() {{ String c = CODE; }} }}\n",
+                    encoding="utf-8",
+                )
+            origin = GrepRecord("kw", "直接", "定数定義", "F0.java", "1", "...")
+            stats1 = ProcessStats()
+            r1 = _batch_track_combined(
+                const_tasks={"CODE": [origin]}, getter_tasks={}, setter_tasks={},
+                source_dir=p, stats=stats1, file_list=None, workers=1,
+            )
+            stats2 = ProcessStats()
+            r2 = _batch_track_combined(
+                const_tasks={"CODE": [origin]}, getter_tasks={}, setter_tasks={},
+                source_dir=p, stats=stats2, file_list=None, workers=2,
+            )
+            # 件数が一致し、内容セットも一致する
+            self.assertEqual(len(r1), len(r2))
+            self.assertEqual(
+                {(r.filepath, r.lineno, r.src_var) for r in r1},
+                {(r.filepath, r.lineno, r.src_var) for r in r2},
+            )
 
 
 if __name__ == "__main__":

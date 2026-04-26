@@ -15,6 +15,7 @@
 |------|-----------|------|----------|
 | javalang | >=0.13.0,<1.0.0 | Java AST解析（`analyze.py` のみ） | Java 7以上のソースをPythonからAST解析できる唯一の実績あるライブラリ。C/SQL/Shell/Kotlin/PL/SQL は正規表現のみで不要 |
 | chardet | 任意（pip install chardet） | 文字コード自動検出（`analyze_common.detect_encoding`） | Kotlin/PL/SQL等の新言語アナライザーで利用。未インストール時は cp932 フォールバック |
+| pyahocorasick | 任意（pip install pyahocorasick） | Aho-Corasick 多パターンスキャン（`analyze_common.build_batch_scanner`） | パターン数 ≥ 100 の場合に自動使用。未インストール時は re.search にフォールバック |
 | re | 標準ライブラリ | grep行パース・全言語の正規表現分類 | 外部依存不要。C/SQL/Shell/Kotlin/PL/SQL はこれのみで分類完結 |
 | csv | 標準ライブラリ | UTF-8 BOM付きTSV出力（`analyze_common.py`） | `encoding='utf-8-sig'` でBOM付き出力をネイティブサポート |
 | heapq | 標準ライブラリ | 大規模TSVの外部マージソート（`analyze_common.py`） | 100万件超のレコードをメモリ効率よくソートするためにチャンク分割+ヒープマージを使用 |
@@ -106,6 +107,39 @@
 
 **注意**: GetterTracker/SetterTracker（第3・第4段階）は IndirectTracker（第2段階）のフィールド追跡完了後にのみ起動する。第2段階と並列実行は不可。Groovy は正規表現で同等の4段階分析を実施する。
 
+## 共通キャッシュ・パフォーマンスインフラ（`analyze_common.py`）
+
+Phase A〜F のパフォーマンス改善により、ファイル I/O・スキャン・パス解決にかかわるすべてのキャッシュとスキャンロジックが `analyze_common.py` に集約されている。各言語アナライザーは独自のファイルキャッシュを持たず、以下の共通 API を利用する。
+
+### 共通 API 一覧
+
+| 関数 | シグネチャ（簡略） | 説明 |
+|------|-------------------|------|
+| `iter_grep_lines` | `(path, encoding)` → generator | grep ファイルを 1 行ずつ yield するストリーミングジェネレータ。全行をメモリに展開しないため GB 級ファイルでも OOM しない |
+| `iter_source_files` | `(src_dir, extensions)` → `list[Path]` | `rglob` 結果をモジュールグローバルにキャッシュして返す。同一ディレクトリへの複数回呼び出しで rglob を再実行しない |
+| `cached_file_lines` | `(path, encoding, stats)` → `list[str]` | サイズベース LRU 行キャッシュ（既定 256MB）。同一ファイルの重複読み込みをゼロにする |
+| `resolve_file_cached` | `(filepath, src_dir)` → `Path \| None` | ファイルパス解決結果をキャッシュ。多パターン追跡で同一パスが繰り返し解決されるコストを排除 |
+| `build_batch_scanner` | `(patterns)` → `_BatchScanner` | パターン数 ≥ 100 で `pyahocorasick`（Aho-Corasick 法）を自動選択、< 100 では `re.search` を使用。スキャナはパターン数によらず均一の API を提供 |
+
+### メモリ使用量の見積もり
+
+| コンポーネント | 上限 | 制御方法 |
+|--------------|------|---------|
+| ファイル行キャッシュ（`cached_file_lines`） | 256MB（既定） | `set_file_lines_cache_limit(n_bytes)` で変更可 |
+| AST キャッシュ（Java のみ、`analyze.py`） | 最大 2000 件 × 推定 1〜3MB = 最大 6GB | `_MAX_AST_CACHE_SIZE`（`analyze.py`）を縮小 |
+| iter_grep_lines ストリーミング | O(1) — 行単位 | 設定不要 |
+
+### 並列処理（`--workers`）
+
+`analyze_all.py` は `ProcessPoolExecutor` を使い、複数の grep ファイルを `--workers N` プロセスで並列スキャンする（既定: 1）。各ワーカーは独立したプロセスで動作するため、GIL の制約を受けずに CPU コア数に比例した高速化が期待できる。
+
+```bash
+# CPU コア数を --workers に指定すると 4〜8 倍速くなる（目安）
+python analyze_all.py --source-dir ./src --workers 4
+```
+
+**注意**: ワーカー数を増やすとメモリ使用量もワーカー数倍になる。ファイル行キャッシュ 256MB × N ワーカー分のメモリが必要。
+
 ## データ永続化戦略
 
 ### ストレージ方式
@@ -136,8 +170,8 @@
 
 | リソース | 上限 | 理由 |
 |---------|------|------|
-| メモリ | 2GB〜8GB | ASTキャッシュ（最大2000ファイル × 推定1〜3MB = 最大6GB）+ GrepRecordリスト（数百MB）の合計見積もり。60GB規模のソースでは AST キャッシュが支配的になるため、メモリ不足時は `_MAX_AST_CACHE_SIZE`（`analyze.py`）を 500〜1000 に下げること |
-| CPU | 100%（シングルコア） | 並列処理は行わない（単純さ優先） |
+| メモリ | 256MB（行キャッシュ）× ワーカー数 + Java AST キャッシュ | ファイル行キャッシュは `cached_file_lines` のサイズベース LRU で 256MB に制限。AST キャッシュ（最大 2000 件 × 推定 1〜3MB）はメモリ不足時に `_MAX_AST_CACHE_SIZE`（`analyze.py`）を縮小すること。60GB 規模のソースでも grep ファイルはストリーミング読み込みのため OOM しない |
+| CPU | `--workers N` コア（既定: 1） | `analyze_all.py` は `ProcessPoolExecutor` でファイルを並列処理。個別アナライザーはシングルプロセス |
 | ディスク | 入力の10倍まで | TSV出力のサイズ見積もり（列追加のため） |
 
 ## セキュリティアーキテクチャ
@@ -168,7 +202,11 @@
 - **想定データ量**: grep結果4万行、Javaソースファイル500件
 - **ASTキャッシュ**: `dict[str, object | None]` で O(1) アクセス。再解析コストをゼロに（上限 2000 件）
 - **mmap 事前フィルタ（`grep_filter_files`）**: バッチスキャン前に `mmap.find()` でパターンを含まないファイルを除外。数万ファイルを数百ファイルに絞り込み、間接追跡フェーズを大幅に高速化
-- **ジェネレータ**: grep行を1行ずつ処理。全行をメモリに展開しない
+- **ストリーミング読み込み（`iter_grep_lines`）**: grep ファイルを 1 行ずつ yield。全行をメモリに展開しないため GB 級ファイルでも OOM しない
+- **共通ファイル行キャッシュ（`cached_file_lines`）**: サイズベース LRU（256MB）。各アナライザーが同一ファイルを再読み込みするコストをゼロに
+- **ファイル列挙キャッシュ（`iter_source_files`）**: rglob 結果をモジュールグローバルにキャッシュ。数万ファイルの walk を 1 回に抑制
+- **Aho-Corasick スキャナ（`build_batch_scanner`）**: パターン数 ≥ 100 で自動的に `pyahocorasick` を選択。O(n) スキャンで O(n×m) の正規表現多重ループを置換
+- **プロセス並列（`--workers`）**: `analyze_all.py` が `ProcessPoolExecutor` で grep ファイルを N 並列処理。GIL を回避し CPU コア数に比例した高速化
 - **アーカイブ戦略**: 不要（入力ファイルはユーザー管理）
 
 ### 機能拡張性
@@ -209,9 +247,10 @@
 
 ### パフォーマンス制約
 - 処理時間の上限は設けない（網羅性優先）
-- シングルコア・シングルプロセス（並列処理なし）
-- ASTキャッシュが有効なメモリを上限とする（`_MAX_AST_CACHE_SIZE = 2000`、メモリ不足時は縮小可）
+- `analyze_all.py` は `--workers N` で N 並列スキャン可能（既定: 1）。個別アナライザーはシングルプロセス
+- ファイル行キャッシュ（`cached_file_lines`）は 256MB LRU で制限。AST キャッシュは `_MAX_AST_CACHE_SIZE = 2000`（メモリ不足時は縮小可）
 - 間接追跡フェーズは `grep_filter_files()` による mmap 事前フィルタで高速化（Solaris 10 対応）
+- grep ファイルはストリーミング読み込み（`iter_grep_lines`）のため、GB 級でも全行展開しない
 
 ### セキュリティ制約
 - ローカル実行のみ（ネットワーク接続なし）

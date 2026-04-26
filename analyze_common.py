@@ -63,11 +63,15 @@ _EXTERNAL_SORT_THRESHOLD = 1_000_000
 
 
 def detect_encoding(path: Path, override: str | None = None) -> str:
-    """ファイルの文字コードを検出する。overrideがあればそのまま返す。"""
+    """ファイルの文字コードを検出する。overrideがあればそのまま返す。
+
+    巨大ファイル対策として先頭 4096 バイトのみを読む。
+    """
     if override is not None:
         return override
     try:
-        raw = path.read_bytes()[:4096]
+        with open(path, "rb") as f:
+            raw = f.read(4096)
     except OSError:
         return "cp932"
     if not _CHARDET_AVAILABLE:
@@ -76,6 +80,16 @@ def detect_encoding(path: Path, override: str | None = None) -> str:
     if result and result.get("confidence", 0) >= 0.6 and result.get("encoding"):
         return result["encoding"]
     return "cp932"
+
+
+def iter_grep_lines(path: Path, encoding: str):
+    """grep 結果ファイルを 1 行ずつジェネレータで返す。
+
+    巨大ファイル対策。改行は除去済み。
+    """
+    with open(path, encoding=encoding, errors="replace", newline="") as f:
+        for line in f:
+            yield line.rstrip("\n").rstrip("\r")
 
 
 def parse_grep_line(line: str) -> dict | None:
@@ -155,6 +169,30 @@ def write_tsv(records: list[GrepRecord], output_path: Path) -> None:
             p.unlink(missing_ok=True)
 
 
+_source_files_cache: dict[tuple[str, tuple[str, ...]], list[Path]] = {}
+
+
+def _source_files_cache_clear() -> None:
+    """テスト用: source_files キャッシュをクリア。"""
+    _source_files_cache.clear()
+
+
+def iter_source_files(src_dir: Path, extensions: list[str]) -> list[Path]:
+    """src_dir 配下で extensions のいずれかにマッチするファイル一覧を返す。
+
+    rglob は呼び出し毎にディスクを再走査するため、(src_dir, extensions) 単位で
+    キャッシュする。同一プロセス内で複数言語を横断して再利用される。
+    """
+    key = (str(src_dir), tuple(sorted(e.lower() for e in extensions)))
+    cached = _source_files_cache.get(key)
+    if cached is not None:
+        return cached
+    ext_set = set(key[1])
+    result = sorted(f for f in src_dir.rglob("*") if f.suffix.lower() in ext_set)
+    _source_files_cache[key] = result
+    return result
+
+
 def grep_filter_files(
     names: list[str],
     src_dir: Path,
@@ -163,28 +201,17 @@ def grep_filter_files(
 ) -> list[Path]:
     """mmap によるバイト列検索でスキャン対象ファイルを絞り込む。
 
-    names に含まれる識別子（ASCII）を1つでも含むファイルのみ返す。
+    iter_source_files で取得した (キャッシュ済み) ファイルリストに対し
+    mmap.find で names の含有を判定する。
     エラー時は安全側（スキャン対象に含める）でフォールバック。
-    Solaris 10 / Windows を含む全 OS で動作する（標準ライブラリのみ）。
-
-    label が指定された場合は事前フィルタ結果を stderr に出力する。
     """
+    candidates = iter_source_files(src_dir, extensions)
     patterns = [n.encode("ascii") for n in names if n.isascii()]
-    ext_set = {e.lower() for e in extensions}
-
     if not patterns:
-        result: list[Path] = []
-        for f in src_dir.rglob("*"):
-            if f.suffix.lower() in ext_set:
-                result.append(f)
-        return sorted(result)
+        return candidates
 
-    total = 0
-    result = []
-    for f in src_dir.rglob("*"):
-        if f.suffix.lower() not in ext_set:
-            continue
-        total += 1
+    result: list[Path] = []
+    for f in candidates:
         try:
             if f.stat().st_size == 0:
                 continue
@@ -197,8 +224,129 @@ def grep_filter_files(
 
     if label:
         print(
-            f"  [{label}] 事前フィルタ完了: {total} → {len(result)} ファイルに絞り込み",
+            f"  [{label}] 事前フィルタ完了: {len(candidates)} → {len(result)} ファイルに絞り込み",
             file=sys.stderr, flush=True,
         )
 
-    return sorted(result)
+    return result
+
+
+from collections import OrderedDict as _OrderedDict
+
+_file_lines_cache: _OrderedDict[str, list[str]] = _OrderedDict()
+_file_lines_cache_bytes: int = 0
+_file_lines_cache_limit: int = 256 * 1024 * 1024  # 256MB
+
+
+def _file_lines_cache_clear() -> None:
+    global _file_lines_cache_bytes
+    _file_lines_cache.clear()
+    _file_lines_cache_bytes = 0
+
+
+def set_file_lines_cache_limit(n_bytes: int) -> None:
+    """テスト/チューニング用: キャッシュの合計バイト上限を変更する。"""
+    global _file_lines_cache_limit
+    _file_lines_cache_limit = n_bytes
+
+
+def _estimate_lines_bytes(lines: list[str]) -> int:
+    return sum(len(s) for s in lines) + 64 * len(lines)  # おおよその overhead
+
+
+def cached_file_lines(
+    path: Path,
+    encoding: str,
+    stats: ProcessStats | None = None,
+) -> list[str]:
+    """ファイルの行リストをサイズベース LRU キャッシュ経由で返す。"""
+    global _file_lines_cache_bytes
+    key = str(path)
+    if key in _file_lines_cache:
+        _file_lines_cache.move_to_end(key)
+        return _file_lines_cache[key]
+    try:
+        lines = path.read_text(encoding=encoding, errors="replace").splitlines()
+    except Exception:
+        if stats is not None:
+            stats.encoding_errors.add(key)
+        lines = []
+    size = _estimate_lines_bytes(lines)
+    _file_lines_cache[key] = lines
+    _file_lines_cache_bytes += size
+    while _file_lines_cache_bytes > _file_lines_cache_limit and len(_file_lines_cache) > 1:
+        _, old_lines = _file_lines_cache.popitem(last=False)
+        _file_lines_cache_bytes -= _estimate_lines_bytes(old_lines)
+    return lines
+
+
+_resolve_file_cache: dict[tuple[str, str], Path | None] = {}
+
+
+def _resolve_file_cache_clear() -> None:
+    """テスト用: resolve_file キャッシュをクリア。"""
+    _resolve_file_cache.clear()
+
+
+def resolve_file_cached(filepath: str, src_dir: Path) -> Path | None:
+    """ファイルパスを解決する（CWD 相対 → src_dir 相対の順）。結果はキャッシュ。"""
+    key = (filepath, str(src_dir))
+    if key in _resolve_file_cache:
+        return _resolve_file_cache[key]
+    candidate = Path(filepath)
+    result: Path | None
+    if candidate.is_absolute():
+        result = candidate if candidate.exists() else None
+    elif candidate.exists():
+        result = candidate
+    else:
+        resolved = src_dir / filepath
+        result = resolved if resolved.exists() else None
+    _resolve_file_cache[key] = result
+    return result
+
+
+class _BatchScanner:
+    def __init__(self, patterns: list[str], backend: str, impl):
+        self.patterns = patterns
+        self.backend = backend
+        self._impl = impl
+
+    def findall(self, line: str):
+        if self.backend == "regex":
+            for m in self._impl.finditer(line):
+                yield (m.start(), m.group(1))
+        else:
+            yield from self._impl.findall_word_boundary(
+                line, word_chars="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",
+            )
+
+
+def build_batch_scanner(patterns: list[str], threshold: int = 100) -> _BatchScanner:
+    """名前リストから「単語境界一致」スキャナを作る。
+
+    パターン数が閾値以上なら Aho-Corasick を使う（pyahocorasick または pure Python）。
+    閾値未満は再来通りの combined regex。
+    """
+    if len(patterns) >= threshold:
+        try:
+            import ahocorasick as _pyaho  # type: ignore[import-not-found]
+            ac = _pyaho.Automaton()
+            for p in patterns:
+                ac.add_word(p, p)
+            ac.make_automaton()
+            class _Wrap:
+                def findall_word_boundary(self, line, word_chars):
+                    wset = set(word_chars)
+                    for end, p in ac.iter(line):
+                        start = end - len(p) + 1
+                        left = start == 0 or line[start - 1] not in wset
+                        right = end + 1 == len(line) or line[end + 1] not in wset
+                        if left and right:
+                            yield (start, p)
+            return _BatchScanner(patterns, "ahocorasick", _Wrap())
+        except ImportError:
+            from aho_corasick import AhoCorasick  # type: ignore[import-not-found]
+            return _BatchScanner(patterns, "ahocorasick", AhoCorasick(patterns))
+    combined = re.compile(r"\b(" + "|".join(re.escape(p) for p in patterns) + r")\b")
+    return _BatchScanner(patterns, "regex", combined)

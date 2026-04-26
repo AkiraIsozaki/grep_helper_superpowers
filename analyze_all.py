@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
 
+from collections.abc import Iterable
+
 from analyze_common import (
     GrepRecord, ProcessStats, RefType,
-    detect_encoding, parse_grep_line, write_tsv,
-    grep_filter_files,
+    build_batch_scanner,
+    cached_file_lines, detect_encoding, parse_grep_line, write_tsv,
+    grep_filter_files, iter_grep_lines, resolve_file_cached,
 )
 
 # ---------------------------------------------------------------------------
@@ -113,15 +117,14 @@ def _classify_for_lang(
     encoding: str | None,
 ) -> str:
     """言語キーに対応する classify_usage 関数を呼び出す。"""
-    # NOTE: _encoding_override is a module global in analyze.py — not thread-safe.
     if lang == "java":
-        _java_mod._encoding_override = encoding
         return _java_mod.classify_usage(
             code=code,
             filepath=filepath,
             lineno=int(lineno),
             source_dir=source_dir,
             stats=stats,
+            encoding_override=encoding,
         )
     if lang == "other":
         return "その他"
@@ -132,7 +135,7 @@ def _classify_for_lang(
 
 
 def process_grep_lines_all(
-    lines: list[str],
+    lines: Iterable[str],
     keyword: str,
     source_dir: Path,
     stats: ProcessStats,
@@ -175,9 +178,7 @@ from analyze import (
 )
 from analyze import _resolve_java_file  # type: ignore[attr-defined]
 from analyze import _get_method_scope   # type: ignore[attr-defined]
-from analyze import _batch_track_constants  # type: ignore[attr-defined]
-from analyze import _batch_track_getters    # type: ignore[attr-defined]
-from analyze import _batch_track_setters    # type: ignore[attr-defined]
+from analyze import _batch_track_combined   # type: ignore[attr-defined]
 
 # Kotlin
 
@@ -187,6 +188,7 @@ from analyze_c import (
     extract_variable_name_c,
     track_variable as _track_variable_c,
     _collect_define_aliases,
+    _get_reverse_define_map as _get_reverse_define_map_c,
 )
 from analyze_c import _build_define_map as _build_define_map_c  # type: ignore[attr-defined]
 
@@ -196,6 +198,7 @@ from analyze_proc import (
     extract_variable_name_proc,
     extract_host_var_name,
     track_variable as _track_variable_proc,
+    _get_reverse_define_map as _get_reverse_define_map_proc,
 )
 from analyze_proc import _build_define_map as _build_define_map_proc  # type: ignore[attr-defined]
 
@@ -217,33 +220,43 @@ from analyze_groovy import (
 )
 
 
-def _resolve_file(filepath: str, source_dir: Path) -> Path | None:
-    """ファイルパスを解決する（CWD相対 → source_dir相対の順）。"""
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = source_dir / filepath
-    return resolved if resolved.exists() else None
 
 
-_file_cache_all: dict[str, list[str]] = {}
-_MAX_FILE_CACHE_ALL = 800
-
-
-def _read_lines(filepath: Path, encoding: str | None) -> list[str]:
-    key = str(filepath)
-    if key in _file_cache_all:
-        return _file_cache_all[key]
-    if len(_file_cache_all) >= _MAX_FILE_CACHE_ALL:
-        _file_cache_all.pop(next(iter(_file_cache_all)))
-    enc = detect_encoding(filepath, encoding)
-    try:
-        _file_cache_all[key] = filepath.read_text(encoding=enc, errors="replace").splitlines()
-    except Exception:
-        _file_cache_all[key] = []
-    return _file_cache_all[key]
+def _scan_files_for_kotlin_const(
+    files: list[Path],
+    src_dir: Path,
+    encoding: str | None,
+    names: list[str],
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]],
+) -> list[GrepRecord]:
+    """ProcessPool worker: Kotlin const val を一括スキャン。"""
+    scanner = build_batch_scanner(names)
+    results: list[GrepRecord] = []
+    for src_file in files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
+        for i, line in enumerate(lines, 1):
+            code = line.strip()
+            for _pos, name in scanner.findall(line):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_kotlin(code),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
 
 
 def _batch_track_kotlin_const(
@@ -251,13 +264,17 @@ def _batch_track_kotlin_const(
     src_dir: Path,
     stats: ProcessStats,
     encoding: str | None,
+    *,
+    workers: int = 1,
 ) -> list[GrepRecord]:
-    """Kotlin const val をプロジェクト全体に対して1パスでバッチスキャンする。"""
+    """Kotlin const val をプロジェクト全体に対して1パスでバッチスキャンする。
+
+    workers >= 2 のとき ProcessPoolExecutor で並列化する。
+    """
     if not tasks:
         return []
-    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
-    results: list[GrepRecord] = []
-    src_files = grep_filter_files(list(tasks.keys()), src_dir, [".kt", ".kts"], label="Kotlin定数追跡")
+    names = list(tasks.keys())
+    src_files = grep_filter_files(names, src_dir, [".kt", ".kts"], label="Kotlin定数追跡")
     if not src_files:
         return []
     total = len(src_files)
@@ -266,10 +283,28 @@ def _batch_track_kotlin_const(
     for name, origins in tasks.items():
         ext_list = []
         for origin in origins:
-            def_path = _resolve_file(origin.filepath, src_dir)
+            def_path = resolve_file_cached(origin.filepath, src_dir)
             ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
         tasks_ext[name] = ext_list
 
+    # 並列実行
+    if workers >= 2 and total >= 2:
+        from concurrent.futures import ProcessPoolExecutor
+        chunks = [src_files[i::workers] for i in range(workers)]
+        results: list[GrepRecord] = []
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [
+                ex.submit(_scan_files_for_kotlin_const, chunk, src_dir, encoding, names, tasks_ext)
+                for chunk in chunks if chunk
+            ]
+            for fut in futures:
+                results.extend(fut.result())
+        print(f"  [Kotlin定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
+        return results
+
+    # 直列実行
+    scanner = build_batch_scanner(names)
+    results = []
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -279,11 +314,10 @@ def _batch_track_kotlin_const(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
-            for m in combined.finditer(line):
-                name = m.group(1)
+            for _pos, name in scanner.findall(line):
                 for origin, def_resolved, def_lineno in tasks_ext[name]:
                     if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
@@ -303,18 +337,59 @@ def _batch_track_kotlin_const(
     return results
 
 
+def _scan_files_for_dotnet_const(
+    files: list[Path],
+    src_dir: Path,
+    encoding: str | None,
+    names: list[str],
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]],
+) -> list[GrepRecord]:
+    """ProcessPool worker: .NET const/static readonly を一括スキャン。"""
+    scanner = build_batch_scanner(names)
+    results: list[GrepRecord] = []
+    for src_file in files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
+        for i, line in enumerate(lines, 1):
+            code = line.strip()
+            for _pos, name in scanner.findall(line):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_dotnet(code),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
 def _batch_track_dotnet_const(
     tasks: dict[str, list[GrepRecord]],
     src_dir: Path,
     stats: ProcessStats,
     encoding: str | None,
+    *,
+    workers: int = 1,
 ) -> list[GrepRecord]:
-    """.NET const/static readonly をプロジェクト全体に対して1パスでバッチスキャンする。"""
+    """.NET const/static readonly をプロジェクト全体に対して1パスでバッチスキャンする。
+
+    workers >= 2 のとき ProcessPoolExecutor で並列化する。
+    """
     if not tasks:
         return []
-    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
-    results: list[GrepRecord] = []
-    src_files = grep_filter_files(list(tasks.keys()), src_dir, [".cs", ".vb"], label=".NET定数追跡")
+    names = list(tasks.keys())
+    src_files = grep_filter_files(names, src_dir, [".cs", ".vb"], label=".NET定数追跡")
     if not src_files:
         return []
     total = len(src_files)
@@ -323,10 +398,28 @@ def _batch_track_dotnet_const(
     for name, origins in tasks.items():
         ext_list = []
         for origin in origins:
-            def_path = _resolve_file(origin.filepath, src_dir)
+            def_path = resolve_file_cached(origin.filepath, src_dir)
             ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
         tasks_ext[name] = ext_list
 
+    # 並列実行
+    if workers >= 2 and total >= 2:
+        from concurrent.futures import ProcessPoolExecutor
+        chunks = [src_files[i::workers] for i in range(workers)]
+        results: list[GrepRecord] = []
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [
+                ex.submit(_scan_files_for_dotnet_const, chunk, src_dir, encoding, names, tasks_ext)
+                for chunk in chunks if chunk
+            ]
+            for fut in futures:
+                results.extend(fut.result())
+        print(f"  [.NET定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
+        return results
+
+    # 直列実行
+    scanner = build_batch_scanner(names)
+    results = []
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -336,11 +429,10 @@ def _batch_track_dotnet_const(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
-            for m in combined.finditer(line):
-                name = m.group(1)
+            for _pos, name in scanner.findall(line):
                 for origin, def_resolved, def_lineno in tasks_ext[name]:
                     if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
@@ -360,18 +452,59 @@ def _batch_track_dotnet_const(
     return results
 
 
+def _scan_files_for_groovy_static_final(
+    files: list[Path],
+    src_dir: Path,
+    encoding: str | None,
+    names: list[str],
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]],
+) -> list[GrepRecord]:
+    """ProcessPool worker: Groovy static final を一括スキャン。"""
+    scanner = build_batch_scanner(names)
+    results: list[GrepRecord] = []
+    for src_file in files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
+        for i, line in enumerate(lines, 1):
+            code = line.strip()
+            for _pos, name in scanner.findall(line):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_groovy(code),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
 def _batch_track_groovy_static_final(
     tasks: dict[str, list[GrepRecord]],
     src_dir: Path,
     stats: ProcessStats,
     encoding: str | None,
+    *,
+    workers: int = 1,
 ) -> list[GrepRecord]:
-    """Groovy static final 定数をプロジェクト全体に対して1パスでバッチスキャンする。"""
+    """Groovy static final 定数をプロジェクト全体に対して1パスでバッチスキャンする。
+
+    workers >= 2 のとき ProcessPoolExecutor で並列化する。
+    """
     if not tasks:
         return []
-    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in tasks) + r')\b')
-    results: list[GrepRecord] = []
-    src_files = grep_filter_files(list(tasks.keys()), src_dir, [".groovy", ".gvy"], label="Groovy定数追跡")
+    names = list(tasks.keys())
+    src_files = grep_filter_files(names, src_dir, [".groovy", ".gvy"], label="Groovy定数追跡")
     if not src_files:
         return []
     total = len(src_files)
@@ -380,10 +513,28 @@ def _batch_track_groovy_static_final(
     for name, origins in tasks.items():
         ext_list = []
         for origin in origins:
-            def_path = _resolve_file(origin.filepath, src_dir)
+            def_path = resolve_file_cached(origin.filepath, src_dir)
             ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
         tasks_ext[name] = ext_list
 
+    # 並列実行
+    if workers >= 2 and total >= 2:
+        from concurrent.futures import ProcessPoolExecutor
+        chunks = [src_files[i::workers] for i in range(workers)]
+        results: list[GrepRecord] = []
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [
+                ex.submit(_scan_files_for_groovy_static_final, chunk, src_dir, encoding, names, tasks_ext)
+                for chunk in chunks if chunk
+            ]
+            for fut in futures:
+                results.extend(fut.result())
+        print(f"  [Groovy定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
+        return results
+
+    # 直列実行
+    scanner = build_batch_scanner(names)
+    results = []
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -393,11 +544,10 @@ def _batch_track_groovy_static_final(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
-            for m in combined.finditer(line):
-                name = m.group(1)
+            for _pos, name in scanner.findall(line):
                 for origin, def_resolved, def_lineno in tasks_ext[name]:
                     if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
@@ -417,25 +567,68 @@ def _batch_track_groovy_static_final(
     return results
 
 
+def _scan_files_for_define_c_all(
+    files: list[Path],
+    src_dir: Path,
+    encoding: str | None,
+    names: list[str],
+    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]],
+) -> list[GrepRecord]:
+    """ProcessPool worker: C #define エイリアス込みで一括スキャン。"""
+    scanner = build_batch_scanner(names)
+    results: list[GrepRecord] = []
+    for src_file in files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
+        for i, line in enumerate(lines, 1):
+            code = line.strip()
+            for _pos, scan_name in scanner.findall(line):
+                for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
+                    if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage_c(code),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=scan_name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
 def _batch_track_define_c_all(
     tasks: dict[str, list[GrepRecord]],
     src_dir: Path,
     stats: ProcessStats,
     encoding: str | None,
+    *,
+    workers: int = 1,
 ) -> list[GrepRecord]:
-    """C #define をエイリアス解決込みで1パスでバッチスキャンする。"""
+    """C #define をエイリアス解決込みで1パスでバッチスキャンする。
+
+    workers >= 2 のとき ProcessPoolExecutor で並列化する。
+    """
     if not tasks:
         return []
     define_map = _build_define_map_c(src_dir, stats, encoding)
+    reverse_map = _get_reverse_define_map_c(src_dir, encoding)
 
     scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]] = {}
     for var_name, records in tasks.items():
-        aliases = _collect_define_aliases(var_name, define_map)
+        aliases = _collect_define_aliases(var_name, define_map, reverse=reverse_map)
         for scan_name in [var_name] + aliases:
             is_primary = (scan_name == var_name)
             for record in records:
                 if is_primary:
-                    def_path = _resolve_file(record.filepath, src_dir)
+                    def_path = resolve_file_cached(record.filepath, src_dir)
                     def_resolved = def_path.resolve() if def_path else None
                     def_lineno = int(record.lineno)
                 else:
@@ -448,13 +641,30 @@ def _batch_track_define_c_all(
     if not scan_tasks:
         return []
 
-    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in scan_tasks) + r')\b')
-    results: list[GrepRecord] = []
-    src_files = grep_filter_files(list(scan_tasks.keys()), src_dir, [".c", ".h", ".pc"], label="C #define追跡")
+    names = list(scan_tasks.keys())
+    src_files = grep_filter_files(names, src_dir, [".c", ".h", ".pc"], label="C #define追跡")
     if not src_files:
         return []
     total = len(src_files)
 
+    # 並列実行
+    if workers >= 2 and total >= 2:
+        from concurrent.futures import ProcessPoolExecutor
+        chunks = [src_files[i::workers] for i in range(workers)]
+        results: list[GrepRecord] = []
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [
+                ex.submit(_scan_files_for_define_c_all, chunk, src_dir, encoding, names, scan_tasks)
+                for chunk in chunks if chunk
+            ]
+            for fut in futures:
+                results.extend(fut.result())
+        print(f"  [C #define追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
+        return results
+
+    # 直列実行
+    scanner = build_batch_scanner(names)
+    results = []
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -464,11 +674,10 @@ def _batch_track_define_c_all(
         except ValueError:
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
-            for m in combined.finditer(line):
-                scan_name = m.group(1)
+            for _pos, scan_name in scanner.findall(line):
                 for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
                     if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
@@ -488,25 +697,70 @@ def _batch_track_define_c_all(
     return results
 
 
+def _scan_files_for_define_proc_all(
+    files: list[Path],
+    src_dir: Path,
+    encoding: str | None,
+    names: list[str],
+    scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]],
+) -> list[GrepRecord]:
+    """ProcessPool worker: Pro*C #define エイリアス込みで一括スキャン。"""
+    scanner = build_batch_scanner(names)
+    results: list[GrepRecord] = []
+    for src_file in files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
+        ext = src_file.suffix.lower()
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
+        for i, line in enumerate(lines, 1):
+            code = line.strip()
+            usage_fn = classify_usage_c if ext in (".c", ".h") else classify_usage_proc
+            for _pos, scan_name in scanner.findall(line):
+                for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
+                    if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=usage_fn(code),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=scan_name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
 def _batch_track_define_proc_all(
     tasks: dict[str, list[GrepRecord]],
     src_dir: Path,
     stats: ProcessStats,
     encoding: str | None,
+    *,
+    workers: int = 1,
 ) -> list[GrepRecord]:
-    """Pro*C #define をエイリアス解決込みで1パスでバッチスキャンする。"""
+    """Pro*C #define をエイリアス解決込みで1パスでバッチスキャンする。
+
+    workers >= 2 のとき ProcessPoolExecutor で並列化する。
+    """
     if not tasks:
         return []
     define_map = _build_define_map_proc(src_dir, stats, encoding)
+    reverse_map = _get_reverse_define_map_proc(src_dir, encoding)
 
     scan_tasks: dict[str, list[tuple[bool, str, GrepRecord, Path | None, int]]] = {}
     for var_name, records in tasks.items():
-        aliases = _collect_define_aliases(var_name, define_map)
+        aliases = _collect_define_aliases(var_name, define_map, reverse=reverse_map)
         for scan_name in [var_name] + aliases:
             is_primary = (scan_name == var_name)
             for record in records:
                 if is_primary:
-                    def_path = _resolve_file(record.filepath, src_dir)
+                    def_path = resolve_file_cached(record.filepath, src_dir)
                     def_resolved = def_path.resolve() if def_path else None
                     def_lineno = int(record.lineno)
                 else:
@@ -519,13 +773,30 @@ def _batch_track_define_proc_all(
     if not scan_tasks:
         return []
 
-    combined = re.compile(r'\b(' + '|'.join(re.escape(k) for k in scan_tasks) + r')\b')
-    results: list[GrepRecord] = []
-    src_files = grep_filter_files(list(scan_tasks.keys()), src_dir, [".pc", ".c", ".h"], label="Pro*C #define追跡")
+    names = list(scan_tasks.keys())
+    src_files = grep_filter_files(names, src_dir, [".pc", ".c", ".h"], label="Pro*C #define追跡")
     if not src_files:
         return []
     total = len(src_files)
 
+    # 並列実行
+    if workers >= 2 and total >= 2:
+        from concurrent.futures import ProcessPoolExecutor
+        chunks = [src_files[i::workers] for i in range(workers)]
+        results: list[GrepRecord] = []
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [
+                ex.submit(_scan_files_for_define_proc_all, chunk, src_dir, encoding, names, scan_tasks)
+                for chunk in chunks if chunk
+            ]
+            for fut in futures:
+                results.extend(fut.result())
+        print(f"  [Pro*C #define追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
+        return results
+
+    # 直列実行
+    scanner = build_batch_scanner(names)
+    results = []
     for idx, src_file in enumerate(src_files, 1):
         if total >= 100 and idx % 100 == 0:
             pct = idx * 100 // total
@@ -536,12 +807,11 @@ def _batch_track_define_proc_all(
             filepath_str = str(src_file)
         src_resolved = src_file.resolve()
         ext = src_file.suffix.lower()
-        lines = _read_lines(src_file, encoding)
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
             usage_fn = classify_usage_c if ext in (".c", ".h") else classify_usage_proc
-            for m in combined.finditer(line):
-                scan_name = m.group(1)
+            for _pos, scan_name in scanner.findall(line):
                 for is_primary, _, origin, def_resolved, def_lineno in scan_tasks[scan_name]:
                     if is_primary and def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
@@ -566,6 +836,7 @@ def _apply_indirect_tracking(
     source_dir: Path,
     stats: ProcessStats,
     encoding: str | None,
+    workers: int = 1,
 ) -> list[GrepRecord]:
     """直接参照レコードから言語別間接追跡を行い、追加レコードを返す。"""
     result: list[GrepRecord] = []
@@ -594,25 +865,34 @@ def _apply_indirect_tracking(
             var_name = extract_variable_name(record.code, record.usage_type)
             if not var_name:
                 continue
-            _java_mod._encoding_override = encoding
             scope = determine_scope(
                 record.usage_type, record.code,
                 record.filepath, source_dir, int(record.lineno),
+                encoding_override=encoding,
             )
             if scope == "project":
                 java_project_tasks.setdefault(var_name, []).append(record)
             elif scope == "class":
                 class_file = _resolve_java_file(record.filepath, source_dir)
                 if class_file:
-                    result.extend(track_field(var_name, class_file, record, source_dir, stats))
-                    for g in find_getter_names(var_name, class_file):
+                    result.extend(track_field(
+                        var_name, class_file, record, source_dir, stats,
+                        encoding_override=encoding,
+                    ))
+                    for g in find_getter_names(var_name, class_file, encoding_override=encoding):
                         java_getter_tasks.setdefault(g, []).append(record)
-                    for s in find_setter_names(var_name, class_file):
+                    for s in find_setter_names(var_name, class_file, encoding_override=encoding):
                         java_setter_tasks.setdefault(s, []).append(record)
             elif scope == "method":
-                method_scope = _get_method_scope(record.filepath, source_dir, int(record.lineno))
+                method_scope = _get_method_scope(
+                    record.filepath, source_dir, int(record.lineno),
+                    encoding_override=encoding,
+                )
                 if method_scope:
-                    result.extend(track_local(var_name, method_scope, record, source_dir, stats))
+                    result.extend(track_local(
+                        var_name, method_scope, record, source_dir, stats,
+                        encoding_override=encoding,
+                    ))
 
         # ── Kotlin ────────────────────────────────────────────────────────
         elif lang == "kotlin":
@@ -630,7 +910,7 @@ def _apply_indirect_tracking(
             elif record.usage_type == "変数代入":
                 var_name = extract_variable_name_c(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(_track_variable_c(
                             var_name, candidate, int(record.lineno),
@@ -646,7 +926,7 @@ def _apply_indirect_tracking(
             elif record.usage_type == "変数代入":
                 var_name = extract_variable_name_proc(record.code) or extract_host_var_name(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(_track_variable_proc(
                             var_name, candidate, int(record.lineno),
@@ -658,7 +938,7 @@ def _apply_indirect_tracking(
             if record.usage_type in ("変数代入", "環境変数エクスポート"):
                 var_name = extract_sh_variable_name(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(track_sh_variable(
                             var_name, candidate, int(record.lineno),
@@ -670,7 +950,7 @@ def _apply_indirect_tracking(
             if record.usage_type == "定数・変数定義":
                 var_name = extract_sql_variable_name(record.code)
                 if var_name:
-                    candidate = _resolve_file(record.filepath, source_dir)
+                    candidate = resolve_file_cached(record.filepath, source_dir)
                     if candidate:
                         result.extend(track_sql_variable(
                             var_name, candidate, int(record.lineno),
@@ -694,12 +974,12 @@ def _apply_indirect_tracking(
                 m = re.search(r'(\w+)\s*[=;]', record.code.strip())
                 if m:
                     fname = m.group(1)
-                    src_file = _resolve_file(record.filepath, source_dir)
+                    src_file = resolve_file_cached(record.filepath, source_dir)
                     if src_file:
                         result.extend(track_field_groovy(
                             fname, src_file, record, source_dir, stats, encoding,
                         ))
-                        lines = _read_lines(src_file, encoding)
+                        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
                         for g in find_getter_names_groovy(fname, lines):
                             groovy_getter_tasks.setdefault(g, []).append(record)
                         for s in find_setter_names_groovy(fname, lines):
@@ -707,8 +987,8 @@ def _apply_indirect_tracking(
 
         # ts / python / perl / plsql / other: 間接追跡なし
 
-    # Java バッチ処理: 定数・getter・setter の事前フィルタを1回の rglob で共有
-    java_candidates: list[Path] | None = None
+    # Java バッチ処理: 定数・getter・setter の事前フィルタを1回の rglob で共有し、
+    # 1 パスで定数/getter/setter を統合追跡する。
     if java_project_tasks or java_getter_tasks or java_setter_tasks:
         all_java_names = list(dict.fromkeys(
             list(java_project_tasks.keys())
@@ -718,19 +998,21 @@ def _apply_indirect_tracking(
         java_candidates = grep_filter_files(
             all_java_names, source_dir, [".java"], label="Java追跡",
         )
-    if java_project_tasks:
-        result.extend(_batch_track_constants(java_project_tasks, source_dir, stats, file_list=java_candidates))
-    if java_getter_tasks:
-        result.extend(_batch_track_getters(java_getter_tasks, source_dir, stats, file_list=java_candidates))
-    if java_setter_tasks:
-        result.extend(_batch_track_setters(java_setter_tasks, source_dir, stats, file_list=java_candidates))
+        result.extend(_batch_track_combined(
+            const_tasks=java_project_tasks,
+            getter_tasks=java_getter_tasks,
+            setter_tasks=java_setter_tasks,
+            source_dir=source_dir, stats=stats, file_list=java_candidates,
+            encoding_override=encoding,
+            workers=workers,
+        ))
 
     # Kotlin / .NET / Groovy static final / C #define / Pro*C #define バッチ処理
-    result.extend(_batch_track_kotlin_const(kotlin_const_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_dotnet_const(dotnet_const_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_groovy_static_final(groovy_sf_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_define_c_all(c_define_tasks, source_dir, stats, encoding))
-    result.extend(_batch_track_define_proc_all(proc_define_tasks, source_dir, stats, encoding))
+    result.extend(_batch_track_kotlin_const(kotlin_const_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_dotnet_const(dotnet_const_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_groovy_static_final(groovy_sf_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_define_c_all(c_define_tasks, source_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_define_proc_all(proc_define_tasks, source_dir, stats, encoding, workers=workers))
 
     # Groovy getter/setter バッチ処理
     result.extend(_batch_track_getter_setter_groovy(
@@ -752,6 +1034,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-dir",  default="input",  help="grep結果ファイルのディレクトリ")
     parser.add_argument("--output-dir", default="output", help="TSV出力先ディレクトリ")
     parser.add_argument("--encoding",   default=None,     help="文字コード強制指定（例: utf-8, cp932）")
+    parser.add_argument(
+        "--workers", type=int, default=1,
+        help=f"並列ワーカー数（デフォルト: 1, 推奨: {os.cpu_count() or 4}）",
+    )
     return parser
 
 
@@ -782,14 +1068,14 @@ def main() -> None:
             print(f"  処理中: {grep_path.name} ...", file=sys.stderr, flush=True)
             keyword = grep_path.stem
             enc = detect_encoding(grep_path, args.encoding)
-            raw_lines = grep_path.read_text(encoding=enc, errors="replace").splitlines()
 
             direct_records = process_grep_lines_all(
-                raw_lines, keyword, source_dir, stats, args.encoding,
+                iter_grep_lines(grep_path, enc),
+                keyword, source_dir, stats, args.encoding,
             )
             all_records = list(direct_records)
             all_records.extend(
-                _apply_indirect_tracking(direct_records, source_dir, stats, args.encoding)
+                _apply_indirect_tracking(direct_records, source_dir, stats, args.encoding, workers=args.workers)
             )
 
             output_path = output_dir / f"{keyword}.tsv"

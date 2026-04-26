@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import analyze_common
 import os
 import sys
 import tempfile
@@ -247,7 +248,7 @@ class TestE2EProc(unittest.TestCase):
         self.assertTrue(expected_path.exists(), f"expected TSV が存在しない: {expected_path}")
 
         # キャッシュをリセット（テスト間の汚染防止）
-        ap._file_cache.clear()
+        analyze_common._file_lines_cache_clear()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -334,7 +335,7 @@ class TestE2EMixed(unittest.TestCase):
         self.assertTrue(src_dir.exists(), f"src_dir が存在しない: {src_dir}")
         self.assertTrue(expected_path.exists(), f"expected TSV が存在しない: {expected_path}")
 
-        ap._file_cache.clear()
+        analyze_common._file_lines_cache_clear()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

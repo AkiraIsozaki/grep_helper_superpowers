@@ -7,7 +7,9 @@ import re
 import sys
 from pathlib import Path
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, parse_grep_line, write_tsv
+from collections.abc import Iterable
+
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, iter_source_files, parse_grep_line, resolve_file_cached, write_tsv
 
 _KOTLIN_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bconst\s+val\s+\w+\s*='),              "const定数定義"),
@@ -17,39 +19,6 @@ _KOTLIN_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'@\w+'),                                  "アノテーション"),
     (re.compile(r'\w+\s*\('),                              "関数引数"),
 ]
-
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
-
-
-def _resolve_source_file(filepath: str, src_dir: Path) -> Path | None:
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = src_dir / filepath
-    return resolved if resolved.exists() else None
 
 
 def classify_usage_kotlin(code: str) -> str:
@@ -80,16 +49,16 @@ def track_const(
     """const val 定数の使用箇所を src_dir 配下の .kt/.kts ファイルでスキャンする。"""
     results: list[GrepRecord] = []
     pattern = re.compile(r'\b' + re.escape(const_name) + r'\b')
-    def_file = _resolve_source_file(record.filepath, src_dir)
+    def_file = resolve_file_cached(record.filepath, src_dir)
 
-    src_files = sorted(src_dir.rglob("*.kt")) + sorted(src_dir.rglob("*.kts"))
+    src_files = iter_source_files(src_dir, [".kt", ".kts"])
     for src_file in src_files:
         try:
             filepath_str = str(src_file.relative_to(src_dir))
         except ValueError:
             filepath_str = str(src_file)
 
-        lines = _get_cached_lines(src_file, stats, encoding_override)
+        lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
         for i, line in enumerate(lines, 1):
             if (def_file is not None
                     and src_file.resolve() == def_file.resolve()
@@ -110,6 +79,32 @@ def track_const(
     return results
 
 
+def process_grep_lines(
+    lines: Iterable[str],
+    keyword: str,
+    source_dir: Path,
+    stats: ProcessStats,
+) -> list[GrepRecord]:
+    """grepファイル行イテラブルを処理し、直接参照レコードを返す。"""
+    records: list[GrepRecord] = []
+    for line in lines:
+        stats.total_lines += 1
+        parsed = parse_grep_line(line)
+        if parsed is None:
+            stats.skipped_lines += 1
+            continue
+        records.append(GrepRecord(
+            keyword=keyword,
+            ref_type=RefType.DIRECT.value,
+            usage_type=classify_usage_kotlin(parsed["code"]),
+            filepath=parsed["filepath"],
+            lineno=parsed["lineno"],
+            code=parsed["code"],
+        ))
+        stats.valid_lines += 1
+    return records
+
+
 def process_grep_file(
     path: Path,
     keyword: str,
@@ -117,30 +112,16 @@ def process_grep_file(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> list[GrepRecord]:
-    """grepファイル全行を処理し、直接参照レコードを返す。"""
-    records: list[GrepRecord] = []
+    """grepファイル全行を処理し、直接参照レコードを返す。後方互換ラッパー。"""
     enc = detect_encoding(path, encoding_override)
-    with open(path, encoding=enc, errors="replace") as f:
-        for line in f:
-            stats.total_lines += 1
-            parsed = parse_grep_line(line)
-            if parsed is None:
-                stats.skipped_lines += 1
-                continue
-            records.append(GrepRecord(
-                keyword=keyword,
-                ref_type=RefType.DIRECT.value,
-                usage_type=classify_usage_kotlin(parsed["code"]),
-                filepath=parsed["filepath"],
-                lineno=parsed["lineno"],
-                code=parsed["code"],
-            ))
-            stats.valid_lines += 1
-    return records
+    return process_grep_lines(iter_grep_lines(path, enc), keyword, source_dir, stats)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Kotlin grep結果 自動分類・使用箇所洗い出しツール")
+    parser = argparse.ArgumentParser(
+        description="Kotlin grep結果 自動分類・使用箇所洗い出しツール。"
+                    "並列実行は analyze_all.py --workers を使用してください。"
+    )
     parser.add_argument("--source-dir", required=True, help="Kotlinソースのルートディレクトリ")
     parser.add_argument("--input-dir",  default="input")
     parser.add_argument("--output-dir", default="output")
@@ -172,7 +153,8 @@ def main() -> None:
     try:
         for grep_path in grep_files:
             keyword = grep_path.stem
-            direct_records = process_grep_file(grep_path, keyword, source_dir, stats, args.encoding)
+            enc = detect_encoding(grep_path, args.encoding)
+            direct_records = process_grep_lines(iter_grep_lines(grep_path, enc), keyword, source_dir, stats)
             all_records: list[GrepRecord] = list(direct_records)
 
             for record in direct_records:

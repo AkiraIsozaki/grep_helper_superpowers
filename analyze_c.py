@@ -7,7 +7,9 @@ import re
 import sys
 from pathlib import Path
 
-from analyze_common import GrepRecord, ProcessStats, RefType, detect_encoding, parse_grep_line, write_tsv
+from collections.abc import Iterable
+
+from analyze_common import GrepRecord, ProcessStats, RefType, cached_file_lines, detect_encoding, iter_grep_lines, iter_source_files, parse_grep_line, resolve_file_cached, write_tsv
 
 _C_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'#\s*define\b'),                               "#define定数定義"),
@@ -17,40 +19,7 @@ _C_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\w+\s*\('),                                   "関数引数"),
 ]
 
-_file_cache: dict[str, list[str]] = {}
-_MAX_FILE_CACHE = 800
-_define_map_cache: dict[tuple[str, str], dict[str, str]] = {}
-
-
-def _get_cached_lines(
-    filepath: str | Path,
-    stats: ProcessStats | None = None,
-    encoding_override: str | None = None,
-) -> list[str]:
-    path = Path(filepath)
-    enc = detect_encoding(path, encoding_override)
-    key = str(filepath)
-    if key not in _file_cache:
-        if len(_file_cache) >= _MAX_FILE_CACHE:
-            _file_cache.pop(next(iter(_file_cache)))
-        try:
-            _file_cache[key] = path.read_text(encoding=enc, errors="replace").splitlines()
-        except Exception:
-            if stats is not None:
-                stats.encoding_errors.add(key)
-            _file_cache[key] = []
-    return _file_cache[key]
-
-
-def _resolve_source_file(filepath: str, src_dir: Path) -> Path | None:
-    """ファイルパスを解決する。CWD相対→src_dir相対の順で試みる。"""
-    candidate = Path(filepath)
-    if candidate.is_absolute():
-        return candidate if candidate.exists() else None
-    if candidate.exists():
-        return candidate
-    resolved = src_dir / filepath
-    return resolved if resolved.exists() else None
+_define_map_cache: dict[tuple[str, str], tuple[dict[str, str], dict[str, list[str]]]] = {}
 
 
 def classify_usage_c(code: str) -> str:
@@ -84,37 +53,52 @@ def extract_define_name(code: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _build_reverse_define_map(define_map: dict[str, str]) -> dict[str, list[str]]:
+    reverse: dict[str, list[str]] = {}
+    for k, v in define_map.items():
+        reverse.setdefault(v, []).append(k)
+    return reverse
+
+
 def _build_define_map(
     src_dir: Path,
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> dict[str, str]:
-    """src_dir配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。"""
+    """src_dir 配下の全ソースから #define NAME IDENTIFIER 形式のマップを構築する。
+    内部キャッシュには forward と reverse map のタプルを保持する。
+    """
     cache_key = (str(src_dir), encoding_override or "")
-    if cache_key in _define_map_cache:
-        return _define_map_cache[cache_key]
+    cached = _define_map_cache.get(cache_key)
+    if cached is not None:
+        return cached[0]
     define_map: dict[str, str] = {}
-    src_files = (sorted(src_dir.rglob("*.c"))
-                 + sorted(src_dir.rglob("*.h"))
-                 + sorted(src_dir.rglob("*.pc")))
+    src_files = iter_source_files(src_dir, [".c", ".h", ".pc"])
     for src_file in src_files:
-        for line in _get_cached_lines(src_file, stats, encoding_override):
+        enc = detect_encoding(src_file, encoding_override)
+        for line in cached_file_lines(src_file, enc, stats):
             m = _DEFINE_ALIAS_PAT.match(line.strip())
             if m:
                 define_map[m.group(1)] = m.group(2)
-    _define_map_cache[cache_key] = define_map
+    _define_map_cache[cache_key] = (define_map, _build_reverse_define_map(define_map))
     return define_map
+
+
+def _get_reverse_define_map(src_dir: Path, encoding_override: str | None) -> dict[str, list[str]]:
+    cache_key = (str(src_dir), encoding_override or "")
+    cached = _define_map_cache.get(cache_key)
+    return cached[1] if cached is not None else {}
 
 
 def _collect_define_aliases(
     var_name: str,
     define_map: dict[str, str],
     max_depth: int = 10,
+    reverse: dict[str, list[str]] | None = None,
 ) -> list[str]:
     """var_nameを直接・間接的に参照する#define名のリストをBFSで返す。"""
-    reverse: dict[str, list[str]] = {}
-    for k, v in define_map.items():
-        reverse.setdefault(v, []).append(k)
+    if reverse is None:
+        reverse = _build_reverse_define_map(define_map)
     aliases: list[str] = []
     to_visit = [var_name]
     seen: set[str] = {var_name}
@@ -141,15 +125,13 @@ def track_define(
 ) -> list[GrepRecord]:
     """#define マクロ名の使用箇所を src_dir 配下の .c/.h/.pc ファイルでスキャンする（多段解決）。"""
     results: list[GrepRecord] = []
-    def_file = _resolve_source_file(record.filepath, src_dir)
+    def_file = resolve_file_cached(record.filepath, src_dir)
 
-    src_files = (sorted(src_dir.rglob("*.c"))
-                 + sorted(src_dir.rglob("*.h"))
-                 + sorted(src_dir.rglob("*.pc")))
+    src_files = iter_source_files(src_dir, [".c", ".h", ".pc"])
 
     # 多段 #define チェーンのエイリアスを収集
     define_map = _build_define_map(src_dir, stats, encoding_override)
-    aliases = _collect_define_aliases(var_name, define_map)
+    aliases = _collect_define_aliases(var_name, define_map, reverse=_get_reverse_define_map(src_dir, encoding_override))
     scan_names = [var_name] + aliases
 
     for scan_name in scan_names:
@@ -160,7 +142,7 @@ def track_define(
             except ValueError:
                 filepath_str = str(src_file)
 
-            lines = _get_cached_lines(src_file, stats, encoding_override)
+            lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
             for i, line in enumerate(lines, 1):
                 if (scan_name == var_name
                         and def_file is not None
@@ -199,7 +181,7 @@ def track_variable(
     except ValueError:
         filepath_str = str(candidate)
 
-    lines = _get_cached_lines(candidate, stats, encoding_override)
+    lines = cached_file_lines(Path(candidate), detect_encoding(Path(candidate), encoding_override), stats)
     for i, line in enumerate(lines, 1):
         if i == def_lineno:
             continue
@@ -218,6 +200,32 @@ def track_variable(
     return results
 
 
+def process_grep_lines(
+    lines: Iterable[str],
+    keyword: str,
+    source_dir: Path,
+    stats: ProcessStats,
+) -> list[GrepRecord]:
+    """grepファイル行イテラブルを処理し、直接参照レコードを返す。"""
+    records: list[GrepRecord] = []
+    for line in lines:
+        stats.total_lines += 1
+        parsed = parse_grep_line(line)
+        if parsed is None:
+            stats.skipped_lines += 1
+            continue
+        records.append(GrepRecord(
+            keyword=keyword,
+            ref_type=RefType.DIRECT.value,
+            usage_type=classify_usage_c(parsed["code"]),
+            filepath=parsed["filepath"],
+            lineno=parsed["lineno"],
+            code=parsed["code"],
+        ))
+        stats.valid_lines += 1
+    return records
+
+
 def process_grep_file(
     path: Path,
     keyword: str,
@@ -225,30 +233,16 @@ def process_grep_file(
     stats: ProcessStats,
     encoding_override: str | None = None,
 ) -> list[GrepRecord]:
-    """grepファイル全行を処理し、直接参照レコードを返す。"""
-    records: list[GrepRecord] = []
+    """grepファイル全行を処理し、直接参照レコードを返す。後方互換ラッパー。"""
     enc = detect_encoding(path, encoding_override)
-    with open(path, encoding=enc, errors="replace") as f:
-        for line in f:
-            stats.total_lines += 1
-            parsed = parse_grep_line(line)
-            if parsed is None:
-                stats.skipped_lines += 1
-                continue
-            records.append(GrepRecord(
-                keyword=keyword,
-                ref_type=RefType.DIRECT.value,
-                usage_type=classify_usage_c(parsed["code"]),
-                filepath=parsed["filepath"],
-                lineno=parsed["lineno"],
-                code=parsed["code"],
-            ))
-            stats.valid_lines += 1
-    return records
+    return process_grep_lines(iter_grep_lines(path, enc), keyword, source_dir, stats)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="純C grep結果 自動分類・使用箇所洗い出しツール")
+    parser = argparse.ArgumentParser(
+        description="純C grep結果 自動分類・使用箇所洗い出しツール。"
+                    "並列実行は analyze_all.py --workers を使用してください。"
+    )
     parser.add_argument("--source-dir", required=True, help="C ソースのルートディレクトリ")
     parser.add_argument("--input-dir",  default="input")
     parser.add_argument("--output-dir", default="output")
@@ -280,7 +274,8 @@ def main() -> None:
     try:
         for grep_path in grep_files:
             keyword = grep_path.stem
-            direct_records = process_grep_file(grep_path, keyword, source_dir, stats, args.encoding)
+            enc = detect_encoding(grep_path, args.encoding)
+            direct_records = process_grep_lines(iter_grep_lines(grep_path, enc), keyword, source_dir, stats)
             all_records: list[GrepRecord] = list(direct_records)
 
             for record in direct_records:
@@ -293,7 +288,7 @@ def main() -> None:
                     # Pro*C の extract_host_var_name 相当のフォールバックは不要
                     var_name = extract_variable_name_c(record.code)
                     if var_name:
-                        candidate = _resolve_source_file(record.filepath, source_dir)
+                        candidate = resolve_file_cached(record.filepath, source_dir)
                         if candidate:
                             all_records.extend(
                                 track_variable(var_name, candidate,
