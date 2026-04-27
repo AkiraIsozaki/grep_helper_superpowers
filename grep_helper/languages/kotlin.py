@@ -207,11 +207,6 @@ def batch_track_indirect(
 
     direct_records から .kt / .kts ファイルかつ usage_type "const定数定義" の
     レコードだけを内部で抽出し、_batch_track_kotlin_const に委譲する。
-
-    Note: analyze_all.py の kotlin ブロック (line 899) には既知のタイポバグがあり、
-    "const val定数定義" を検索するため kotlin_const_tasks は常に空になる。
-    そのため analyze_all.py 経由では本関数は {} を受け取り [] を返す（バグ保持）。
-    スタンドアロン CLI 経由では正しい "const定数定義" でフィルタされ正常動作する。
     """
     from grep_helper.languages import detect_handler
     self_module = sys.modules[__name__]
