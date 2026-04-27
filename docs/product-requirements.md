@@ -66,7 +66,7 @@ Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Pe
 - [ ] `ファイルパス:行番号:コード行` 形式のgrep行を正しくパースする
 - [ ] バイナリファイル通知行・空行・不正フォーマット行はスキップし、件数をレポートに記録する
 - [ ] `input/` が空の場合はエラーメッセージを標準エラー出力（stderr）に日本語で表示し、exit code 1 で終了する
-- [ ] 共通インフラ（`parse_grep_line`, `write_tsv`, `GrepRecord`, `ProcessStats`）は `analyze_common.py` に集約し、全言語アナライザーから共有する
+- [ ] 共通インフラ（`parse_grep_line`, `write_tsv`, `GrepRecord`, `ProcessStats`）は `grep_helper/` パッケージに集約し、全言語ハンドラから共有する
 
 **優先度**: P0（必須）
 

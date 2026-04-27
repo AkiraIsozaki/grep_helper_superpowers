@@ -61,7 +61,7 @@ pip install --no-index --find-links=./wheelhouse -r requirements.txt -r requirem
 ```
 
 > **Python バージョンについて**  
-> `pyahocorasick` のみ C 拡張のためプラットフォーム特化 wheel（`cp312` / Linux x86_64）を同梱している。それ以外は `py3-none-any` で Python マイナーバージョン非依存。`pyahocorasick` がインストールできない場合でも、コード側の防御的フォールバックにより同梱の純Python実装（`aho_corasick.py`）に切り替わって動作する（性能のみ低下）。別プラットフォーム / 別 Python バージョンで使う場合は対応 wheel を追加するか、フォールバックに任せて差し支えない。
+> `pyahocorasick` のみ C 拡張のためプラットフォーム特化 wheel（`cp312` / Linux x86_64）を同梱している。それ以外は `py3-none-any` で Python マイナーバージョン非依存。`pyahocorasick` がインストールできない場合でも、コード側の防御的フォールバックにより同梱の純Python実装（`grep_helper/_aho_corasick.py`）に切り替わって動作する（性能のみ低下）。別プラットフォーム / 別 Python バージョンで使う場合は対応 wheel を追加するか、フォールバックに任せて差し支えない。
 
 ---
 
@@ -185,6 +185,20 @@ python analyze_sql.py --source-dir ./src --input-dir input --output-dir output
 ```bash
 python -m pytest tests/ -v
 ```
+
+---
+
+## リポジトリ構成
+
+このツールは `grep_helper/` パッケージとして実装されています。ルート直下の `analyze*.py` は CLI エントリポイントとしての shim で、各言語のロジックは `grep_helper/languages/<lang>.py` にあります。
+
+- `grep_helper/` — 共通インフラ (`encoding.py` / `grep_input.py` / `tsv_output.py` / `source_files.py` / `file_cache.py` / `scanner.py` / `_aho_corasick.py` / `cli.py` / `pipeline.py` / `dispatcher.py` / `model.py`)
+- `grep_helper/languages/<lang>.py` — 各言語の `EXTENSIONS` / `classify_usage` / 任意の `batch_track_indirect`
+- `analyze<_lang>.py` — CLI shim（5〜6 行）— 互換性維持のため残しています
+- `tests/` — pytest 規約のモジュールキャッシュクリア前提のため、`pytest-xdist` 並列実行は使わないでください
+- `scripts/check_cache_identity_phase*.py` — リファクタで導入したキャッシュ dict の object identity チェッカ
+
+詳細は [`docs/repository-structure.md`](docs/repository-structure.md) を参照。
 
 ---
 

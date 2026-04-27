@@ -188,7 +188,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 
 **定義**: コードにおける文言または変数/定数の使われ方を示す分類値（TSVの「使用タイプ」列）。言語によって種類が異なる。
 
-**Java（`analyze.py`）— 7種**:
+**Java（`grep_helper.languages.java`）— 7種**:
 
 | 使用タイプ | 内容 | 例 |
 |----------|------|----|
@@ -200,19 +200,19 @@ someService.process(obj.getType());        // ← Handler.java:55
 | メソッド引数 | メソッド呼び出しの引数として渡している | `process(CODE)` |
 | その他 | 上記に当てはまらないもの（コメント行・文字列連結など） | `// 777 はここで使う` |
 
-**C（`analyze_c.py`）— 6種**: #define定数定義・条件判定・return文・変数代入・関数引数・その他
+**C（`grep_helper.languages.c`）— 6種**: #define定数定義・条件判定・return文・変数代入・関数引数・その他
 
-**Pro*C（`analyze_proc.py`）— 7種**: EXEC SQL文・#define定数定義・条件判定・return文・変数代入・関数引数・その他
+**Pro*C（`grep_helper.languages.proc`）— 7種**: EXEC SQL文・#define定数定義・条件判定・return文・変数代入・関数引数・その他
 
-**Oracle SQL（`analyze_sql.py`）— 7種**: 例外・エラー処理・定数・変数定義・WHERE条件・比較・DECODE・INSERT/UPDATE値・SELECT/INTO・その他
+**Oracle SQL（`grep_helper.languages.sql`）— 7種**: 例外・エラー処理・定数・変数定義・WHERE条件・比較・DECODE・INSERT/UPDATE値・SELECT/INTO・その他
 
-**Shell（`analyze_sh.py`）— 6種**: 環境変数エクスポート・変数代入・条件判定・echo/print出力・コマンド引数・その他
+**Shell（`grep_helper.languages.sh`）— 6種**: 環境変数エクスポート・変数代入・条件判定・echo/print出力・コマンド引数・その他
 
-**Kotlin（`analyze_kotlin.py`）— 7種**: const定数定義・変数代入・条件判定・return文・アノテーション・関数引数・その他
+**Kotlin（`grep_helper.languages.kotlin`）— 7種**: const定数定義・変数代入・条件判定・return文・アノテーション・関数引数・その他
 
-**PL/SQL（`analyze_plsql.py`）— 7種**: 定数/変数宣言・EXCEPTION処理・条件判定・カーソル定義・INSERT/UPDATE値・WHERE条件・その他
+**PL/SQL（`grep_helper.languages.plsql`）— 7種**: 定数/変数宣言・EXCEPTION処理・条件判定・カーソル定義・INSERT/UPDATE値・WHERE条件・その他
 
-**TypeScript/JavaScript（`analyze_ts.py`）— 7種**:
+**TypeScript/JavaScript（`grep_helper.languages.ts`）— 7種**:
 
 | 使用タイプ | 内容 | 例 |
 |----------|------|----|
@@ -224,7 +224,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 | 関数引数 | 関数・メソッド呼び出しの引数として渡している | `process(CODE)` |
 | その他 | 上記に当てはまらないもの（コメント行・テンプレートリテラルなど） | `// TARGET はここで使う` |
 
-**Python（`analyze_python.py`）— 6種**:
+**Python（`grep_helper.languages.python`）— 6種**:
 
 | 使用タイプ | 内容 | 例 |
 |----------|------|----|
@@ -235,7 +235,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 | 関数引数 | 関数・メソッド呼び出しの引数として渡している | `process(CODE)` |
 | その他 | 上記に当てはまらないもの（コメント行・f-stringなど） | `# TARGET はここで使う` |
 
-**Perl（`analyze_perl.py`）— 6種**:
+**Perl（`grep_helper.languages.perl`）— 6種**:
 
 | 使用タイプ | 内容 | 例 |
 |----------|------|----|
@@ -246,7 +246,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 | 関数引数 | サブルーチン呼び出しの引数として渡している | `process(CODE)` |
 | その他 | 上記に当てはまらないもの（コメント行など） | `# TARGET はここで使う` |
 
-**C#/VB.NET（`analyze_dotnet.py`）— 7種**:
+**C#/VB.NET（`grep_helper.languages.dotnet`）— 7種**:
 
 | 使用タイプ | 内容 | 例 |
 |----------|------|----|
@@ -258,7 +258,7 @@ someService.process(obj.getType());        // ← Handler.java:55
 | メソッド引数 | メソッド呼び出しの引数として渡している | `Process(CODE)` |
 | その他 | 上記に当てはまらないもの（コメント行・文字列補間など） | `// TARGET はここで使う` |
 
-**Groovy（`analyze_groovy.py`）— 7種**:
+**Groovy（`grep_helper.languages.groovy`）— 7種**:
 
 | 使用タイプ | 内容 | 例 |
 |----------|------|----|
@@ -320,7 +320,7 @@ public String fetchOrderType() { return type; }
 **定義**: ファイルの文字コードを自動検出するPythonライブラリ（`requirements.txt` の本番依存）
 
 **本プロジェクトでの用途**:
-`analyze_common.detect_encoding()` から利用。ファイル先頭4096バイトを読み、confidence ≥ 0.6 の場合に検出された文字コードを採用、それ以外は `cp932` にフォールバックする。全言語アナライザー（Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）から共通利用される。
+`grep_helper.encoding.detect_encoding()` から利用。ファイル先頭4096バイトを読み、confidence ≥ 0.6 の場合に検出された文字コードを採用、それ以外は `cp932` にフォールバックする。全言語ハンドラ（Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）から共通利用される。
 `wheelhouse/` に wheel を同梱しているのでオフライン install 可。コード側は防御的に `try/except ImportError` を備えており、万一インポート不可の場合も cp932 フォールバックで動作する。
 
 **関連ドキュメント**: [アーキテクチャ設計書](./architecture.md)
@@ -332,9 +332,9 @@ public String fetchOrderType() { return type; }
 **定義**: PythonからJava 7以上のソースコードをAST（抽象構文木）解析するライブラリ
 
 **本プロジェクトでの用途**:
-`analyze.py`（Javaアナライザー）のみで使用。Javaコード行の使用タイプ分類にAST解析を使用。
+`grep_helper.languages.java*`（Javaハンドラ）のみで使用。Javaコード行の使用タイプ分類にAST解析を使用。
 パースエラー時は正規表現フォールバックで処理を継続する。
-他言語アナライザー（C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）は `javalang` を使用せず、正規表現のみで分類する。
+他言語ハンドラ（C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）は `javalang` を使用せず、正規表現のみで分類する。
 
 **バージョン**: `>=0.13.0,<1.0.0`
 
@@ -344,14 +344,14 @@ public String fetchOrderType() { return type; }
 
 ### ASTキャッシュ
 
-**定義**: 同一Javaファイルの繰り返しAST解析を防ぐオンメモリのキャッシュ。`analyze.py` 専用。
+**定義**: 同一Javaファイルの繰り返しAST解析を防ぐオンメモリのキャッシュ。`grep_helper.languages.java_ast` 専用。
 
 **説明**:
-`_ast_cache: dict[str, object | None]` としてモジュールレベルで定義。
+`_ast_cache: dict[str, object | None]` として `grep_helper.languages.java_ast` モジュールレベルで定義。
 - `object`: パース成功時のjavalang ASTオブジェクト
 - `None`: パースエラーが発生したファイル（正規表現フォールバックを使用）
 
-他言語アナライザー（C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）はAST解析を行わないため、代わりに `analyze_common.cached_file_lines()` が提供するサイズベース LRU のファイル行キャッシュ（`_file_lines_cache: OrderedDict[str, list[str]]`、デフォルト上限 256MB）を使用する。
+他言語ハンドラ（C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy）はAST解析を行わないため、代わりに `grep_helper.file_cache.cached_file_lines()` が提供するサイズベース LRU のファイル行キャッシュ（`_file_lines_cache: OrderedDict[str, list[str]]`、デフォルト上限 256MB）を使用する。
 
 **使用例**:
 ```python
@@ -377,25 +377,28 @@ AST解析より精度は低いが、処理を中断せずに継続できる。
 フォールバックが発生したファイルは `ProcessStats.fallback_files` に記録する。
 
 **`USAGE_PATTERNS`**:
-`analyze.py` モジュールレベルで定義される定数。`list[tuple[re.Pattern, str]]` 型で、
+`grep_helper.languages.java_classify` モジュールレベルで定義される定数。`list[tuple[re.Pattern, str]]` 型で、
 優先度順の `(パターン, 使用タイプ名)` タプルのリスト。起動時に1度だけコンパイルされる。
 
 **関連用語**: [使用タイプ](#使用タイプ), [ASTキャッシュ](#astキャッシュ)
 
 ---
 
-### analyze_common.py
+### grep_helper パッケージ（共通インフラ）
 
-**定義**: 全言語アナライザーが共有する共通インフラモジュール
+**定義**: 全言語ハンドラが共有する共通インフラパッケージ（`grep_helper/` ディレクトリ）
 
-**提供するもの**:
-- `GrepRecord`（NamedTuple）、`ProcessStats`（dataclass）、`RefType`（Enum）: データモデル
-- `parse_grep_line()`: grep行パーサー（全言語共通）
-- `write_tsv()`: UTF-8 BOM付きTSV出力（100万件超は外部マージソート）
-- `detect_encoding()`: ファイルの文字コード検出（`chardet` 利用。万一未インストールの場合は cp932 フォールバック）
-- `iter_grep_lines()`: grep結果ファイルを1行ずつ返すジェネレータ
-- `cached_file_lines()`: ソースファイル行リストの LRU キャッシュ（読み込みエラーは `stats.encoding_errors` に記録）
-- `iter_source_files()` / `grep_filter_files()` / `resolve_file_cached()`: ファイル列挙・mmap 事前フィルタ・パス解決の共通ユーティリティ（呼び出し結果はキャッシュ）
+**主要モジュールと提供するもの**:
+- `grep_helper.model`: `GrepRecord`（NamedTuple）、`ProcessStats`（dataclass）、`RefType`（Enum）、`ClassifyContext`（dataclass）— データモデル
+- `grep_helper.grep_input`: `parse_grep_line()` — grep行パーサー（全言語共通）、`iter_grep_lines()` — ストリーミングジェネレータ
+- `grep_helper.tsv_output`: `write_tsv()` — UTF-8 BOM付きTSV出力（100万件超は外部マージソート）
+- `grep_helper.encoding`: `detect_encoding()` — ファイルの文字コード検出（`chardet` 利用。万一未インストールの場合は cp932 フォールバック）
+- `grep_helper.file_cache`: `cached_file_lines()` — ソースファイル行リストの LRU キャッシュ（読み込みエラーは `stats.encoding_errors` に記録）
+- `grep_helper.source_files`: `iter_source_files()` / `grep_filter_files()` / `resolve_file_cached()` — ファイル列挙・mmap 事前フィルタ・パス解決の共通ユーティリティ（呼び出し結果はキャッシュ）
+- `grep_helper.scanner`: `build_batch_scanner()` — Aho-Corasick / regex 自動選択の多パターンスキャナ
+- `grep_helper.cli`: `build_parser()` / `run(handler)` — 単言語 CLI ループ
+- `grep_helper.pipeline`: `process_grep_file()` — 第1段階（直接参照分類）
+- `grep_helper.dispatcher`: `main()` — 多言語一括 CLI ループ
 
 **関連用語**: [GrepRecord](#greprecord), [TSV](#tsvtab-separated-values)
 
@@ -406,8 +409,8 @@ AST解析より精度は低いが、処理を中断せずに継続できる。
 **定義**: Oracle Precompiler（EXEC SQL文をC言語コードに埋め込むプリプロセス形式）
 
 **本プロジェクトでの用途**:
-`analyze_proc.py` が対応。拡張子 `.pc`（Pro*Cソース）と `.c`/`.h`（純Cヘッダ）が混在するディレクトリを解析できる。
-ファイル拡張子によって `classify_usage_proc()` と `classify_usage_c()` を自動切り替えする。
+`grep_helper.languages.proc` が対応。拡張子 `.pc`（Pro*Cソース）と `.c`/`.h`（純Cヘッダ）が混在するディレクトリを解析できる。
+`classify_usage(code, *, ctx)` で `ctx.filepath` の拡張子によって Pro*C 分類と `grep_helper.languages.c.classify_usage` を自動切り替えする。
 
 **関連用語**: [使用タイプ](#使用タイプ)
 
@@ -435,7 +438,7 @@ AST解析より精度は低いが、処理を中断せずに継続できる。
 
 **エンコード**: `utf-8-sig`（UTF-8 BOM付き）
 
-**ソート順**: 文言 → ファイルパス → 行番号（数値ソート）。`analyze_common.write_tsv()` のキーは `(keyword, filepath, int(lineno))` で、参照種別による追加グループ化は行わない。
+**ソート順**: 文言 → ファイルパス → 行番号（数値ソート）。`grep_helper.tsv_output.write_tsv()` のキーは `(keyword, filepath, int(lineno))` で、参照種別による追加グループ化は行わない。
 
 ---
 
@@ -552,7 +555,7 @@ output/[文言].tsv
 
 **必須**: はい（未指定の場合は exit code 1）
 
-**使用例**: `python analyze_proc.py --source-dir /path/to/proc/src`
+**使用例**: `python analyze_proc.py --source-dir /path/to/proc/src`  （`analyze_proc.py` は `grep_helper.languages.proc` への shim）
 
 **説明**: 間接参照の追跡時に、このディレクトリ以下の対象拡張子ファイルを再帰的に検索する。対象拡張子は言語ごとに異なる（Java: `.java`、C: `.c`/`.h`、Pro*C: `.c`/`.h`/`.pc`、C#・VB.NET: `.cs`/`.vb`、Groovy: `.groovy`/`.gvy`、PL/SQL: `.pls`/`.pck`/`.prc`/`.pkb`/`.pks`/`.fnc`/`.trg` 等）。
 
@@ -636,5 +639,5 @@ output/[文言].tsv
 
 **対処方法**:
 - `errors='replace'` で置換文字に変換して処理継続
-- `stats.encoding_errors` に記録（`analyze_common.cached_file_lines()` などで補足）
+- `stats.encoding_errors` に記録（`grep_helper.file_cache.cached_file_lines()` などで補足）
 - 処理完了後のサマリに件数を表示

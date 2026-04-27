@@ -1,5 +1,93 @@
 # 開発ガイドライン (Development Guidelines)
 
+## 新言語の追加手順
+
+新しい言語サポートを追加する際の手順を示す。
+
+### ステップ 1: ハンドラモジュールの作成
+
+`grep_helper/languages/<lang>.py` を新規作成する。複数ファイルに分割する場合は `grep_helper/languages/<lang>_<役割>.py` のプレフィックスを付ける（例: `java_ast.py`, `proc_track.py`）。
+
+### ステップ 2: 必須シンボルの実装
+
+```python
+# grep_helper/languages/<lang>.py
+
+from grep_helper.model import ClassifyContext
+
+EXTENSIONS: tuple[str, ...] = ('.<拡張子>',)
+
+def classify_usage(code: str, *, ctx: ClassifyContext | None = None) -> str:
+    """コード行を受け取り使用タイプ文字列を返す。"""
+    ...  # 正規表現 or AST 解析で分類
+    return "その他"
+```
+
+### ステップ 3: オプション — 間接追跡の実装
+
+間接参照追跡が必要な場合は `batch_track_indirect` を追加する。
+
+```python
+from grep_helper.model import GrepRecord
+from pathlib import Path
+
+def batch_track_indirect(
+    direct_records: list[GrepRecord],
+    src_dir: Path,
+    encoding: str,
+    *,
+    workers: int = 1,
+) -> list[GrepRecord]:
+    """直接参照レコードを受け取り、間接参照レコードを返す。"""
+    ...
+    return []
+```
+
+### ステップ 4: オプション — シバン判定の追加
+
+拡張子なしファイル（シバン行で判定するインタープリタ）をサポートする場合は `SHEBANGS` を追加する。
+
+```python
+SHEBANGS: tuple[str, ...] = ('<インタープリタ名>',)
+```
+
+### ステップ 5: `__init__.py` への登録
+
+`grep_helper/languages/__init__.py` の登録ループにハンドラモジュールを追加する（`EXT_TO_HANDLER` / `SHEBANG_TO_HANDLER` の自動構築を確認する）。
+
+### ステップ 6: CLI shim の作成
+
+ルート直下に `analyze_<lang>.py` を作成する。
+
+```python
+"""``grep_helper.languages.<lang>`` への CLI shim。"""
+from grep_helper.cli import run
+from grep_helper.languages import <lang> as _handler
+
+if __name__ == "__main__":
+    raise SystemExit(run(_handler, description="<LANG> grep結果 自動分類・使用箇所洗い出しツール"))
+```
+
+### ステップ 7: テストファイルの追加
+
+`tests/test_<lang>_analyzer.py` を作成し、インポートパスは `grep_helper.languages.<lang>` を使用する。
+
+```python
+import unittest
+from grep_helper.languages import <lang>
+
+class TestClassifyUsage(unittest.TestCase):
+    def test_定数定義を正しく分類する(self):
+        """定数定義を正しく分類すること。"""
+        ...
+```
+
+### ステップ 8: ドキュメントの更新
+
+`docs/repository-structure.md` のファイル一覧と責務テーブルを更新する。
+
+---
+
 ## コーディング規約
 
 ### 命名規則
@@ -23,7 +111,7 @@ def classify(c): ...
 **原則**:
 - 変数: `snake_case`、名詞または名詞句
 - 関数: `snake_case`、動詞で始める（`parse_`, `classify_`, `track_`, `write_`）
-- 定数: `UPPER_SNAKE_CASE`（例: `USAGE_PATTERNS`, `DEFAULT_ENCODING`）
+- 定数: `UPPER_SNAKE_CASE`（例: `EXTENSIONS`, `EXT_TO_HANDLER`）
 - Boolean: `is_`, `has_`, `should_` で始める（例: `is_valid`, `has_getter`）
 
 #### クラス・列挙型
@@ -48,33 +136,34 @@ class UsageType(Enum):
 #### ファイル名
 
 ```
-# 共通インフラ
-analyze_common.py
-aho_corasick.py    # Aho-Corasick 多パターンスキャナ
+# パッケージ（共通インフラ）
+grep_helper/model.py
+grep_helper/cli.py
+grep_helper/pipeline.py
+grep_helper/dispatcher.py
+grep_helper/encoding.py
+grep_helper/grep_input.py
+grep_helper/tsv_output.py
+grep_helper/source_files.py
+grep_helper/file_cache.py
+grep_helper/scanner.py
+grep_helper/_aho_corasick.py   # Aho-Corasick 多パターンスキャナ（フォールバック用）
 
-# 統合エントリ
-analyze_all.py     # 拡張子から言語を判定して各アナライザーに委譲
+# 言語ハンドラ
+grep_helper/languages/<lang>.py        # 1 ファイル完結の言語
+grep_helper/languages/<lang>_ast.py    # 複数ファイルに分割する場合のサブモジュール
 
-# 言語別アナライザー: analyze_[言語].py
-analyze.py       # Java（言語名を省略）
-analyze_c.py     # C
-analyze_dotnet.py  # C#/VB.NET
-analyze_groovy.py  # Groovy
-analyze_kotlin.py  # Kotlin
-analyze_perl.py    # Perl
-analyze_plsql.py   # PL/SQL
-analyze_proc.py  # Pro*C
-analyze_python.py  # Python
-analyze_sh.py    # Shell
-analyze_sql.py   # SQL
-analyze_ts.py    # TypeScript/JavaScript
+# CLI shim（互換性維持のためルート直下）
+analyze.py          # Java（grep_helper.languages.java への shim）
+analyze_all.py      # 全言語（grep_helper.dispatcher.main への shim）
+analyze_<lang>.py   # 各言語
 
 # テスト
 tests/test_analyze.py       # Java
 tests/test_analyze_proc.py  # Pro*C
 tests/test_common.py        # 共通インフラ
 tests/test_aho_corasick.py  # Aho-Corasick スキャナ
-tests/test_all_analyzer.py  # analyze_all.py（言語判定）
+tests/test_all_analyzer.py  # dispatcher（言語判定）
 tests/test_c_analyzer.py
 tests/test_dotnet_analyzer.py
 tests/test_groovy_analyzer.py
@@ -182,23 +271,23 @@ except Exception:
 
 ### パフォーマンス
 
-**キャッシュは `analyze_common.py` に集約する（最重要）**:
+**キャッシュは `grep_helper/` パッケージに集約する（最重要）**:
 
-すべてのファイル I/O キャッシュ・ファイル列挙キャッシュ・パス解決キャッシュは `analyze_common.py` に実装済みである。新規アナライザーを追加する場合も、モジュールスコープで独自の `_file_cache` / `_source_files` 等のキャッシュ辞書を作ってはならない。代わりに以下の共通 API を使うこと。
+すべてのファイル I/O キャッシュ・ファイル列挙キャッシュ・パス解決キャッシュは `grep_helper/` パッケージ直下の各モジュールに実装済みである。新規ハンドラを追加する場合も、モジュールスコープで独自の `_file_cache` / `_source_files` 等のキャッシュ辞書を作ってはならない。代わりに以下の共通 API を使うこと。
 
-| 共通 API | 用途 |
-|---------|------|
-| `iter_grep_lines(path, encoding)` | grep ファイルのストリーミング読み込み。全行をリストに展開しない |
-| `iter_source_files(src_dir, extensions)` | ソースファイル列挙（rglob 結果をキャッシュ） |
-| `cached_file_lines(path, encoding, stats)` | ソースファイル行のサイズベース LRU キャッシュ（256MB） |
-| `resolve_file_cached(filepath, src_dir)` | ファイルパス解決のキャッシュ |
-| `build_batch_scanner(patterns)` | 多パターンスキャナ（Aho-Corasick / regex 自動選択） |
+| 共通 API | モジュール | 用途 |
+|---------|---------|------|
+| `iter_grep_lines(path, encoding)` | `grep_helper.grep_input` | grep ファイルのストリーミング読み込み。全行をリストに展開しない |
+| `iter_source_files(src_dir, extensions)` | `grep_helper.source_files` | ソースファイル列挙（rglob 結果をキャッシュ） |
+| `cached_file_lines(path, encoding, stats)` | `grep_helper.file_cache` | ソースファイル行のサイズベース LRU キャッシュ（256MB） |
+| `resolve_file_cached(filepath, src_dir)` | `grep_helper.source_files` | ファイルパス解決のキャッシュ |
+| `build_batch_scanner(patterns)` | `grep_helper.scanner` | 多パターンスキャナ（Aho-Corasick / regex 自動選択） |
 
 ```python
 # 良い例: 共通 API を使う
-from analyze_common import (
-    iter_source_files, cached_file_lines, resolve_file_cached, build_batch_scanner
-)
+from grep_helper.source_files import iter_source_files
+from grep_helper.file_cache import cached_file_lines
+from grep_helper.scanner import build_batch_scanner
 
 def _track_constants(names: list[str], src_dir: Path, stats) -> list:
     scanner = build_batch_scanner(names)          # ≥100 パターンで自動 AC 選択
@@ -209,7 +298,7 @@ def _track_constants(names: list[str], src_dir: Path, stats) -> list:
                 ...
 
 # 悪い例: 独自キャッシュを定義する（絶対にやらない）
-_my_file_cache: dict[str, list[str]] = {}  # NG: analyze_common のキャッシュと二重管理になる
+_my_file_cache: dict[str, list[str]] = {}  # NG: grep_helper のキャッシュと二重管理になる
 
 def _read_lines(path: Path) -> list[str]:
     if str(path) not in _my_file_cache:
@@ -217,25 +306,18 @@ def _read_lines(path: Path) -> list[str]:
     return _my_file_cache[str(path)]
 ```
 
-**ASTキャッシュ（Java のみ）**:
+**ASTキャッシュ（Java のみ、`grep_helper.languages.java_ast`）**:
 ```python
-# 良い例: キャッシュを使って再解析を省略
-_ast_cache: dict[str, object | None] = {}
+# 良い例: grep_helper.languages.java_ast のキャッシュ API を使う
+from grep_helper.languages.java_ast import get_ast
 
-def get_ast(filepath: str, source_dir: Path) -> object | None:
-    if filepath not in _ast_cache:
-        full_path = source_dir / filepath
-        try:
-            source = full_path.read_text(encoding="shift_jis", errors="replace")
-            _ast_cache[filepath] = javalang.parse.parse(source)
-        except Exception:
-            _ast_cache[filepath] = None
-    return _ast_cache[filepath]
+def classify_usage(code: str, *, ctx=None) -> str:
+    tree = get_ast(ctx.filepath, ctx.src_dir)  # _ast_cache を共有
+    if tree:
+        ...
 
-# 悪い例: キャッシュなしで毎回解析（大規模ファイルで極端に遅くなる）
-def get_ast(filepath: str, source_dir: Path) -> object | None:
-    source = (source_dir / filepath).read_text(encoding="shift_jis", errors="replace")
-    return javalang.parse.parse(source)
+# 悪い例: 独自の _ast_cache を定義する（絶対にやらない）
+_ast_cache: dict[str, object | None] = {}  # NG: java_ast のキャッシュと分離してしまう
 ```
 
 **正規表現のプリコンパイル**:
@@ -319,10 +401,10 @@ Closes #12
 
 **作成前のチェック（作成者）**:
 - [ ] 全てのテストがパス（`python -m pytest tests/ -v`）
-- [ ] 構文エラーがない（`python -m py_compile analyze*.py`）
-- [ ] コードスタイル準拠（`python -m flake8 analyze*.py tests/`）
+- [ ] 構文エラーがない（`python -m py_compile analyze*.py` および新規モジュール）
+- [ ] コードスタイル準拠（`python -m flake8 analyze*.py grep_helper/ tests/`）
 - [ ] 型ヒントが適切に付与されている
-- [ ] `USAGE_PATTERNS` 等の定数がモジュールレベルで定義されている
+- [ ] `EXTENSIONS` / `USAGE_PATTERNS` 等の定数がモジュールレベルで定義されている
 
 **マージ条件（レビュアー）**:
 - レビュアー1名以上の承認
@@ -504,6 +586,14 @@ coverage report
 coverage html  # htmlcov/index.html で視覚的に確認
 ```
 
+### テスト並列実行の禁止
+
+テストはモジュールキャッシュのクリア規律（`setUp` で `_*_clear()` 等のクリア関数を呼ぶ）に依存しているため、`pytest-xdist` 等の並列実行は導入しないこと。並列実行するとキャッシュの状態が他テストに干渉し、フラッキーなテスト失敗の原因になる。常に `python -m pytest tests/ -v`（シングルプロセス）で実行すること。
+
+### TSV 同一性検証
+
+リファクタや内部実装変更時に TSV 出力が変わっていないことを確認するには、`tests/fixtures/` を入力に `python analyze_all.py --source-dir tests/fixtures/<lang> --input-dir <grep-dir>` を before/after で実行し `diff -r output_before output_after` で比較する。これにより、`grep_helper/` パッケージへの変更が既存の出力に影響を与えないことを TSV レベルで保証できる。
+
 ## コードレビュー基準
 
 ### レビューポイント
@@ -519,10 +609,10 @@ coverage html  # htmlcov/index.html で視覚的に確認
 - [ ] 複雑なロジックにコメントがあるか
 
 **パフォーマンス**:
-- [ ] ファイル I/O に `cached_file_lines` / `iter_source_files` / `resolve_file_cached` を使用しているか（独自 `_file_cache` を定義していないか）
-- [ ] grep ファイルの読み込みに `iter_grep_lines` を使用しているか（全行をリストに展開していないか）
-- [ ] 多パターンスキャンに `build_batch_scanner` を使用しているか
-- [ ] ASTキャッシュ（Java）を使用しているか
+- [ ] ファイル I/O に `grep_helper.file_cache.cached_file_lines` / `grep_helper.source_files.iter_source_files` / `grep_helper.source_files.resolve_file_cached` を使用しているか（独自 `_file_cache` を定義していないか）
+- [ ] grep ファイルの読み込みに `grep_helper.grep_input.iter_grep_lines` を使用しているか（全行をリストに展開していないか）
+- [ ] 多パターンスキャンに `grep_helper.scanner.build_batch_scanner` を使用しているか
+- [ ] ASTキャッシュ（Java）は `grep_helper.languages.java_ast` の API を使用しているか
 - [ ] 正規表現がモジュールレベルでプリコンパイルされているか
 - [ ] 不要な計算・ループがないか
 
@@ -559,7 +649,7 @@ exclude =
     dist,
     .steering
 ```
-プロジェクトルートの `.flake8` で設定済み。`python -m flake8 analyze*.py tests/` で実行する。
+プロジェクトルートの `.flake8` で設定済み。`python -m flake8 analyze*.py grep_helper/ tests/` で実行する。
 
 ### セットアップ手順
 
@@ -606,9 +696,9 @@ python analyze.py --source-dir /path/to/sample/java
 - [ ] 命名が明確で一貫している（`snake_case`）
 - [ ] 型ヒントが適切に定義されている
 - [ ] 関数が単一の責務を持っている（20〜50行を目安）
-- [ ] `USAGE_PATTERNS` 等の定数がモジュールレベルで定義されている
-- [ ] ASTキャッシュが適切に使われている（Java のみ）
-- [ ] ファイル I/O キャッシュは `analyze_common.py` の共通 API を使っている（独自 `_file_cache` を定義していない）
+- [ ] `EXTENSIONS` / `USAGE_PATTERNS` 等の定数がモジュールレベルで定義されている
+- [ ] ASTキャッシュは `grep_helper.languages.java_ast` の API 経由で使っている（Java のみ）
+- [ ] ファイル I/O キャッシュは `grep_helper/` パッケージの共通 API を使っている（独自 `_file_cache` を定義していない）
 
 ### 網羅性（最重要）
 - [ ] 分類できないものは「その他」で出力している（スキップしていない）
