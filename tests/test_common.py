@@ -171,15 +171,12 @@ class TestDetectEncodingStreaming(unittest.TestCase):
 
 
 class TestIterGrepLines(unittest.TestCase):
-    def test_全行をロードせずにジェネレータで返す(self):
+    def test_grep行を順序通りに取り出せる(self):
         from grep_helper.grep_input import iter_grep_lines
-        import types
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "x.grep"
             p.write_text("a:1:foo\nb:2:bar\n", encoding="utf-8")
-            it = iter_grep_lines(p, "utf-8")
-            self.assertIsInstance(it, types.GeneratorType)
-            self.assertEqual(list(it), ["a:1:foo", "b:2:bar"])
+            self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["a:1:foo", "b:2:bar"])
 
     def test_デコードエラーを置換して継続する(self):
         from grep_helper.grep_input import iter_grep_lines
@@ -187,6 +184,22 @@ class TestIterGrepLines(unittest.TestCase):
             p = Path(d) / "x.grep"
             p.write_bytes(b"good\n\xff\xfe\xfd\nmore\n")
             self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["good", "���", "more"])
+
+    def test_巨大ファイルでも先頭数行だけ消費して短時間で返る(self):
+        import itertools, time
+        from grep_helper.grep_input import iter_grep_lines
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "huge.grep"
+            # 数十 MB 相当を生成 (300_000 行 × ~30 byte/line ≒ 9MB)
+            with open(p, "w", encoding="utf-8") as f:
+                for i in range(300_000):
+                    f.write(f"src/file.py:{i}:line content here\n")
+            t0 = time.monotonic()
+            head = list(itertools.islice(iter_grep_lines(p, "utf-8"), 5))
+            elapsed = time.monotonic() - t0
+            self.assertEqual(len(head), 5)
+            self.assertEqual(head[0], "src/file.py:0:line content here")
+            self.assertLess(elapsed, 2.0, f"ストリーミングが効いていない疑い: {elapsed:.3f}s")
 
 
 class TestIterSourceFiles(unittest.TestCase):
