@@ -156,7 +156,12 @@ class TestBuildDefineMapWhitebox(unittest.TestCase):
             self.assertIsNot(dm1, dm2)
 
 
-class TestCollectDefineAliases(unittest.TestCase):
+class TestCollectDefineAliasesWhitebox(unittest.TestCase):
+    """TestCollectDefineAliasesWhitebox: _collect_define_aliases の BFS 内部挙動を観察するテスト。
+    多段チェーン展開と循環参照打ち切り（`max_depth=10` + `seen` セット）の
+    内部実装契約を検証。E2E fixture には循環ケースがない。
+    実装変更時は本クラスも同期更新が必要。
+    """
     def test_2段階のdefineチェーンを辿れる(self):
         """B->A, C->B のような連鎖を辿って A のエイリアス集合に B と C を含むことを確認する。"""
         define_map = {"B": "A", "C": "B"}
