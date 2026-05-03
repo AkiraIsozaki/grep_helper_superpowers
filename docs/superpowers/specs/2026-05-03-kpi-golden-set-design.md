@@ -217,7 +217,7 @@ python scripts/measure_kpi.py --lang <name> [--samples-dir tests/golden] [--outp
 
 #### `--lang all` の失敗時規約
 
-いずれかの言語で計測が失敗しても、**残りの言語は続行する**。これは「F-1 で Java だけ整備して `--lang all` を走らせる」「F-2 で他言語を順次追加していく」運用を想定しているため。
+いずれかの言語で計測が失敗しても、**残りの言語は続行する**。これは「Step 3 終了時点で Java だけ整備された状態で `--lang all` を走らせる」「Step 4 で他言語を順次追加していく」運用、および将来「ある言語のサンプルを更新中で一時的に未整備」のような運用を想定しているため。
 
 - ある言語で **入力エラー（exit code 1 相当）**: 期待TSV未整備・ディレクトリ欠損・ペアリング不一致など。サマリレポートに「未整備」と記録し、次の言語へ進む
 - ある言語で **実行時例外（exit code 2 相当）**: 例外内容をサマリレポートに記録し、次の言語へ進む
@@ -498,33 +498,52 @@ C_SPEC = {
 
 ---
 
-## 実装計画分割の推奨
+## 実装の段階化（単一 plan 内での順序）
 
-本 spec の成果物は単一の writing-plans でカバーするには大きい（スクリプト本体 + Java 深堀り 500+ 件 + 他11言語 ~86 件 + テスト + pipeline 拡張 + pytest.ini）。writing-plans に渡す際は、以下の3フェーズに分けることを推奨する。各フェーズは独立した実装計画 / PR として閉じる：
+本 spec の成果物は中規模（スクリプト本体 + Java 深堀り 500+ 件 + 他11言語 ~86 件 + テスト + pipeline 拡張 + pytest.ini）だが、要素が多いため writing-plans では **1つの implementation plan** でカバーし、内部を以下の6ステップで段階化する。**ステップ3の時点で Java の正常動作を検証してから他言語に広げる**ことで、増分安全性を確保する。
 
-### F-1: スクリプト本体 + Java 深堀り
+### Step 1: 基盤整備（インフラ）
 
-- `grep_helper/pipeline.py` に `run_full_pipeline()` を追加
-- `pytest.ini` を新規作成（`norecursedirs`）
-- `scripts/measure_kpi.py` 本体（`compare` / `format_*` / `assert_coverage_distribution` / `run` 等）
-- `tests/golden/java/`（500件超）
-- `tests/test_measure_kpi.py`（compare/format/assert/load_*/E2E Java）
-- `.gitignore` に `output/kpi/` 追加
+- `grep_helper/pipeline.py` に `run_full_pipeline(source_dir, input_dir, output_dir, handler, workers=1)` を追加
+- `pytest.ini` を新規作成（`norecursedirs = tests/golden`）
+- `.gitignore` に `output/kpi/` を追加
 
-このフェーズだけで KPI の「Java 網羅率 100% / 分類精度 90% 以上」を達成できる。`--lang java` のみが動く状態。
+### Step 2: 計測スクリプト本体 + 単体テスト
 
-### F-2: 他11言語のスモークセット整備
+- `lang_spec` のスキーマ確定（`RefType` enum / `tool-overview.md §4-2` の実値を確認したうえで dict 構造を確定）
+- `scripts/measure_kpi.py` 本体（`compare` / `format_summary` / `format_detail_report` / `load_expected_tsv` / `load_actual_tsv` / `assert_coverage_distribution` / `run`）
+- `tests/test_measure_kpi.py` のうち、`compare` / `load_*` / `format_*` / `assert_coverage_distribution` の単体テスト（ゴールデンセット未作成でも検証可能なもの）
 
-- `tests/golden/{c,proc,sql,sh,kotlin,plsql,ts,python,perl,dotnet,groovy}/`（各 6〜11 件）
-- `lang_spec` 定数を全12言語ぶんに拡張
-- `--lang all` ロジックの実装（失敗時規約含む）
+### Step 3: Java ゴールデンセット + Java E2E ★検証ゲート
+
+- `tests/golden/java/` を作成（`src/` + `inputs/` + `expected/` + `README.md`）
+- Java E2E テスト（最小サブセットで `coverage_rate == 1.0` を assert）
+- `python scripts/measure_kpi.py --lang java` で網羅率 100% / 分類精度 90% 以上を達成することを手動確認
+
+**この時点で Java の KPI 計測が完全に動く。** スクリプトの設計に問題があればここで判明するので、他言語サンプルを書き始める前に修正できる。
+
+### Step 4: 他11言語のスモークサンプル作成
+
+- `tests/golden/{c,proc,sql,sh,kotlin,plsql,ts,python,perl,dotnet,groovy}/` を作成（各 6〜11 件）
+- 各言語の `README.md`
+- 各言語ごとに `python scripts/measure_kpi.py --lang <lang>` で網羅率 100% を確認
+
+### Step 5: `--lang all` 対応 + 11言語 E2E
+
+- `--lang all` ロジック実装（失敗時規約含む: 続行・最終 exit code は max・`_summary` は常に出力）
 - E2E テストを11言語ぶん追加
-- `README.md` に KPI 計測の使い方を追記
+- `python scripts/measure_kpi.py --lang all` で全言語サマリレポートが出ることを確認
 
-### F-3 (任意): cli.py のリファクタ
+### Step 6: ドキュメント整備 + 最終確認
+
+- `README.md` に KPI 計測の使い方を1セクション追記
+- `pytest` 全件 pass 確認
+- spec の §成功条件 全項目を点検
+
+### 任意: cli.py のリファクタ
 
 - `grep_helper/cli.py` の `run()` を `run_full_pipeline()` 経由にリファクタして重複削減
-- F-1/F-2 と独立して着手可能
+- 本 plan の Step 1 と統合してもよいし、別タスクに切り出してもよい（writing-plans 段階で判断）
 
 ---
 
