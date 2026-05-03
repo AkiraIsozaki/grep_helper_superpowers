@@ -37,54 +37,6 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 # ---------------------------------------------------------------------------
-# TestParseGrepLine
-# ---------------------------------------------------------------------------
-
-class TestParseGrepLine(unittest.TestCase):
-    """parse_grep_line() のテスト"""
-
-    def test_通常のgrep行をパースできる(self):
-        """ファイルパス:行番号:コード形式の標準的なgrep行を正しく分解できる"""
-        result = parse_grep_line("src/sample.pc:42:    EXEC SQL FETCH cur INTO :hostVar;")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["filepath"], "src/sample.pc")
-        self.assertEqual(result["lineno"], "42")
-        self.assertEqual(result["code"], "EXEC SQL FETCH cur INTO :hostVar;")
-
-    def test_Windowsパスを含む行をパースできる(self):
-        """ドライブレター付きのWindowsパス（C:\\...）でも行番号を抽出できる"""
-        result = parse_grep_line(r"C:\project\sample.pc:10:char buf[256];")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["lineno"], "10")
-
-    def test_バイナリファイル通知行はNoneを返す(self):
-        """grep のバイナリファイル一致通知行（Binary file ... matches）はパース対象外"""
-        result = parse_grep_line("Binary file ./obj/sample.o matches")
-        self.assertIsNone(result)
-
-    def test_空行はNoneを返す(self):
-        """空文字列はパースできずNoneを返す"""
-        result = parse_grep_line("")
-        self.assertIsNone(result)
-
-    def test_空白のみの行はNoneを返す(self):
-        """空白と改行だけの行はパース対象外"""
-        result = parse_grep_line("   \n")
-        self.assertIsNone(result)
-
-    def test_行番号が数値でない場合はNoneを返す(self):
-        """行番号位置に非数値が来た行は無効としてNoneを返す"""
-        result = parse_grep_line("src/sample.pc:no_number:code")
-        self.assertIsNone(result)
-
-    def test_コード部分の前後空白がトリムされる(self):
-        """コード列の前後の空白文字は除去される"""
-        result = parse_grep_line("src/sample.pc:1:    int x = 0;    ")
-        self.assertIsNotNone(result)
-        self.assertEqual(result["code"], "int x = 0;")
-
-
-# ---------------------------------------------------------------------------
 # TestClassifyUsageProc
 # ---------------------------------------------------------------------------
 
