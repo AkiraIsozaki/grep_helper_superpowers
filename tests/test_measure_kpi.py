@@ -209,5 +209,40 @@ class TestAssertCoverageDistribution(unittest.TestCase):
         self.assertTrue(any("直接" in w for w in warnings))
 
 
+class TestFormatSummary(unittest.TestCase):
+    """format_summary: 完全一致のスナップショットは取らず、主要数値とラベルの存在を検証する
+    （feedback_test_style §5 変更耐性と整合）。
+    """
+
+    def _result(self, coverage: float = 1.0, accuracy: float = 1.0,
+                missing: int = 0, fp: int = 0) -> "measure_kpi.ComparisonResult":
+        return measure_kpi.ComparisonResult(
+            expected_total=10, matched_rows=int(10 * coverage),
+            classified_correctly=int(10 * coverage * accuracy),
+            coverage_rate=coverage, classification_accuracy=accuracy,
+            missing_rows=[_rec("f", str(i)) for i in range(missing)],
+            false_positives=[_rec("g", str(i)) for i in range(fp)],
+        )
+
+    def test_網羅率と分類精度の数値が含まれる(self):
+        out = measure_kpi.format_summary(self._result(coverage=0.9, accuracy=0.85))
+        self.assertIn("90.0%", out)
+        self.assertIn("85.0%", out)
+
+    def test_網羅率100未満ならWARNラベル(self):
+        out = measure_kpi.format_summary(self._result(coverage=0.9))
+        self.assertIn("WARN", out)
+
+    def test_網羅率100ならOKラベル(self):
+        out = measure_kpi.format_summary(self._result(coverage=1.0, accuracy=1.0))
+        self.assertNotIn("WARN", out)
+        self.assertIn("OK", out)
+
+    def test_FP件数が表示される(self):
+        out = measure_kpi.format_summary(self._result(fp=5))
+        self.assertIn("5", out)
+        self.assertIn("false positive", out.lower() if "false" in out.lower() else out)
+
+
 if __name__ == "__main__":
     unittest.main()

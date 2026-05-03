@@ -152,3 +152,29 @@ def assert_coverage_distribution(records: list[Record], lang_spec: dict) -> list
             warnings.append(f"参照種別「{kind}」のサンプルが1件もない")
 
     return warnings
+
+
+# しきい値定数（spec §出力フォーマット 参照）
+COVERAGE_THRESHOLD = 1.0
+ACCURACY_THRESHOLD = 0.9
+
+
+def format_summary(result: ComparisonResult) -> str:
+    """ComparisonResult から stdout 用の短いサマリ文字列を生成する。
+    完全一致のスナップショットは取らず、主要数値の存在で検証される設計。
+    """
+    cov_pct = result.coverage_rate * 100
+    acc_pct = result.classification_accuracy * 100
+    cov_label = "OK" if result.coverage_rate >= COVERAGE_THRESHOLD else "WARN"
+    acc_label = "OK" if result.classification_accuracy >= ACCURACY_THRESHOLD else "WARN"
+
+    lines = [
+        f"網羅率: {result.matched_rows}/{result.expected_total} ({cov_pct:.1f}%) [{cov_label}]",
+        f"分類精度: {result.classified_correctly}/{result.matched_rows} ({acc_pct:.1f}%) [{acc_label}]",
+        f"false positive: {len(result.false_positives)}件 (KPI算入なし)",
+    ]
+    if result.missing_rows:
+        lines.append(f"取りこぼし: {len(result.missing_rows)}件")
+    if result.misclassified:
+        lines.append(f"誤分類: {len(result.misclassified)}件")
+    return "\n".join(lines)
