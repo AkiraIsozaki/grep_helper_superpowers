@@ -39,23 +39,18 @@ class TestDetectLanguage(unittest.TestCase):
     """
 
     def test_java拡張子はjavaと判定される(self):
-        """.java 拡張子は java 言語として判定される。"""
         self.assertEqual(detect_language("src/Foo.java", Path(".")), "java")
 
     def test_kt拡張子はkotlinと判定される(self):
-        """.kt 拡張子は kotlin 言語として判定される。"""
         self.assertEqual(detect_language("src/Foo.kt", Path(".")), "kotlin")
 
     def test_kts拡張子はkotlinと判定される(self):
-        """.kts 拡張子は kotlin 言語として判定される。"""
         self.assertEqual(detect_language("src/build.kts", Path(".")), "kotlin")
 
     def test_c拡張子はc言語と判定される(self):
-        """.c 拡張子は c 言語として判定される。"""
         self.assertEqual(detect_language("src/util.c", Path(".")), "c")
 
     def test_h拡張子はc言語と判定される(self):
-        """.h ヘッダ拡張子は c 言語として判定される。"""
         self.assertEqual(detect_language("src/util.h", Path(".")), "c")
 
     def test_pc拡張子はprocと判定される(self):
@@ -63,7 +58,6 @@ class TestDetectLanguage(unittest.TestCase):
         self.assertEqual(detect_language("src/proc.pc", Path(".")), "proc")
 
     def test_sql拡張子はsqlと判定される(self):
-        """.sql 拡張子は sql 言語として判定される。"""
         self.assertEqual(detect_language("src/query.sql", Path(".")), "sql")
 
     def test_sh拡張子はshと判定される(self):
@@ -91,11 +85,9 @@ class TestDetectLanguage(unittest.TestCase):
         self.assertEqual(detect_language("src/app.jsx", Path(".")), "ts")
 
     def test_py拡張子はpythonと判定される(self):
-        """.py 拡張子は python 言語として判定される。"""
         self.assertEqual(detect_language("src/util.py", Path(".")), "python")
 
     def test_pl拡張子はperlと判定される(self):
-        """.pl 拡張子は perl 言語として判定される。"""
         self.assertEqual(detect_language("src/script.pl", Path(".")), "perl")
 
     def test_pm拡張子はperlと判定される(self):
@@ -111,19 +103,15 @@ class TestDetectLanguage(unittest.TestCase):
         self.assertEqual(detect_language("src/App.vb", Path(".")), "dotnet")
 
     def test_groovy拡張子はgroovyと判定される(self):
-        """.groovy 拡張子は groovy 言語として判定される。"""
         self.assertEqual(detect_language("src/Svc.groovy", Path(".")), "groovy")
 
     def test_gvy拡張子はgroovyと判定される(self):
-        """.gvy 拡張子は groovy 言語として判定される。"""
         self.assertEqual(detect_language("src/Svc.gvy", Path(".")), "groovy")
 
     def test_pls拡張子はplsqlと判定される(self):
-        """.pls 拡張子は plsql として判定される。"""
         self.assertEqual(detect_language("src/pkg.pls", Path(".")), "plsql")
 
     def test_pck拡張子はplsqlと判定される(self):
-        """.pck 拡張子は plsql として判定される。"""
         self.assertEqual(detect_language("src/pkg.pck", Path(".")), "plsql")
 
     def test_xml拡張子はotherと判定される(self):
@@ -207,7 +195,6 @@ class TestDetectLanguage(unittest.TestCase):
             self.assertEqual(detect_language("run", src), "other")
 
     def test_拡張子なしシェバンなしはotherと判定される(self):
-        """シェバンを持たない拡張子なしファイルは other に分類される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             f = src / "run"
@@ -215,7 +202,6 @@ class TestDetectLanguage(unittest.TestCase):
             self.assertEqual(detect_language("run", src), "other")
 
     def test_拡張子なしファイル不在はotherと判定される(self):
-        """存在しない拡張子なしファイルは other にフォールバックする。"""
         self.assertEqual(detect_language("nonexistent_file", Path("/tmp")), "other")
 
 
@@ -252,7 +238,6 @@ class TestDirectClassification(unittest.TestCase):
             self.assertEqual(records[0].usage_type, "条件判定")
 
     def test_sh行は変数代入として分類される(self):
-        """シェルスクリプトの代入行が「変数代入」として分類される。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -289,7 +274,6 @@ class TestDirectClassification(unittest.TestCase):
             self.assertNotEqual(records[0].usage_type, "その他")
 
     def test_不正なgrep行はスキップされる(self):
-        """grep 形式に合致しない行はレコード化されずスキップされる。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             records = self._make_direct_records(
@@ -315,7 +299,6 @@ class TestIndirectTracking(unittest.TestCase):
     """
 
     def test_groovyのstatic_final定数は間接参照を追跡する(self):
-        """Groovy の static final 定数定義から参照する別ファイルを間接参照として検出する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "Const.groovy").write_text(
@@ -352,7 +335,6 @@ class TestIndirectTracking(unittest.TestCase):
             self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in indirect))
 
     def test_dotnetのconst定義は間接参照を追跡する(self):
-        """C# の const 定義から参照する別ファイルを間接参照として検出する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "Consts.cs").write_text('const string STATUS = "TARGET";\n')
@@ -448,7 +430,7 @@ class TestE2EAll(unittest.TestCase):
         self.assertEqual(xml_records[0].usage_type, "その他")
 
     def test_拡張子なしperlファイルはその他にならない(self):
-        """E2E入力中の拡張子なし Perl ファイル(cleanup)はシェバン判定で「その他」にならない。"""
+        """E2E 入力中の cleanup ファイル(Perl シェバン)は その他 に分類されない。"""
         # Use repo root as src_dir so that "tests/all/src/cleanup" resolves correctly
         src_dir   = Path(__file__).parent.parent
         input_dir = self.TESTS_DIR / "input"
@@ -467,7 +449,6 @@ class TestProcessGrepLinesAllIterable(unittest.TestCase):
     """
 
     def test_ジェネレータ入力を受け付ける(self):
-        """list ではなくジェネレータも受け取れる。"""
         stats = ProcessStats()
         def gen():
             yield "Foo.java:1:public class Foo {}"
