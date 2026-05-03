@@ -178,3 +178,45 @@ def format_summary(result: ComparisonResult) -> str:
     if result.misclassified:
         lines.append(f"誤分類: {len(result.misclassified)}件")
     return "\n".join(lines)
+
+
+def format_detail_report(result: ComparisonResult, *, lang: str = "", timestamp: str = "") -> str:
+    """Markdown 詳細レポートを生成する。spec §詳細レポート の章構成に準拠。"""
+    header = f"# KPI 計測レポート"
+    if lang:
+        header += f" ({lang})"
+    if timestamp:
+        header += f" — {timestamp}"
+
+    parts = [header, "", "## サマリ", "", format_summary(result), ""]
+
+    parts.append("## 取りこぼし行（網羅率を下げている要因）")
+    if result.missing_rows:
+        parts.append("| ファイルパス | 行番号 | 期待コード行 | 期待使用タイプ |")
+        parts.append("|---|---|---|---|")
+        for r in result.missing_rows:
+            parts.append(f"| {r.filepath} | {r.lineno} | {r.code} | {r.usage_type} |")
+    else:
+        parts.append("（なし）")
+    parts.append("")
+
+    parts.append("## 誤分類行（分類精度を下げている要因）")
+    if result.misclassified:
+        parts.append("| ファイル | 行 | 期待 | 実際 |")
+        parts.append("|---|---|---|---|")
+        for exp, act in result.misclassified:
+            parts.append(f"| {exp.filepath} | {exp.lineno} | {exp.ref_type}/{exp.usage_type} | {act.ref_type}/{act.usage_type} |")
+    else:
+        parts.append("（なし）")
+    parts.append("")
+
+    parts.append("## false positive（参考、KPI算入なし）")
+    if result.false_positives:
+        parts.append("| ファイル | 行 | 実際の使用タイプ |")
+        parts.append("|---|---|---|")
+        for r in result.false_positives:
+            parts.append(f"| {r.filepath} | {r.lineno} | {r.usage_type} |")
+    else:
+        parts.append("（なし）")
+
+    return "\n".join(parts) + "\n"

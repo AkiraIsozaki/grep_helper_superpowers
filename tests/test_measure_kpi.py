@@ -244,5 +244,33 @@ class TestFormatSummary(unittest.TestCase):
         self.assertIn("false positive", out.lower() if "false" in out.lower() else out)
 
 
+class TestFormatDetailReport(unittest.TestCase):
+    """format_detail_report: Markdown レポート。章タイトルと主要数値の存在で検証する。"""
+
+    def test_主要章が含まれる(self):
+        result = measure_kpi.ComparisonResult(
+            expected_total=2, matched_rows=1, classified_correctly=1,
+            coverage_rate=0.5, classification_accuracy=1.0,
+            missing_rows=[_rec("f", "2")],
+            false_positives=[_rec("g", "5")],
+            misclassified=[],
+        )
+        out = measure_kpi.format_detail_report(result)
+        self.assertIn("# KPI", out)
+        self.assertIn("## サマリ", out)
+        self.assertIn("## 取りこぼし", out)
+        self.assertIn("## false positive", out)
+
+    def test_取りこぼし行のファイルパスと行番号が含まれる(self):
+        result = measure_kpi.ComparisonResult(
+            expected_total=1, matched_rows=0, classified_correctly=0,
+            coverage_rate=0.0, classification_accuracy=0.0,
+            missing_rows=[_rec("missing.sql", "42")],
+        )
+        out = measure_kpi.format_detail_report(result)
+        self.assertIn("missing.sql", out)
+        self.assertIn("42", out)
+
+
 if __name__ == "__main__":
     unittest.main()
