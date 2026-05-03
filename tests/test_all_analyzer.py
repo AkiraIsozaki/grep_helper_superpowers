@@ -459,9 +459,14 @@ class TestProcessGrepLinesAllIterable(unittest.TestCase):
         self.assertEqual(len(records), 1)
 
 
-class TestMainStreaming(unittest.TestCase):
+class TestMainStreamingWhitebox(unittest.TestCase):
+    """TestMainStreamingWhitebox: dispatcher.main のストリーミング実装を観察するテスト。
+    inspect.getsource でソース文字列を覗き、read_text().splitlines() を使わず
+    iter_grep_lines を使う実装契約を観察する。
+    実装変更時は本クラスも同期更新が必要。
+    """
+
     def test_mainはgrepファイル全体を読み込まない(self):
-        """main は grep_path.read_text(...).splitlines() を使わない。"""
         import grep_helper.dispatcher
         src = inspect.getsource(grep_helper.dispatcher.main)
         self.assertNotIn("read_text(encoding=enc, errors=\"replace\").splitlines()", src)
