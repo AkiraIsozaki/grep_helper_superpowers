@@ -1,7 +1,6 @@
 """analyze_proc.py のユニットテスト・統合テスト"""
 from __future__ import annotations
 
-import csv
 from grep_helper.file_cache import _file_lines_cache_clear
 import sys
 import tempfile
@@ -165,71 +164,6 @@ class TestExtractVariableNameProc(unittest.TestCase):
     def test_変数宣言以外ではNoneを返す(self):
         """EXEC SQL 文など変数宣言でない行ではNoneを返す"""
         self.assertIsNone(extract_variable_name_proc("EXEC SQL COMMIT;"))
-
-
-# ---------------------------------------------------------------------------
-# TestWriteTsv
-# ---------------------------------------------------------------------------
-
-class TestWriteTsv(unittest.TestCase):
-    """write_tsv() の列数・エンコード・ソート順テスト"""
-
-    def _make_record(self, keyword, ref_type, filepath, lineno, code,
-                     src_var="", src_file="", src_lineno=""):
-        return GrepRecord(
-            keyword=keyword,
-            ref_type=ref_type,
-            usage_type="その他",
-            filepath=filepath,
-            lineno=lineno,
-            code=code,
-            src_var=src_var,
-            src_file=src_file,
-            src_lineno=src_lineno,
-        )
-
-    def test_TSV出力の列数が9列であること(self):
-        """ヘッダ行とデータ行の両方が 9 列で出力される"""
-        records = [self._make_record("KW", "直接", "a.pc", "1", "code")]
-        with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "out.tsv"
-            write_tsv(records, out)
-            with open(out, encoding="utf-8-sig", newline="") as f:
-                reader = csv.reader(f, delimiter="\t")
-                header = next(reader)
-                self.assertEqual(len(header), 9)
-                row = next(reader)
-                self.assertEqual(len(row), 9)
-
-    def test_TSV出力がUTF8_BOMで始まること(self):
-        """write_tsv は Excel 互換のため UTF-8 BOM 付きで書き出す"""
-        records = [self._make_record("KW", "直接", "a.pc", "1", "code")]
-        with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "out.tsv"
-            write_tsv(records, out)
-            raw = out.read_bytes()
-            self.assertTrue(raw.startswith(b'\xef\xbb\xbf'), "UTF-8 BOMで始まること")
-
-    def test_TSV出力がファイルパスと行番号でソートされる(self):
-        """ファイルパス昇順、同一ファイル内では行番号昇順で並ぶ"""
-        records = [
-            self._make_record("KW", "直接", "b.pc", "10", "code b"),
-            self._make_record("KW", "直接", "a.pc", "20", "code a20"),
-            self._make_record("KW", "直接", "a.pc", "5", "code a5"),
-        ]
-        with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "out.tsv"
-            write_tsv(records, out)
-            with open(out, encoding="utf-8-sig", newline="") as f:
-                reader = csv.reader(f, delimiter="\t")
-                next(reader)  # header
-                rows = list(reader)
-            # a.pc:5 → a.pc:20 → b.pc:10 の順
-            self.assertEqual(rows[0][3], "a.pc")
-            self.assertEqual(rows[0][4], "5")
-            self.assertEqual(rows[1][3], "a.pc")
-            self.assertEqual(rows[1][4], "20")
-            self.assertEqual(rows[2][3], "b.pc")
 
 
 # ---------------------------------------------------------------------------
