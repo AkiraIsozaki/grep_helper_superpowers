@@ -288,6 +288,20 @@ class TestBatchScannerSelector(unittest.TestCase):
         self.assertEqual(large_hits, ["A", "B", "C"])
 
 
+class TestDetectEncoding(unittest.TestCase):
+    def test_overrideを与えるとそのまま返る(self):
+        from grep_helper.encoding import detect_encoding
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "any.txt"
+            p.write_bytes(b"\xe3\x81\x82\xe3\x81\x84")
+            self.assertEqual(detect_encoding(p, override="utf-16"), "utf-16")
+
+    def test_存在しないファイルはcp932にフォールバックする(self):
+        from grep_helper.encoding import detect_encoding
+        result = detect_encoding(Path("/nonexistent/path/x.txt"))
+        self.assertEqual(result, "cp932")
+
+
 class TestBatchScannerSelectorWhitebox(unittest.TestCase):
     """build_batch_scanner のバックエンド選択は内部最適化の実装契約。
     public な振る舞い（マッチ結果）はパターン数に依らず同一だが、
