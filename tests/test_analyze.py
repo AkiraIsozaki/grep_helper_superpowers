@@ -80,7 +80,6 @@ class TestGrepParser(unittest.TestCase):
     """F-01: parse_grep_line() のテスト。"""
 
     def test_正常なgrep行をパースして辞書を返す(self):
-        """正常なgrep行をパースして辞書を返すこと。"""
         line = 'src/main/java/Constants.java:10:    public static final String CODE = "TARGET";'
         result = parse_grep_line(line)
         self.assertIsNotNone(result)
@@ -89,18 +88,15 @@ class TestGrepParser(unittest.TestCase):
         self.assertIn("CODE", result["code"])
 
     def test_バイナリ通知行はNoneを返す(self):
-        """バイナリ通知行はNoneを返すこと。"""
         line = "Binary file src/main/resources/logo.png matches"
         self.assertIsNone(parse_grep_line(line))
 
     def test_空行や空白のみの行はNoneを返す(self):
-        """空行・空白のみの行はNoneを返すこと。"""
         self.assertIsNone(parse_grep_line(""))
         self.assertIsNone(parse_grep_line("   "))
         self.assertIsNone(parse_grep_line("\n"))
 
     def test_Windowsパスを含むgrep行を正しくパースできる(self):
-        """Windowsパス（C:\\...）でも正しくパースできること。"""
         line = r"C:\project\src\Constants.java:42:    String s = CODE;"
         result = parse_grep_line(line)
         self.assertIsNotNone(result)
@@ -108,11 +104,9 @@ class TestGrepParser(unittest.TestCase):
         self.assertIn("CODE", result["code"])
 
     def test_区切り文字を含まない不正な形式はNoneを返す(self):
-        """区切り文字がない不正行はNoneを返すこと。"""
         self.assertIsNone(parse_grep_line("no colon separator here"))
 
     def test_コード行の前後の空白がtrimされる(self):
-        """コード行の前後の空白がtrimされること。"""
         line = "Foo.java:5:    int x = 1;   "
         result = parse_grep_line(line)
         self.assertIsNotNone(result)
@@ -127,45 +121,35 @@ class TestUsageClassifier(unittest.TestCase):
     """F-02: classify_usage_regex() の7種分類テスト。"""
 
     def test_アノテーション行を正しく分類する(self):
-        """アノテーション行を正しく分類すること。"""
         self.assertEqual(classify_usage_regex('@RequestMapping("TARGET")'), "アノテーション")
 
     def test_static_final定数定義を正しく分類する(self):
-        """static final定数定義を正しく分類すること。"""
         code = 'public static final String CODE = "TARGET";'
         self.assertEqual(classify_usage_regex(code), "定数定義")
 
     def test_if文を条件判定として分類する(self):
-        """if文を正しく分類すること。"""
         self.assertEqual(classify_usage_regex('if (x.equals(CODE)) {'), "条件判定")
 
     def test_equalsを含む行は条件判定として分類されreturnより優先される(self):
-        """.equals() を含む行を条件判定と分類すること（returnより優先）。"""
         # 優先度: 条件判定（.equals）> return文 のため、条件判定になる
         self.assertEqual(classify_usage_regex('return a.equals(CODE);'), "条件判定")
 
     def test_不等号を含む行を条件判定として分類する(self):
-        """!= を含む行を条件判定と分類すること。"""
         self.assertEqual(classify_usage_regex('if (x != CODE) {'), "条件判定")
 
     def test_return文を正しく分類する(self):
-        """return文を正しく分類すること。"""
         self.assertEqual(classify_usage_regex('return CODE;'), "return文")
 
     def test_変数代入を正しく分類する(self):
-        """変数代入を正しく分類すること。"""
         self.assertEqual(classify_usage_regex('String msg = CODE;'), "変数代入")
 
     def test_メソッド引数を正しく分類する(self):
-        """メソッド引数を正しく分類すること。"""
         self.assertEqual(classify_usage_regex('someService.process(CODE);'), "メソッド引数")
 
     def test_コメント行をその他に分類する(self):
-        """コメント行を「その他」に分類すること。"""
         self.assertEqual(classify_usage_regex('// TARGET はここで使われる'), "その他")
 
     def test_アノテーションが定数定義より優先される(self):
-        """アノテーションが定数定義より優先されること。"""
         # @SomeAnnotation(static final がある行でもアノテーション優先)
         code = '@Value("${static.final.code}")'
         self.assertEqual(classify_usage_regex(code), "アノテーション")
@@ -201,19 +185,16 @@ class TestTsvWriter(unittest.TestCase):
         )
 
     def test_TSVファイルが生成される(self):
-        """TSVファイルが生成されること。"""
         write_tsv([self._make_record()], self.output_path)
         self.assertTrue(self.output_path.exists())
 
     def test_UTF8_BOM付きで出力されExcelで文字化けしない(self):
-        """UTF-8 BOM付きで出力されること（Excelで文字化けしない）。"""
         write_tsv([self._make_record()], self.output_path)
         raw = self.output_path.read_bytes()
         # UTF-8 BOM は EF BB BF
         self.assertTrue(raw.startswith(b'\xef\xbb\xbf'), "BOMが先頭にない")
 
     def test_ヘッダー行が9列正しく出力される(self):
-        """ヘッダー行が9列正しく出力されること。"""
         write_tsv([self._make_record()], self.output_path)
         with open(self.output_path, encoding="utf-8-sig", newline="") as f:
             reader = csv.reader(f, delimiter="\t")
@@ -223,7 +204,6 @@ class TestTsvWriter(unittest.TestCase):
         self.assertEqual(header, expected)
 
     def test_行番号が数値順にソートされる(self):
-        """行番号が数値順にソートされること（"10" < "9" のバグがないこと）。"""
         records = [
             self._make_record(lineno="10"),
             self._make_record(lineno="9"),
@@ -238,7 +218,6 @@ class TestTsvWriter(unittest.TestCase):
         self.assertEqual(linenos, ["2", "9", "10"])
 
     def test_文言とファイルパスと行番号の順にソートされる(self):
-        """文言 → ファイルパス → 行番号の順にソートされること。"""
         records = [
             self._make_record(keyword="ZZZ", filepath="B.java", lineno="1"),
             self._make_record(keyword="AAA", filepath="C.java", lineno="1"),
@@ -255,7 +234,6 @@ class TestTsvWriter(unittest.TestCase):
         self.assertEqual(filepaths[:2], ["A.java", "C.java"])
 
     def test_出力ディレクトリが存在しなくても自動作成される(self):
-        """output/ ディレクトリが存在しなくても自動作成されること。"""
         nested_path = Path(self.tmp_dir) / "new_dir" / "sub" / "out.tsv"
         write_tsv([self._make_record()], nested_path)
         self.assertTrue(nested_path.exists())
@@ -269,28 +247,24 @@ class TestIndirectTracker(unittest.TestCase):
     """F-03: determine_scope() / extract_variable_name() のテスト。"""
 
     def test_定数定義はprojectスコープになる(self):
-        """定数定義は project スコープになること。"""
         self.assertEqual(
             determine_scope(UsageType.CONSTANT.value, 'public static final String CODE = "X";'),
             "project",
         )
 
     def test_アクセス修飾子付きフィールドはclassスコープになる(self):
-        """アクセス修飾子付きフィールドは class スコープになること。"""
         self.assertEqual(
             determine_scope(UsageType.VARIABLE.value, 'private String type = "X";'),
             "class",
         )
 
     def test_ローカル変数はmethodスコープになる(self):
-        """ローカル変数は method スコープになること（正規表現フォールバック）。"""
         # AST 未使用（filepath 省略）の場合は正規表現で判定される
         result = determine_scope(UsageType.VARIABLE.value, 'String msg = CODE;')
         # 修飾子なしのローカル変数は正規表現では method になる
         self.assertEqual(result, "method")
 
     def test_パッケージプライベートフィールドはclassスコープになる(self):
-        """パッケージプライベートフィールド（修飾子なし）が class スコープになること。"""
         java_dir = Path(__file__).parent / "fixtures" / "java"
         if not java_dir.exists():
             self.skipTest("フィクスチャが存在しません。")
@@ -305,22 +279,18 @@ class TestIndirectTracker(unittest.TestCase):
         self.assertEqual(result, "class")
 
     def test_static_final定数名を正しく抽出できる(self):
-        """static final 定数名を正しく抽出できること。"""
         code = 'public static final String CODE = "TARGET";'
         self.assertEqual(extract_variable_name(code, UsageType.CONSTANT.value), "CODE")
 
     def test_シンプルな変数代入から変数名を抽出できる(self):
-        """シンプルな変数代入から変数名を抽出できること。"""
         code = 'String msg = CODE;'
         self.assertEqual(extract_variable_name(code, UsageType.VARIABLE.value), "msg")
 
     def test_privateフィールドから変数名を抽出できる(self):
-        """private フィールドから変数名を抽出できること。"""
         code = 'private String type;'
         self.assertEqual(extract_variable_name(code, UsageType.VARIABLE.value), "type")
 
     def test_変数宣言でない行はNoneを返す(self):
-        """変数宣言でない行（条件文など）は None を返すこと。"""
         result = extract_variable_name('if (x.equals(CODE)) {', UsageType.CONDITION.value)
         self.assertIsNone(result)
 
@@ -341,7 +311,6 @@ class TestReporter(unittest.TestCase):
             return mock_out.getvalue()
 
     def test_処理サマリが標準出力に出力される(self):
-        """処理サマリが標準出力に出力されること。"""
         stats = ProcessStats(total_lines=10, valid_lines=8, skipped_lines=2)
         output = self._capture_report(stats, ["SAMPLE.grep"])
         self.assertIn("処理完了", output)
@@ -351,7 +320,6 @@ class TestReporter(unittest.TestCase):
         self.assertIn("2", output)
 
     def test_ASTフォールバックしたファイルが表示される(self):
-        """ASTフォールバックしたファイルが表示されること。"""
         stats = ProcessStats(fallback_files=["Foo.java", "Bar.java"])
         output = self._capture_report(stats, [])
         self.assertIn("ASTフォールバック", output)
@@ -359,14 +327,12 @@ class TestReporter(unittest.TestCase):
         self.assertIn("Bar.java", output)
 
     def test_エンコーディングエラーのファイルが表示される(self):
-        """エンコーディングエラーのファイルが表示されること。"""
         stats = ProcessStats(encoding_errors=["Baz.java"])
         output = self._capture_report(stats, [])
         self.assertIn("エンコーディングエラー", output)
         self.assertIn("Baz.java", output)
 
     def test_フォールバックとエンコーディングエラーが0件のとき任意セクションは出力されない(self):
-        """フォールバック・エンコーディングエラーが0件のとき任意セクションが出力されないこと。"""
         stats = ProcessStats(total_lines=5, valid_lines=5, skipped_lines=0)
         output = self._capture_report(stats, ["X.grep"])
         self.assertNotIn("ASTフォールバック", output)
@@ -388,7 +354,6 @@ class TestIntegration(unittest.TestCase):
             self.skipTest("tests/fixtures/ が存在しません。統合テストをスキップします。")
 
     def test_直接参照が期待TSVに正しく出力される(self):
-        """直接参照がTSVに正しく出力されることを確認。"""
         import subprocess
         import tempfile
 
@@ -468,7 +433,6 @@ class TestProcessGrepFile(unittest.TestCase):
         return p
 
     def test_有効なgrep行からGrepRecordが生成される(self):
-        """有効なgrep行からGrepRecordが生成されること。"""
         path = self._write_grep([
             "tests/fixtures/java/Constants.java:9:    public static final String SAMPLE_CODE = \"SAMPLE\";"
         ])
@@ -480,7 +444,6 @@ class TestProcessGrepFile(unittest.TestCase):
         self.assertEqual(stats.valid_lines, 1)
 
     def test_空行はスキップされskipped_linesが増加する(self):
-        """空行はスキップされ、skipped_lines が増加すること。"""
         path = self._write_grep([""])
         stats = ProcessStats()
         records = process_grep_file(path, "KW", self.JAVA_DIR, stats)
@@ -488,7 +451,6 @@ class TestProcessGrepFile(unittest.TestCase):
         self.assertEqual(stats.skipped_lines, 1)
 
     def test_バイナリ通知行はスキップされる(self):
-        """バイナリ通知行はスキップされること。"""
         path = self._write_grep(["Binary file foo.class matches"])
         stats = ProcessStats()
         records = process_grep_file(path, "KW", self.JAVA_DIR, stats)
@@ -496,7 +458,6 @@ class TestProcessGrepFile(unittest.TestCase):
         self.assertEqual(stats.skipped_lines, 1)
 
     def test_複数行が全て処理される(self):
-        """複数行が全て処理されること。"""
         path = self._write_grep([
             "tests/fixtures/java/Constants.java:9:    public static final String SAMPLE_CODE = \"SAMPLE\";",
             "tests/fixtures/java/Constants.java:13:        if (value.equals(SAMPLE_CODE)) {",
@@ -510,7 +471,6 @@ class TestProcessGrepFile(unittest.TestCase):
         self.assertEqual(stats.skipped_lines, 1)
 
     def test_存在しないJavaファイルでも正規表現にフォールバックして処理継続する(self):
-        """存在しないJavaファイルでもフォールバックして処理が継続すること。"""
         path = self._write_grep([
             "nonexistent/Foo.java:5:    return CODE;"
         ])
@@ -536,19 +496,16 @@ class TestGetAst(unittest.TestCase):
         _ast_cache.clear()
 
     def test_有効なJavaファイルはASTツリーを返す(self):
-        """有効なJavaファイルはASTツリーを返すこと。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         tree = get_ast("Constants.java", self.JAVA_DIR)
         self.assertIsNotNone(tree)
 
     def test_get_astは存在しないファイルでNoneを返す(self):
-        """存在しないファイルはNoneを返すこと。"""
         result = get_ast("nonexistent/Foo.java", self.JAVA_DIR)
         self.assertIsNone(result)
 
     def test_2回目の呼び出しはキャッシュから取得し再パースしない(self):
-        """2回目の呼び出しはキャッシュから取得すること（再パース不要）。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         filepath = "Constants.java"
@@ -557,7 +514,6 @@ class TestGetAst(unittest.TestCase):
         self.assertIs(tree1, tree2, "キャッシュから同一オブジェクトが返るべき")
 
     def test_存在しないファイルはNoneとしてキャッシュされる(self):
-        """存在しないファイルはNoneとしてキャッシュされること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         get_ast("ghost.java", self.JAVA_DIR)
@@ -581,7 +537,6 @@ class TestClassifyUsage(unittest.TestCase):
         _ast_cache.clear()
 
     def test_AST使用時に定数定義を正しく分類する(self):
-        """ASTが使えるファイルで定数定義を正しく分類すること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -595,7 +550,6 @@ class TestClassifyUsage(unittest.TestCase):
         self.assertEqual(result, UsageType.CONSTANT.value)
 
     def test_AST使用時に条件判定を正しく分類する(self):
-        """ASTが使えるファイルで条件判定を正しく分類すること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -609,7 +563,6 @@ class TestClassifyUsage(unittest.TestCase):
         self.assertEqual(result, UsageType.CONDITION.value)
 
     def test_存在しないファイルは正規表現フォールバックで分類する(self):
-        """存在しないファイルは正規表現フォールバックで分類すること。"""
         stats = ProcessStats()
         result = classify_usage(
             code="return CODE;",
@@ -621,7 +574,6 @@ class TestClassifyUsage(unittest.TestCase):
         self.assertEqual(result, "return文")
 
     def test_AST使用時にreturn文を正しく分類する(self):
-        """ASTが使えるファイルでreturn文を正しく分類すること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -635,7 +587,6 @@ class TestClassifyUsage(unittest.TestCase):
         self.assertEqual(result, UsageType.RETURN.value)
 
     def test_フォールバック発生時にstats_fallback_filesに記録される(self):
-        """フォールバック発生時にstats.fallback_filesに記録されること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -659,24 +610,20 @@ class TestResolveJavaFile(unittest.TestCase):
     JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
     def test_source_dir基準の相対パスが解決される(self):
-        """相対パス（source_dir基準）が解決されること。"""
         result = _resolve_java_file("Constants.java", self.JAVA_DIR)
         self.assertIsNotNone(result)
         self.assertTrue(result.exists())
 
     def test_絶対パスが解決される(self):
-        """絶対パスが解決されること。"""
         abs_path = str((self.JAVA_DIR / "Constants.java").resolve())
         result = _resolve_java_file(abs_path, self.JAVA_DIR)
         self.assertIsNotNone(result)
 
     def test_存在しない相対パスはNoneを返す(self):
-        """存在しない相対パスはNoneを返すこと。"""
         result = _resolve_java_file("ghost/Missing.java", self.JAVA_DIR)
         self.assertIsNone(result)
 
     def test_存在しない絶対パスはNoneを返す(self):
-        """存在しない絶対パスはNoneを返すこと。"""
         result = _resolve_java_file("/nonexistent/path/Foo.java", self.JAVA_DIR)
         self.assertIsNone(result)
 
@@ -697,7 +644,6 @@ class TestGetMethodScope(unittest.TestCase):
         _ast_cache.clear()
 
     def test_メソッド内の行番号からスタートとエンドのタプルが返る(self):
-        """メソッド内の行番号を渡すと (start, end) タプルが返ること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         # Constants.java: isSample メソッドは12行目から始まる（source_dir基準の相対パス）
@@ -708,12 +654,10 @@ class TestGetMethodScope(unittest.TestCase):
         self.assertGreaterEqual(end, 13)
 
     def test_get_method_scopeは存在しないファイルでNoneを返す(self):
-        """存在しないファイルはNoneを返すこと。"""
         result = _get_method_scope("ghost.java", self.JAVA_DIR, 5)
         self.assertIsNone(result)
 
     def test_メソッドより前の行はNoneを返す(self):
-        """メソッドより前の行はNoneを返すこと。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         result = _get_method_scope("Constants.java", self.JAVA_DIR, 1)
@@ -746,7 +690,6 @@ class TestSearchInLines(unittest.TestCase):
         )
 
     def test_変数名を含む行がGrepRecordとして返る(self):
-        """変数名を含む行がGrepRecordとして返ること。"""
         lines = [
             "// some comment",
             "String x = MY_VAR;",
@@ -769,7 +712,6 @@ class TestSearchInLines(unittest.TestCase):
         self.assertEqual(records[0].ref_type, RefType.INDIRECT.value)
 
     def test_originと同じファイルと行番号の行はスキップされる(self):
-        """origin と同じファイル・行番号の行はスキップされること。"""
         lines = ["String x = MY_VAR;"]
         origin = self._make_origin(filepath="A.java", lineno="1")
         stats = ProcessStats()
@@ -786,7 +728,6 @@ class TestSearchInLines(unittest.TestCase):
         self.assertEqual(len(records), 0)
 
     def test_変数名が単語境界でマッチして部分一致しない(self):
-        """変数名が単語境界でマッチすること（部分一致しないこと）。"""
         lines = ["MY_VARIABLE_EXTRA = 1;", "MY_VAR = 2;"]
         origin = self._make_origin()
         stats = ProcessStats()
@@ -822,7 +763,6 @@ class TestTrackConstant(unittest.TestCase):
         _ast_cache.clear()
 
     def test_定数名がプロジェクト全体から検索される(self):
-        """定数名がプロジェクト全体から検索されること。"""
         origin = GrepRecord(
             keyword="SAMPLE",
             ref_type=RefType.DIRECT.value,
@@ -841,7 +781,6 @@ class TestTrackConstant(unittest.TestCase):
         )
 
     def test_track_constantは間接参照型のレコードを返す(self):
-        """返されるレコードの参照種別が '間接' であること。"""
         origin = GrepRecord(
             keyword="SAMPLE",
             ref_type=RefType.DIRECT.value,
@@ -872,7 +811,6 @@ class TestTrackField(unittest.TestCase):
         _ast_cache.clear()
 
     def test_フィールドが同一クラス内で見つかる(self):
-        """フィールドが同一クラス内で見つかること。"""
         entity_file = self.JAVA_DIR / "Entity.java"
         if not entity_file.exists():
             self.skipTest("Entity.java フィクスチャが存在しません。")
@@ -894,7 +832,6 @@ class TestTrackField(unittest.TestCase):
         )
 
     def test_track_fieldは間接参照型のレコードを返す(self):
-        """返されるレコードの参照種別が '間接' であること。"""
         entity_file = self.JAVA_DIR / "Entity.java"
         if not entity_file.exists():
             self.skipTest("Entity.java フィクスチャが存在しません。")
@@ -931,7 +868,6 @@ class TestTrackLocal(unittest.TestCase):
         _ast_cache.clear()
 
     def test_ローカル変数がメソッドスコープ内で見つかる(self):
-        """ローカル変数がメソッドスコープ内で見つかること。"""
         # 一時Javaファイルを作成
         java_src = (
             "public class Tmp {\n"
@@ -962,7 +898,6 @@ class TestTrackLocal(unittest.TestCase):
         )
 
     def test_track_localは存在しないファイルで空リストを返す(self):
-        """存在しないファイルは空リストを返すこと。"""
         origin = GrepRecord(
             keyword="KW",
             ref_type=RefType.DIRECT.value,
@@ -992,7 +927,6 @@ class TestFindGetterNames(unittest.TestCase):
         _ast_cache.clear()
 
     def test_命名規則によるgetter候補が含まれる(self):
-        """命名規則によるgetter候補が含まれること。"""
         entity_file = self.JAVA_DIR / "Entity.java"
         if not entity_file.exists():
             self.skipTest("Entity.java フィクスチャが存在しません。")
@@ -1000,7 +934,6 @@ class TestFindGetterNames(unittest.TestCase):
         self.assertIn("getType", getters)
 
     def test_ASTベースのgetter検出でgetTypeが見つかる(self):
-        """Entity.javaの `return type;` から getType が見つかること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         entity_file = self.JAVA_DIR / "Entity.java"
@@ -1010,7 +943,6 @@ class TestFindGetterNames(unittest.TestCase):
         self.assertIn("getType", getters)
 
     def test_getter結果に重複が含まれない(self):
-        """重複したgetter名が含まれないこと。"""
         entity_file = self.JAVA_DIR / "Entity.java"
         if not entity_file.exists():
             self.skipTest("Entity.java フィクスチャが存在しません。")
@@ -1018,7 +950,6 @@ class TestFindGetterNames(unittest.TestCase):
         self.assertEqual(len(getters), len(set(getters)))
 
     def test_存在しないファイルでも命名規則のgetter候補が返る(self):
-        """存在しないファイルでも命名規則のgetter候補は返ること。"""
         getters = find_getter_names("name", Path("/nonexistent/Foo.java"))
         self.assertIn("getName", getters)
 
@@ -1039,7 +970,6 @@ class TestFindSetterNames(unittest.TestCase):
         _ast_cache.clear()
 
     def test_命名規則によるsetter候補が含まれる(self):
-        """命名規則によるsetter候補が含まれること。"""
         order_file = self.INTENSE_DIR / "com/example/domain/Order.java"
         if not order_file.exists():
             self.skipTest("Order.java フィクスチャが存在しません。")
@@ -1047,7 +977,6 @@ class TestFindSetterNames(unittest.TestCase):
         self.assertIn("setOrderStatus", setters)
 
     def test_setter結果に重複が含まれない(self):
-        """重複したsetter名が含まれないこと。"""
         order_file = self.INTENSE_DIR / "com/example/domain/Order.java"
         if not order_file.exists():
             self.skipTest("Order.java フィクスチャが存在しません。")
@@ -1055,7 +984,6 @@ class TestFindSetterNames(unittest.TestCase):
         self.assertEqual(len(setters), len(set(setters)))
 
     def test_存在しないファイルでも命名規則のsetter候補が返る(self):
-        """存在しないファイルでも命名規則のsetter候補は返ること。"""
         setters = find_setter_names("name", Path("/nonexistent/Foo.java"))
         self.assertIn("setName", setters)
 
@@ -1076,7 +1004,6 @@ class TestTrackGetterCalls(unittest.TestCase):
         _ast_cache.clear()
 
     def test_ServiceクラスのgetType呼び出しが検出される(self):
-        """Service.java の getType() 呼び出しが検出されること。"""
         service_file = self.JAVA_DIR / "Service.java"
         entity_file = self.JAVA_DIR / "Entity.java"
         if not service_file.exists() or not entity_file.exists():
@@ -1098,7 +1025,6 @@ class TestTrackGetterCalls(unittest.TestCase):
         )
 
     def test_track_getter_callsはgetter経由参照型のレコードを返す(self):
-        """返されるレコードの参照種別が '間接（getter経由）' であること。"""
         entity_file = self.JAVA_DIR / "Entity.java"
         if not entity_file.exists():
             self.skipTest("Entity.java フィクスチャが存在しません。")
@@ -1124,13 +1050,11 @@ class TestBuildParser(unittest.TestCase):
     """CLI: build_parser() のテスト。"""
 
     def test_source_dirは必須引数である(self):
-        """--source-dir が必須であること。"""
         parser = build_parser()
         with self.assertRaises(SystemExit):
             parser.parse_args([])
 
     def test_input_dirとoutput_dirのデフォルト値が設定される(self):
-        """デフォルト値が設定されること。"""
         parser = build_parser()
         args = parser.parse_args(["--source-dir", "/tmp/src"])
         self.assertEqual(args.source_dir, "/tmp/src")
@@ -1138,7 +1062,6 @@ class TestBuildParser(unittest.TestCase):
         self.assertEqual(args.output_dir, "output")
 
     def test_全オプションを指定できる(self):
-        """全オプションを指定できること。"""
         parser = build_parser()
         args = parser.parse_args([
             "--source-dir", "/src",
@@ -1187,7 +1110,6 @@ class TestMain(unittest.TestCase):
         return returncode, out_buf.getvalue(), err_buf.getvalue()
 
     def test_正常な引数でmainがゼロ終了しTSVを生成する(self):
-        """正常な引数で main() がゼロ終了し TSV を生成すること。"""
         if not self.INPUT_DIR.exists() or not self.JAVA_DIR.exists():
             self.skipTest("フィクスチャが存在しません。")
         rc, out, _ = self._run_main([
@@ -1200,7 +1122,6 @@ class TestMain(unittest.TestCase):
         self.assertIn("処理完了", out)
 
     def test_存在しないsource_dirで終了コード1になる(self):
-        """存在しない --source-dir で sys.exit(1) になること。"""
         rc, _, err = self._run_main([
             "--source-dir", "/nonexistent/dir",
             "--input-dir", str(self.INPUT_DIR),
@@ -1210,7 +1131,6 @@ class TestMain(unittest.TestCase):
         self.assertIn("source-dir", err)
 
     def test_存在しないinput_dirで終了コード1になる(self):
-        """存在しない --input-dir で sys.exit(1) になること。"""
         rc, _, err = self._run_main([
             "--source-dir", str(self.JAVA_DIR),
             "--input-dir", "/nonexistent/input",
@@ -1220,7 +1140,6 @@ class TestMain(unittest.TestCase):
         self.assertIn("input-dir", err)
 
     def test_grepファイルが0件のinput_dirで終了コード1になる(self):
-        """grep ファイルが 0 件の --input-dir で sys.exit(1) になること。"""
         empty_dir = Path(self.tmp_dir) / "empty_input"
         empty_dir.mkdir()
         rc, _, err = self._run_main([
@@ -1232,7 +1151,6 @@ class TestMain(unittest.TestCase):
         self.assertIn("grep結果ファイルがありません", err)
 
     def test_mainがgrepファイルを処理して直接参照をTSVに出力する(self):
-        """main() が grep ファイルを処理して直接参照を TSV に出力すること。"""
         if not self.INPUT_DIR.exists() or not self.JAVA_DIR.exists():
             self.skipTest("フィクスチャが存在しません。")
         rc, out, _ = self._run_main([
@@ -1265,7 +1183,6 @@ class TestGetAstExceptionHandling(unittest.TestCase):
         _ast_cache.clear()
 
     def test_構文エラーのJavaファイルはNoneを返しキャッシュされる(self):
-        """構文エラーのあるJavaファイルはNoneを返しキャッシュされること。"""
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         bad_file = Path(self.tmp_dir) / "Bad.java"
@@ -1376,7 +1293,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_フィクスチャ一式が揃っている(self):
-        """フィクスチャディレクトリ・Java ファイル・grep ファイルが揃っていること。"""
         self.assertTrue(self.JAVA_DIR.exists(), f"JAVA_DIR が存在しない: {self.JAVA_DIR}")
         self.assertTrue(self.GREP_DIR.exists(), f"GREP_DIR が存在しない: {self.GREP_DIR}")
 
@@ -1406,7 +1322,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_直接参照レコードが6種類以上の使用タイプを網羅する(self):
-        """ORDER_TYPE_NORMAL.grep から 6 種類以上の使用タイプが検出されること。"""
         direct_records, _, _ = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
 
         usage_types_found = {r.usage_type for r in direct_records}
@@ -1425,7 +1340,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_バイナリ行と空行がskipped_linesに計上されvalid_linesに含まれない(self):
-        """バイナリ行・空行が skipped_lines に計上され valid_lines に含まれないこと。"""
         # ORDER_TYPE_NORMAL.grep の検証
         _, _, stats_n = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
         self.assertGreater(stats_n.skipped_lines, 0, "スキップ行が 0 件")
@@ -1445,7 +1359,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_定数の間接参照が複数ファイルにわたって検出される(self):
-        """ORDER_TYPE_NORMAL（static final 定数）の間接参照が複数の異なるファイルにわたって検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
 
         # 定数定義レコードが存在すること
@@ -1483,7 +1396,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_フィールドの間接参照が同一クラス内で検出される(self):
-        """orderStatus（private フィールド）の間接参照が Order.java クラス内で検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("orderStatus.grep")
 
         # フィールド定義レコードが存在すること
@@ -1514,7 +1426,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_getter経由参照が検出される(self):
-        """orderStatus フィールドの getter 経由参照が検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("orderStatus.grep")
 
         getter_records = [r for r in all_records if r.ref_type == RefType.GETTER.value]
@@ -1536,7 +1447,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_TSV出力が文言とファイルパスと行番号の昇順でソートされる(self):
-        """TSV 出力が 文言 → ファイルパス → 行番号（昇順） でソートされること。"""
         direct_records, all_records, _ = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
 
         output_path = self.output_dir / "ORDER_TYPE_NORMAL.tsv"
@@ -1575,7 +1485,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_処理統計が正確に集計される(self):
-        """処理統計（total, valid, skipped）が正確に集計されること。"""
         grep_path_n = self.GREP_DIR / "ORDER_TYPE_NORMAL.grep"
         grep_path_s = self.GREP_DIR / "orderStatus.grep"
         stats = ProcessStats()
@@ -1602,7 +1511,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_間接参照が大量かつ複数ファイルにわたって検出される(self):
-        """間接参照が大量かつ複数ファイルにわたって検出されること。"""
         direct_records, all_records, _ = self._run_pipeline("ORDER_TYPE_NORMAL.grep")
 
         indirect_records = [r for r in all_records if r.ref_type == RefType.INDIRECT.value]
@@ -1623,7 +1531,6 @@ class TestIntenseE2E(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_CLI経由で2つのTSVファイルが正常出力される(self):
-        """CLI（main()）を通じて 2 つの TSV ファイルが正常出力されること。"""
         rc, out, err = self._run_main([
             "--source-dir", str(self.JAVA_DIR),
             "--input-dir",  str(self.GREP_DIR),
@@ -1667,7 +1574,6 @@ class TestBatchTrackSetters(unittest.TestCase):
     """Java-4: _batch_track_setters() のテスト。"""
 
     def test_setter呼び出しを検出できる(self):
-        """setter呼び出しを検出できること。"""
         with tempfile.TemporaryDirectory() as d:
             src_dir = Path(d)
             (src_dir / "Model.java").write_text(
@@ -1693,12 +1599,10 @@ class TestBatchTrackSetters(unittest.TestCase):
 
 class TestBatchTrackOnePass(unittest.TestCase):
     def test_batch_track_combinedが1パスで定数とgetterとsetterを処理する(self):
-        """定数+getter+setter を 1 パスで処理する _batch_track_combined を提供。"""
         from grep_helper.languages import java_track
         self.assertTrue(hasattr(java_track, "_batch_track_combined"))
 
     def test_combinedが定数とgetterとsetterのレコードを混合で返す(self):
-        """combined は constant / getter / setter のレコードを混合で返す。"""
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
             (p / "Foo.java").write_text(
@@ -1727,20 +1631,17 @@ class TestBatchTrackOnePass(unittest.TestCase):
 
 class TestNoModuleGlobalEncoding(unittest.TestCase):
     def test_encoding_overrideモジュールグローバルは廃止されている(self):
-        """_encoding_override モジュールグローバルは廃止されている。"""
         self.assertFalse(hasattr(analyze, "_encoding_override"),
             "_encoding_override は引数化されたため削除されているべき")
 
 
 class TestParallelBatchTrack(unittest.TestCase):
     def test_batch_track_combinedはworkers引数を受け取る(self):
-        """並列ワーカー数を指定できる。"""
         import inspect
         sig = inspect.signature(_batch_track_combined)
         self.assertIn("workers", sig.parameters)
 
     def test_workers2でも結果が単一ワーカーと一致する(self):
-        """workers=2 で実行しても結果が一致する。"""
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
             for i in range(4):
