@@ -118,3 +118,37 @@ def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
         misclassified=misclassified,
         detail_diffs=[],  # Task 9
     )
+
+
+def assert_coverage_distribution(records: list[Record], lang_spec: dict) -> list[str]:
+    """ゴールデンセットが lang_spec の網羅要件を満たすか検証し、警告メッセージ列を返す。
+
+    Args:
+        records:    期待TSV からロードしたレコード列
+        lang_spec:  {"usage_types": [...], "min_per_type": int, "reference_kinds_required": [...]}
+
+    Returns: 警告文字列のリスト。空なら OK。
+    """
+    warnings: list[str] = []
+    usage_types = lang_spec["usage_types"]
+    min_per_type = lang_spec["min_per_type"]
+    ref_kinds = lang_spec["reference_kinds_required"]
+
+    # 使用タイプの件数チェック
+    counts: dict[str, int] = {ut: 0 for ut in usage_types}
+    for r in records:
+        if r.usage_type in counts:
+            counts[r.usage_type] += 1
+    for ut, c in counts.items():
+        if c < min_per_type:
+            warnings.append(
+                f"使用タイプ「{ut}」: {c} 件 (要 {min_per_type} 件以上)"
+            )
+
+    # 参照種別の存在チェック
+    seen_kinds = {r.ref_type for r in records}
+    for kind in ref_kinds:
+        if kind not in seen_kinds:
+            warnings.append(f"参照種別「{kind}」のサンプルが1件もない")
+
+    return warnings

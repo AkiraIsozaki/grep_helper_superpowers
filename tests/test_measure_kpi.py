@@ -177,5 +177,37 @@ class TestCompareEdgeCases(unittest.TestCase):
         self.assertEqual(result.matched_rows, 0)
 
 
+class TestAssertCoverageDistribution(unittest.TestCase):
+    """assert_coverage_distribution: ゴールデンセットが各使用タイプ・参照種別を満たすかを警告列で返す。"""
+
+    def _spec(self) -> dict:
+        return {
+            "usage_types": ["定数定義", "条件判定", "その他"],
+            "min_per_type": 1,
+            "reference_kinds_required": ["直接"],
+        }
+
+    def test_全使用タイプが1件以上ある場合は警告ゼロ(self):
+        expected = [
+            _rec("f.sql", "1", usage="定数定義"),
+            _rec("f.sql", "2", usage="条件判定"),
+            _rec("f.sql", "3", usage="その他"),
+        ]
+        warnings = measure_kpi.assert_coverage_distribution(expected, self._spec())
+        self.assertEqual(warnings, [])
+
+    def test_使用タイプ不足なら警告が出る(self):
+        expected = [_rec("f.sql", "1", usage="定数定義")]
+        warnings = measure_kpi.assert_coverage_distribution(expected, self._spec())
+        self.assertTrue(any("条件判定" in w for w in warnings))
+        self.assertTrue(any("その他" in w for w in warnings))
+
+    def test_必要な参照種別が無いと警告が出る(self):
+        expected = [_rec("f.sql", "1", ref_type="間接", usage="定数定義")]
+        spec = {**self._spec(), "usage_types": ["定数定義"]}
+        warnings = measure_kpi.assert_coverage_distribution(expected, spec)
+        self.assertTrue(any("直接" in w for w in warnings))
+
+
 if __name__ == "__main__":
     unittest.main()
