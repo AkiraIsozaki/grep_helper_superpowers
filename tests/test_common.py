@@ -172,6 +172,17 @@ class TestIterGrepLines(unittest.TestCase):
             self.assertEqual(head[0], "src/file.py:0:line content here")
             self.assertLess(elapsed, 2.0, f"ストリーミングが効いていない疑い: {elapsed:.3f}s")
 
+    def test_max_line_size超の行はスキップされ周囲の正常行は処理される(self):
+        # jar 等のバイナリ混入で改行を含まない巨大行が紛れ込んでも、
+        # 前後の正常行は通常通り yield される。
+        from grep_helper.grep_input import iter_grep_lines
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "x.grep"
+            huge = "X" * 50_000
+            p.write_text(f"good:1:before\n{huge}\nokay:2:after\n", encoding="utf-8")
+            result = list(iter_grep_lines(p, "utf-8", max_line_size=1024))
+            self.assertEqual(result, ["good:1:before", "okay:2:after"])
+
 
 class TestIterSourceFiles(unittest.TestCase):
     """TestIterSourceFiles: iter_source_files のキャッシュ挙動を観察するテスト。
