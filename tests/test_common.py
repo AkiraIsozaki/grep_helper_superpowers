@@ -303,9 +303,10 @@ class TestDetectEncoding(unittest.TestCase):
 
 
 class TestBatchScannerSelectorWhitebox(unittest.TestCase):
-    """build_batch_scanner のバックエンド選択は内部最適化の実装契約。
-    public な振る舞い（マッチ結果）はパターン数に依らず同一だが、
-    性能劣化の早期検知のため backend 名を固定する。リファクタ時に同期更新が必要。
+    """TestBatchScannerSelectorWhitebox: build_batch_scanner の backend 選択を観察するテスト。
+    `scanner.backend` 内部 attribute を直接 peek し、閾値 100 を境に regex / ahocorasick が
+    選ばれる実装契約を固定。性能非機能要件（大量パターン時の AC 切替）を担保する。
+    実装変更時は本クラスも同期更新が必要。
     """
 
     def test_パターン数が閾値以上ならahocorasickバックエンドが選ばれる(self):
@@ -320,9 +321,10 @@ class TestBatchScannerSelectorWhitebox(unittest.TestCase):
 
 
 class TestDetectEncodingStreamingWhitebox(unittest.TestCase):
-    """detect_encoding が先頭 4096 byte のみ読むという実装契約のテスト。
-    巨大ファイルに対するメモリ・レイテンシ非機能要件を担保する。
-    実装を変更したら本クラスも同期更新する必要がある。
+    """TestDetectEncodingStreamingWhitebox: detect_encoding のストリーミング読込を観察するテスト。
+    `Path.read_bytes` を未呼出に固定し、`open().read(n)` を spy して `n <= 4096` を観測する
+    密結合 coupling test。巨大ファイル時のメモリ・レイテンシ非機能要件を担保する。
+    実装変更時は本クラスも同期更新が必要。
     """
 
     def test_read_bytesを呼ばない(self):
