@@ -784,7 +784,9 @@ class TestTrackConstantWhitebox(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestTrackLocal(unittest.TestCase):
-    """F-03: track_local() のテスト。"""
+    """TestTrackLocal: track_local() の公開 API としてローカル変数追跡の振る舞いを観察するテスト。
+    E2E ゴールデンは method スコープ経路を弱くしか踏まないため、最小ケースで保持する。
+    """
 
     JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
