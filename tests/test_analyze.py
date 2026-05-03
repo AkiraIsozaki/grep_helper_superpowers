@@ -513,12 +513,45 @@ class TestGetAst(unittest.TestCase):
         tree2 = get_ast(filepath, self.JAVA_DIR)
         self.assertIs(tree1, tree2, "キャッシュから同一オブジェクトが返るべき")
 
+
+# ---------------------------------------------------------------------------
+# TestAstCacheWhitebox
+# ---------------------------------------------------------------------------
+
+class TestAstCacheWhitebox(unittest.TestCase):
+    """TestAstCacheWhitebox: get_ast() が _ast_cache に None キャッシュを書き込む実装契約を観察するテスト。
+    キャッシュ dict の存在は内部実装で、E2E では観察不可能。
+    実装変更時は本クラスも同期更新が必要。
+    """
+
+    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        _ast_cache.clear()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+        _ast_cache.clear()
+
     def test_存在しないファイルはNoneとしてキャッシュされる(self):
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         get_ast("ghost.java", self.JAVA_DIR)
         self.assertIn("ghost.java", _ast_cache)
         self.assertIsNone(_ast_cache["ghost.java"])
+
+    def test_構文エラーのJavaファイルはNoneを返しキャッシュされる(self):
+        if not _JAVALANG_AVAILABLE:
+            self.skipTest("javalang が未インストールです。")
+        bad_file = Path(self.tmp_dir) / "Bad.java"
+        bad_file.write_text("this is not valid java { { {", encoding="utf-8")
+        java_dir = Path(self.tmp_dir)
+        result = get_ast("Bad.java", java_dir)
+        self.assertIsNone(result)
+        self.assertIn("Bad.java", _ast_cache)
+        self.assertIsNone(_ast_cache["Bad.java"])
 
 
 # ---------------------------------------------------------------------------
@@ -1100,34 +1133,6 @@ class TestMain(unittest.TestCase):
             content = f.read()
         self.assertIn("SAMPLE", content)
         self.assertIn("直接", content)
-
-
-# ---------------------------------------------------------------------------
-# TestGetAstExceptionHandling
-# ---------------------------------------------------------------------------
-
-class TestGetAstExceptionHandling(unittest.TestCase):
-    """get_ast() の例外処理テスト。"""
-
-    def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp()
-        _ast_cache.clear()
-
-    def tearDown(self):
-        import shutil
-        shutil.rmtree(self.tmp_dir, ignore_errors=True)
-        _ast_cache.clear()
-
-    def test_構文エラーのJavaファイルはNoneを返しキャッシュされる(self):
-        if not _JAVALANG_AVAILABLE:
-            self.skipTest("javalang が未インストールです。")
-        bad_file = Path(self.tmp_dir) / "Bad.java"
-        bad_file.write_text("this is not valid java { { {", encoding="utf-8")
-        java_dir = Path(self.tmp_dir)
-        result = get_ast("Bad.java", java_dir)
-        self.assertIsNone(result)
-        self.assertIn("Bad.java", _ast_cache)
-        self.assertIsNone(_ast_cache["Bad.java"])
 
 
 # ---------------------------------------------------------------------------
