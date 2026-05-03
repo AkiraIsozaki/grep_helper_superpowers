@@ -8,10 +8,33 @@
 """
 from __future__ import annotations
 
+import argparse
 import csv
+import datetime
+import importlib
+import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
+
+from grep_helper.pipeline import run_full_pipeline
+
+
+LANG_SPECS: dict[str, dict] = {
+    "java": {
+        "module": "grep_helper.languages.java",
+        "usage_types": [
+            "アノテーション", "定数定義", "変数代入", "条件判定",
+            "return文", "メソッド引数", "その他",
+        ],
+        "min_per_type": 10,  # Java 深堀り
+        "reference_kinds_required": [
+            "直接", "間接", "間接（getter経由）", "間接（setter経由）",
+        ],
+    },
+    # 他言語は Step 5 (Task 19) で追加
+}
 
 
 class Record(NamedTuple):
@@ -220,3 +243,140 @@ def format_detail_report(result: ComparisonResult, *, lang: str = "", timestamp:
         parts.append("（なし）")
 
     return "\n".join(parts) + "\n"
+
+
+def run(argv: list[str] | None = None) -> int:
+    """CLI エントリポイント。
+
+    Returns:
+        0: 計測完了（しきい値割れでも 0）
+        1: 入力エラー（ディレクトリ欠損、ペアリング不一致、未対応 lang）
+        2: 実行時例外
+    """
+    parser = argparse.ArgumentParser(description="KPI ゴールデンセット計測スクリプト")
+    parser.add_argument("--lang", required=True, help="計測対象言語（または all）")
+    parser.add_argument("--samples-dir", default="tests/golden", help="ゴールデンセットのルート")
+    parser.add_argument("--output-dir", default="output/kpi", help="レポート出力先")
+    parser.add_argument("--quiet", action="store_true", help="stdout サマリを抑制")
+    args = parser.parse_args(argv)
+
+    samples_dir = Path(args.samples_dir)
+    output_dir = Path(args.output_dir)
+
+    if args.lang == "all":
+        return _run_all(samples_dir, output_dir, quiet=args.quiet)
+    if args.lang not in LANG_SPECS:
+        print(f"エラー: 未対応の --lang: {args.lang}", file=sys.stderr)
+        return 1
+
+    try:
+        return _run_single(args.lang, samples_dir, output_dir, quiet=args.quiet)
+    except FileNotFoundError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"予期しないエラー: {e}", file=sys.stderr)
+        return 2
+
+
+def _run_single(lang: str, samples_dir: Path, output_dir: Path, *, quiet: bool) -> int:
+    """単一言語の KPI 計測。Step 5 (Task 20) で _run_all から呼ばれる形に再利用する。"""
+    spec = LANG_SPECS[lang]
+    lang_dir = samples_dir / lang
+    inputs_dir = lang_dir / "inputs"
+    expected_dir = lang_dir / "expected"
+    src_dir = lang_dir / "src"
+
+    if not lang_dir.is_dir():
+        raise FileNotFoundError(f"言語ディレクトリが存在しません: {lang_dir}")
+    if not inputs_dir.is_dir() or not expected_dir.is_dir() or not src_dir.is_dir():
+        raise FileNotFoundError(f"inputs/expected/src いずれかが存在しません: {lang_dir}")
+
+    # ペアリング検証
+    grep_files = sorted(inputs_dir.glob("*.grep"))
+    expected_files = {p.stem for p in expected_dir.glob("*.tsv")}
+    actual_stems = {p.stem for p in grep_files}
+    if actual_stems != expected_files:
+        raise FileNotFoundError(
+            f"inputs/expected の対応不一致: only-input={actual_stems - expected_files}, "
+            f"only-expected={expected_files - actual_stems}"
+        )
+
+    handler = importlib.import_module(spec["module"])
+
+    # 各 grep ファイルを処理
+    aggregated = ComparisonResult(
+        expected_total=0, matched_rows=0, classified_correctly=0,
+        coverage_rate=0.0, classification_accuracy=0.0,
+    )
+    per_file: list[tuple[str, ComparisonResult]] = []
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        run_full_pipeline(
+            source_dir=src_dir,
+            input_dir=inputs_dir,
+            output_dir=tmp_path,
+            handler=handler,
+            workers=1,
+        )
+        for grep_path in grep_files:
+            stem = grep_path.stem
+            actual = load_actual_tsv(tmp_path / f"{stem}.tsv")
+            expected = load_expected_tsv(expected_dir / f"{stem}.tsv")
+            res = compare(expected, actual)
+            per_file.append((stem, res))
+            aggregated.expected_total += res.expected_total
+            aggregated.matched_rows += res.matched_rows
+            aggregated.classified_correctly += res.classified_correctly
+            aggregated.missing_rows.extend(res.missing_rows)
+            aggregated.false_positives.extend(res.false_positives)
+            aggregated.misclassified.extend(res.misclassified)
+
+    aggregated.coverage_rate = (
+        aggregated.matched_rows / aggregated.expected_total
+        if aggregated.expected_total > 0 else 1.0
+    )
+    aggregated.classification_accuracy = (
+        aggregated.classified_correctly / aggregated.matched_rows
+        if aggregated.matched_rows > 0 else 0.0
+    )
+
+    # 分布チェック（全 expected を改めてロード）
+    all_expected: list[Record] = []
+    for grep_path in grep_files:
+        all_expected.extend(load_expected_tsv(expected_dir / f"{grep_path.stem}.tsv"))
+    distribution_warnings = assert_coverage_distribution(all_expected, spec)
+
+    # レポート出力
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / f"{lang}-{timestamp}.md"
+    report_path.write_text(
+        format_detail_report(aggregated, lang=lang, timestamp=timestamp),
+        encoding="utf-8",
+    )
+
+    if not quiet:
+        print(f"=== KPI 計測結果 ({lang}) ===")
+        for stem, res in per_file:
+            print(f"\n[{stem}.grep]")
+            print(format_summary(res))
+        print(f"\n=== 合計 ({lang}) ===")
+        print(format_summary(aggregated))
+        if distribution_warnings:
+            print("\nサンプル分布警告:")
+            for w in distribution_warnings:
+                print(f"  - {w}")
+        print(f"\n詳細レポート: {report_path}")
+
+    return 0
+
+
+def _run_all(samples_dir: Path, output_dir: Path, *, quiet: bool) -> int:
+    """全言語ループ（Task 20 で実装）。"""
+    raise NotImplementedError("--lang all は Task 20 で実装")
+
+
+if __name__ == "__main__":
+    raise SystemExit(run())

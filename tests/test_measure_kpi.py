@@ -272,5 +272,21 @@ class TestFormatDetailReport(unittest.TestCase):
         self.assertIn("42", out)
 
 
+class TestRunCli(unittest.TestCase):
+    """run() の CLI 振る舞い。"""
+
+    def test_未対応のlangを指定するとexit_1(self):
+        result = measure_kpi.run(["--lang", "doesnotexist"])
+        self.assertEqual(result, 1)
+
+    def test_存在しないsamples_dirを指定するとexit_1(self):
+        result = measure_kpi.run([
+            "--lang", "java",
+            "--samples-dir", "/tmp/__nonexistent_samples__",
+            "--quiet",
+        ])
+        self.assertEqual(result, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
