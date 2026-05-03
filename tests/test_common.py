@@ -13,12 +13,12 @@ class TestCommonImports(unittest.TestCase):
     ソート出力という、複数モジュールの最小限の WHAT を 1 箇所で観察する sanity layer。
     """
 
-    def test_GrepRecordのフィールドが正しく設定される(self):
+    def test_GrepRecord初期化でsrc_varは空文字に既定設定される(self):
         r = GrepRecord("kw", "直接", "その他", "f.sql", "1", "code")
         self.assertEqual(r.keyword, "kw")
         self.assertEqual(r.src_var, "")
 
-    def test_有効なgrep行をパースできる(self):
+    def test_grep行はfilepathとlinenoとcodeに分解される(self):
         result = parse_grep_line("src/sample.sql:10:WHERE code = 'A';")
         self.assertEqual(result["filepath"], "src/sample.sql")
         self.assertEqual(result["lineno"], "10")
@@ -142,7 +142,7 @@ class TestIterGrepLines(unittest.TestCase):
     streaming 性能は非機能要件で E2E では計測しないため、本クラスで担保する。
     """
 
-    def test_grep行を順序通りに取り出せる(self):
+    def test_grep行は入力順のままyieldされる(self):
         from grep_helper.grep_input import iter_grep_lines
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "x.grep"
@@ -179,7 +179,7 @@ class TestIterSourceFiles(unittest.TestCase):
     `_source_files_cache_clear` は前提条件リセット用で観測対象は公開戻り値のみ。
     """
 
-    def test_拡張子セットごとにキャッシュする(self):
+    def test_同じ拡張子セットでは追加ファイルが再列挙されない(self):
         from grep_helper.source_files import iter_source_files, _source_files_cache_clear
         _source_files_cache_clear()
         with tempfile.TemporaryDirectory() as d:
@@ -211,7 +211,7 @@ class TestResolveFileCached(unittest.TestCase):
     `_resolve_file_cache_clear` は前提条件リセット用途で観測対象は公開戻り値のみ。
     """
 
-    def test_src_dirからの相対パスを解決できる(self):
+    def test_src_dir相対パスは絶対Pathに解決される(self):
         from grep_helper.source_files import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
         with tempfile.TemporaryDirectory() as d:
@@ -246,7 +246,7 @@ class TestCachedFileLines(unittest.TestCase):
     公開契約を観察。LRU の eviction は E2E では再現性が低いため本クラスで担保する。
     """
 
-    def test_行リストを返す(self):
+    def test_ファイル各行が文字列リストとして返る(self):
         from grep_helper.file_cache import cached_file_lines, _file_lines_cache_clear
         _file_lines_cache_clear()
         with tempfile.TemporaryDirectory() as d:
