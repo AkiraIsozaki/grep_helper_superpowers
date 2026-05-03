@@ -14,6 +14,10 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsagePlsql(unittest.TestCase):
+    """TestClassifyUsagePlsql: classify_usage の分類ルール網羅を観察するテスト。
+    E2E は4分類のみカバーし、EXCEPTION処理・カーソル定義・その他は未カバー。
+    """
+
     def test_CONSTANT宣言は定数_変数宣言に分類される(self):
         """CONSTANT付きの宣言行が「定数/変数宣言」として分類されることを確認"""
         self.assertEqual(classify_usage_plsql('v_status CONSTANT VARCHAR2(10) := TARGET;'), "定数/変数宣言")
