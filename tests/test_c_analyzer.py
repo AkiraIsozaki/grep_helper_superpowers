@@ -237,7 +237,12 @@ class TestE2EC(unittest.TestCase):
             )
 
 
-class TestDefineMapWithReverse(unittest.TestCase):
+class TestDefineMapWithReverseWhitebox(unittest.TestCase):
+    """TestDefineMapWithReverseWhitebox: reverse map のキャッシュ再利用を観察するテスト。
+    `_build_reverse_define_map` を monkey-patch で差し替え、呼出回数 0 を
+    アサートする内部実装密結合の coupling test。
+    実装変更時は本クラスも同期更新が必要。
+    """
     def test_エイリアス収集でreverseマップが再構築されない(self):
         """_collect_define_aliases を多数回呼んでも reverse 構築は 1 回。"""
         _define_map_cache.clear()
