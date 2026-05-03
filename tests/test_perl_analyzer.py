@@ -27,31 +27,24 @@ class TestClassifyUsagePerl(unittest.TestCase):
         self.assertEqual(classify_usage_perl('$code = STATUS;'), "変数代入")
 
     def test_my宣言付き代入を変数代入と判定する(self):
-        """my 宣言を伴う代入を「変数代入」に分類する"""
         self.assertEqual(classify_usage_perl('my $x = STATUS;'), "変数代入")
 
     def test_our宣言付き代入を変数代入と判定する(self):
-        """our 宣言を伴う代入を「変数代入」に分類する"""
         self.assertEqual(classify_usage_perl('our $x = STATUS;'), "変数代入")
 
     def test_if文の条件式を条件判定と判定する(self):
-        """if 文での比較を「条件判定」に分類する"""
         self.assertEqual(classify_usage_perl('if ($code eq STATUS)'), "条件判定")
 
     def test_unless文の条件式を条件判定と判定する(self):
-        """unless 文での比較を「条件判定」に分類する"""
         self.assertEqual(classify_usage_perl('unless ($x == STATUS)'), "条件判定")
 
     def test_print文をprint_say出力と判定する(self):
-        """print 文を「print/say出力」に分類する"""
         self.assertEqual(classify_usage_perl('print STATUS;'), "print/say出力")
 
     def test_say文をprint_say出力と判定する(self):
-        """say 文を「print/say出力」に分類する"""
         self.assertEqual(classify_usage_perl('say STATUS;'), "print/say出力")
 
     def test_printf文をprint_say出力と判定する(self):
-        """printf 文を「print/say出力」に分類する"""
         self.assertEqual(classify_usage_perl('printf "%s", STATUS;'), "print/say出力")
 
     def test_関数呼び出しの実引数を関数引数と判定する(self):
@@ -71,7 +64,6 @@ class TestE2EPerl(unittest.TestCase):
     TESTS_DIR = Path(__file__).parent / "perl"
 
     def test_E2EでTARGET定数の解析結果が期待TSVと一致する(self):
-        """grep 入力から TARGET 定数を解析した TSV が期待出力と一致することを E2E で検証する"""
         src_dir       = self.TESTS_DIR / "src"
         input_dir     = self.TESTS_DIR / "input"
         expected_path = self.TESTS_DIR / "expected" / "TARGET.tsv"
