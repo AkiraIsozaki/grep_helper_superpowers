@@ -58,3 +58,50 @@ def process_grep_file(
         ))
         stats.valid_lines += 1
     return records
+
+
+def run_full_pipeline(
+    source_dir: Path,
+    input_dir: Path,
+    output_dir: Path,
+    handler: ModuleType,
+    *,
+    encoding: str | None = None,
+    workers: int = 1,
+    stats: ProcessStats | None = None,
+) -> list[str]:
+    """input_dir/*.grep を処理し、output_dir/<stem>.tsv を書き出す（in-process 完全版）。
+
+    grep_helper.cli.run() の本体（argparse 抜き）と等価。
+    KPI 計測スクリプト・将来の cli.run() リファクタの両方から再利用される。
+
+    Returns: 処理した grep ファイル名のリスト。
+    """
+    from grep_helper.tsv_output import write_tsv  # noqa: PLC0415
+
+    if stats is None:
+        stats = ProcessStats()
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    grep_files = sorted(input_dir.glob("*.grep"))
+    processed_files: list[str] = []
+
+    for grep_path in grep_files:
+        keyword = grep_path.stem
+        direct_records = process_grep_file(
+            grep_path, source_dir, handler,
+            keyword=keyword, encoding=encoding, stats=stats,
+        )
+        indirect_fn = getattr(handler, "batch_track_indirect", None)
+        indirect_records: list = []
+        if indirect_fn is not None:
+            indirect_records = indirect_fn(
+                direct_records, source_dir, encoding, workers=workers,
+            )
+        all_records = list(direct_records) + list(indirect_records)
+        output_path = output_dir / f"{keyword}.tsv"
+        write_tsv(all_records, output_path)
+        processed_files.append(grep_path.name)
+
+    return processed_files
