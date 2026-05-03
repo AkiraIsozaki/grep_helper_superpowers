@@ -160,11 +160,13 @@ class TestExtractDefineName(unittest.TestCase):
         self.assertEqual(extract_define_name("#define MAX_LEN 256"), "MAX_LEN")
 
 
-class TestBuildDefineMapProc(unittest.TestCase):
-    """_build_define_map() のキャッシュテスト"""
+class TestBuildDefineMapProcWhitebox(unittest.TestCase):
+    """TestBuildDefineMapProcWhitebox: _build_define_map のキャッシュ実装契約を観察するテスト。
+    キャッシュキーは (src_dir, encoding) で構成され、同一キーなら同一オブジェクトを再利用する。
+    実装変更時は本クラスも同期更新が必要。
+    """
 
     def test_define_mapは同一src_dirに対してキャッシュされる(self):
-        """同一 src_dir への2回目の呼び出しはキャッシュを返す（同一オブジェクト）"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "a.pc").write_text('#define ALIAS TARGET\n')
@@ -175,7 +177,6 @@ class TestBuildDefineMapProc(unittest.TestCase):
             self.assertIs(dm1, dm2)
 
     def test_define_mapキャッシュはエンコーディング別に分かれる(self):
-        """encoding が異なる場合は別キャッシュエントリになる"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "a.pc").write_text('#define ALIAS TARGET\n')
