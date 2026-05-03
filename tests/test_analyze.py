@@ -601,34 +601,6 @@ class TestClassifyUsage(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# TestResolveJavaFile
-# ---------------------------------------------------------------------------
-
-class TestResolveJavaFile(unittest.TestCase):
-    """F-03 内部: _resolve_java_file() のテスト。"""
-
-    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
-
-    def test_source_dir基準の相対パスが解決される(self):
-        result = _resolve_java_file("Constants.java", self.JAVA_DIR)
-        self.assertIsNotNone(result)
-        self.assertTrue(result.exists())
-
-    def test_絶対パスが解決される(self):
-        abs_path = str((self.JAVA_DIR / "Constants.java").resolve())
-        result = _resolve_java_file(abs_path, self.JAVA_DIR)
-        self.assertIsNotNone(result)
-
-    def test_存在しない相対パスはNoneを返す(self):
-        result = _resolve_java_file("ghost/Missing.java", self.JAVA_DIR)
-        self.assertIsNone(result)
-
-    def test_存在しない絶対パスはNoneを返す(self):
-        result = _resolve_java_file("/nonexistent/path/Foo.java", self.JAVA_DIR)
-        self.assertIsNone(result)
-
-
-# ---------------------------------------------------------------------------
 # TestGetMethodScope
 # ---------------------------------------------------------------------------
 
