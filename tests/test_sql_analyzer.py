@@ -59,6 +59,9 @@ class TestClassifyUsageSql(unittest.TestCase):
 
 
 class TestExtractSqlVariableName(unittest.TestCase):
+    """TestExtractSqlVariableName: extract_sql_variable_name の代入文→変数名抽出を観察するテスト。
+    SQL 言語の E2E 駆動テストが現状無いため、公開 API の抽出仕様を本クラスで保証する。
+    """
     def test_単純な代入文から変数名を抽出できる(self):
         """`v_code := ...` から変数名 v_code を取り出せること"""
         self.assertEqual(
