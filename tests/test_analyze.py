@@ -604,8 +604,11 @@ class TestClassifyUsage(unittest.TestCase):
 # TestGetMethodScope
 # ---------------------------------------------------------------------------
 
-class TestGetMethodScope(unittest.TestCase):
-    """F-03 内部: _get_method_scope() のテスト。"""
+class TestGetMethodScopeWhitebox(unittest.TestCase):
+    """TestGetMethodScopeWhitebox: _get_method_scope() のメソッドスコープ start/end タプル契約を観察するテスト。
+    Phase 2 Task 7 の mutation 実測（戻り値を `(1, 99999)` / `(method_start+1000, i)` / `(method_start, method_start)` の 3 通りに歪めても TestIntenseE2E は赤化せず）により、本関数の戻り値契約は E2E ゴールデンでは観察不能と判明。b 案削除を断念し Whitebox として保持。
+    実装変更時は本クラスも同期更新が必要。
+    """
 
     JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
