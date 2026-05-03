@@ -8,6 +8,7 @@ dist/
 *.log
 .DS_Store
 output/*.tsv
+output/kpi/
 htmlcov/
 .coverage
 .ai/
