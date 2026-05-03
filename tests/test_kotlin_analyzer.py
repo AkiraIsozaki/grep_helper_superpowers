@@ -18,6 +18,10 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsageKotlin(unittest.TestCase):
+    """TestClassifyUsageKotlin: classify_usage_kotlin の各分岐の分類結果を観察するテスト。
+    E2E TSV では具体ケースのみ現れ、9 種の分岐すべてを区別観察できないため keep。
+    """
+
     def test_const_val宣言はconst定数定義に分類される(self):
         """const val 宣言がconst定数定義として分類されることを確認"""
         self.assertEqual(classify_usage_kotlin('const val STATUS = "TARGET"'), "const定数定義")
@@ -56,6 +60,10 @@ class TestClassifyUsageKotlin(unittest.TestCase):
 
 
 class TestExtractConstName(unittest.TestCase):
+    """TestExtractConstName: extract_const_name の抽出有無を観察するテスト。
+    None 返却（const なし / 宣言以外）の WHAT は E2E TSV からは観察できないため keep。
+    """
+
     def test_const_val宣言から定数名を抽出できる(self):
         """const val 宣言行から定数名を正しく抽出することを確認"""
         self.assertEqual(extract_const_name('const val STATUS = "TARGET"'), "STATUS")
@@ -70,6 +78,10 @@ class TestExtractConstName(unittest.TestCase):
 
 
 class TestTrackConst(unittest.TestCase):
+    """TestTrackConst: track_const の間接参照検出と定義行除外を観察するテスト。
+    定義行が結果から除外される WHAT は E2E TSV からは直接観察しにくいため keep。
+    """
+
     def test_ktファイル内の定数利用箇所を検出できる(self):
         """track_const が .kt ファイル内の定数利用箇所を間接参照として検出することを確認"""
         with tempfile.TemporaryDirectory() as d:
