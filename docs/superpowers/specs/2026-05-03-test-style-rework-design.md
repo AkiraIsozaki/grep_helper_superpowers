@@ -67,23 +67,35 @@ self.assertEqual(first, second)
 
 適用対象：`test_サイズ上限内ならキャッシュされる`、`test_解決結果がキャッシュされる`（後者は既に近い形）。
 
+**注記**：本パターンは「キャッシュは自動無効化しない（mtime/inode を見ない）」という現状契約に依存する。将来 mtime ベース無効化を導入する場合、契約変更を反映してテストを更新する必要がある。逆に言うと、テストが赤くなれば契約違反が検出される。
+
 ### パターン B：キャッシュ容量 peek → 退避後の再読込で観察
 
 ```python
 # Before（HOW: dict のサイズで判定）
 self.assertLessEqual(len(_file_lines_cache), 3)
 
-# After（WHAT: 上限超過後、古いファイルは再読込される）
-old = p / "f0.txt"; old.write_text("X" * 50)
-cached_file_lines(old, "utf-8")
-for i in range(1, 5):  # 上限超過させる
-    f = p / f"f{i}.txt"; f.write_text("X" * 50)
+# After（WHAT: 上限超過後、初期エントリのうち少なくとも 1 つは再読込される）
+early = []
+for i in range(3):
+    f = p / f"early{i}.txt"; f.write_text("X" * 50)
     cached_file_lines(f, "utf-8")
-old.write_text("CHANGED")
-self.assertEqual(cached_file_lines(old, "utf-8"), ["CHANGED"])  # 再読込された
+    early.append(f)
+for i in range(5):  # 容量上限を確実に超過させる
+    f = p / f"later{i}.txt"; f.write_text("X" * 50)
+    cached_file_lines(f, "utf-8")
+# 初期エントリの中身を書き換え、再読込が起きていることを確認
+re_read = []
+for f in early:
+    f.write_text("CHANGED")
+    if cached_file_lines(f, "utf-8") == ["CHANGED"]:
+        re_read.append(f)
+self.assertGreaterEqual(len(re_read), 1)  # 退避ポリシーは問わない
 ```
 
 適用対象：`test_合計サイズが上限超過で古いものを破棄する`。
+
+**注記**：「どれが追い出されるか」は LRU/FIFO/LFU 等の退避ポリシーに依存する。原則 6（変更耐性）を守るため、本パターンは**特定エントリの追い出し**ではなく**少なくとも 1 つは追い出される**ことを WHAT として観察する。退避ポリシーの具体は実装詳細としてホワイトボックス側で別途固定したい場合のみテストする。
 
 ### パターン C：バックエンド選択 → 削除＋ホワイトボックス 1 本に集約
 
@@ -120,11 +132,34 @@ self.assertEqual(list(it), ["a:1:foo", "b:2:bar"])
 self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["a:1:foo", "b:2:bar"])
 ```
 
-「メモリに全行ロードしない」という性能契約を守りたい場合のみ、ホワイトボックス側に 1 本書く。基本は型 assertion を**消す**。
+ただし `iter_grep_lines` という関数名は「ストリーミング処理する」ことを公開契約として示している。型 assertion を単純に消すと、名前と振る舞いの乖離が検出されなくなる。
+
+そこで以下の二段構えとする：
+- **ブラックボックス側**：「行順に取り出せる」WHAT を `assertEqual(list(...), [...])` で検証する（型 assertion は消す）。加えて「**先頭 N 行だけ消費して break しても全行を読まない**」型の smoke test を 1 本残す。これは大きな入力（数十 MB 相当を `tempfile` で生成）で、`itertools.islice` で先頭数行だけ消費し、関数が **timeout なく返ってくる**ことを assert する。タイミング閾値は緩く（数秒）取り、フレーキーを回避する
+- **ホワイトボックス側**（必要なら）：実装契約「全行を一度に list 化していないこと」を patch ベースで verify する 1 本。基本はブラックボックス側だけで足りるはず
 
 ### パターン F（横串）：メソッドの docstring を削除
 
 書き直したテストでは原則 docstring を書かない。残すのは前提条件や WHY が非自明な場合のみ。
+
+### パターン G：private helper 直接ユニットテスト → 公開 API 経由、または E2E カバーで削除
+
+```python
+# Before（HOW: アンダースコア付き private helper を直接呼ぶ）
+class TestSearchInLines(unittest.TestCase):
+    def test_変数名を含む行がGrepRecordとして返る(self):
+        records = _search_in_lines(lines=..., var_name=..., start_line=..., ...)
+        self.assertEqual(len(records), 1)
+```
+
+選択肢：
+- **a) 公開 API 経由に持ち上げる**：`track_constant` / `track_field` などの上位公開関数を呼び、同じ入力空間の代表点を**経由的に**検証する。private helper の細かい引数アリティから解放される
+- **b) E2E でカバーされていれば削除**：`tests/fixtures/` の E2E 比較がその分岐を踏んでいるなら、private helper の直接ユニットテストは冗長として削除する
+- **c) ホワイトボックス側に隔離**：a) も b) も難しい場合のみ、`Test...Whitebox` クラスに移して「内部 API のテスト」と明示
+
+判定の優先順は **b → a → c**。E2E カバーの有無は `coverage.py` 等で機械的に確認するのではなく、フィクスチャを読んで該当パスを踏むかを目視で判断する（YAGNI）。
+
+適用対象（スイープ第一弾）：`test_analyze.py:688-806` 周辺の `TestGetMethodScope`、`TestSearchInLines`、`TestBatchTrackSetters`、`TestBatchTrackOnePass`。これらは `_get_method_scope`、`_search_in_lines`、`_batch_track_setters`、`_batch_track_combined` を直接テストしており、リファクタ脆性が高い。
 
 ## ホワイトボックス隔離の規約
 
@@ -132,6 +167,9 @@ self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["a:1:foo", "b:2:bar"])
 - **クラス docstring** で「これは実装契約のテスト。リファクタ時に同期更新が必要」と明記
 - メソッド docstring は他のテスト同様、原則書かない
 - 別ファイル化・別ディレクトリ化は行わない（局所性を優先）
+- **インタラクション検証（モックで「呼ばれた／呼ばれない」「読み取りバイト数」等を verify する形）は本クラス内に限り許容**する。本クラス外で `unittest.mock.patch` を使った interaction 検証を書かない（boundary としてのモック — `sys.stdout` キャプチャ等 — は別。これは出力という観察可能な振る舞いの取得手段にすぎない）
+
+なお、**ホワイトボックス隔離クラス以外**のテストクラスについては、**クラス docstring も任意**とする（メソッド docstring と同じ原則）。意味のないグルーピング用クラスにまで docstring を強制しない。
 
 ## パイロット内の実行順序（`test_common.py`）
 
@@ -143,6 +181,7 @@ self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["a:1:foo", "b:2:bar"])
 4. **パターン E（型 assertion 削除）の書き直し**
 5. **パターン C・D（隔離対象）を `class Test...Whitebox` に移送**
 6. **ホワイトボックス点検**：書き直し後のテスト群を実装と突き合わせ、明らかに不足している分岐があれば**実装を知らないつもりで**ブラックボックス的にケースを足す。ただし追加したケースが内部リファクタで容易に壊れる形にしかならないなら、原則 6 に従い追加を諦めるか、ホワイトボックス隔離側に書く
+7. **パターン G の試験翻訳**（スパイク）：`test_analyze.py:688-806` から 1 テスト（例：`TestGetMethodScope` の 1 メソッド）を選び、公開 API 経由 or 削除に変換可能か手で確認する。スイープ第一弾で躓かないための先行検証。試験翻訳は本パイロット PR には含めず、知見のみ spec に追記する（必要なら別途 issue 化）
 
 ## TDD ディシプリン（このリファクタにおける適用）
 
@@ -161,7 +200,8 @@ self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["a:1:foo", "b:2:bar"])
 2. 書き直し
 3. **書き直し後**にテスト単体を実行してグリーン確認
 4. 自問：「元のテストが捕まえていたバグを、新しいテストも捕まえるか？」を 1 行で言語化（コミットメッセージに残す）
-5. パイロット完了時、`tests/` 全体を 1 度だけ実行してリグレッションがないことを確認
+5. **手動 mutation スポットチェック**：書き直したテストが対応する production コードの代表的な 1 行（条件分岐・正規表現・キー判定など）を**手で一時コメントアウト**し、新テストが赤くなることを 1 度だけ確認する（赤くならない場合、新テストが WHAT を捕まえていない徴候）。確認後は production を元に戻す
+6. パイロット完了時、`tests/` 全体を 1 度だけ実行してリグレッションがないことを確認
 
 ミューテーションテスト等の機械的検証は今回はやらない（YAGNI）。やるなら別タスクで。
 
@@ -176,7 +216,7 @@ self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["a:1:foo", "b:2:bar"])
 | 3 | `test_all_analyzer.py` | dispatcher 内部の `inspect` でシグネチャ検証している箇所（あれば）、その他軽微 | 472 |
 | 4 | `test_aho_corasick.py` および `test_*_analyzer.py`（言語別） | 既にほぼ WHAT。ざっと点検し docstring 削除 | 各 < 200 |
 
-各ファイルでパイロットの 6 ステップを繰り返す。スイープは個別 PR／個別コミット。
+各ファイルでパイロットの 1〜6 ステップを繰り返す（ステップ 7 はパイロット限定の試験翻訳なので不要）。スイープは個別 PR／個別コミット。
 
 ## 終状態（このリファクタ完了時）
 
@@ -184,13 +224,15 @@ self.assertEqual(list(iter_grep_lines(p, "utf-8")), ["a:1:foo", "b:2:bar"])
 - 公開 API・E2E 出力ベースの WHAT 検証が主体
 - 真にホワイトボックスなテストは `Test...Whitebox` クラスに隔離されラベリングされている
 - 内部リファクタ（private helper の名前変更、cache 実装の差し替え、backend 選択ロジック変更）でも、ホワイトボックス隔離クラス以外は壊れない
-- ガイドラインドキュメントに 5 パターンと隔離規約が成文化されている
+- ガイドラインドキュメントに 7 パターン（A〜G）と隔離規約が成文化されている
 
 ## 想定リスクと緩和
 
 | リスク | 緩和策 |
 |---|---|
-| 書き直しで WHAT 契約が暗黙に弱くなる | コミットごとに「元のテストが捕まえていたバグを新テストも捕まえるか」をメッセージに記す |
+| 書き直しで WHAT 契約が暗黙に弱くなる | コミットごとに「元のテストが捕まえていたバグを新テストも捕まえるか」をメッセージに記す。加えてステップ 5 の手動 mutation チェックで該当行コメントアウト時に新テストが赤くなることを 1 度確認する |
 | `_ast_cache` 等の peek を全部 behavioral に翻訳できないケースが出る | パターン D の判定基準（タイミングが必要・観察対象が曖昧）に該当すればホワイトボックス隔離を許容 |
-| パイロットで決めたパターンが他ファイルに合わない | スイープ第一弾（`test_analyze.py`）で違和感が出たら設計に戻る。ガイドラインは「成長するもの」とする |
+| パイロットで決めたパターンが他ファイルに合わない | スイープ第一弾（`test_analyze.py`）で違和感が出たら設計に戻る。ガイドラインは「成長するもの」とする。なおパターン G の試験翻訳をパイロット内で行うことで、第一弾の躓きを前倒しで検出する |
 | パイロット中に production バグが見つかる | テスト見直しは止めず、別 PR で扱う旨をコミットメッセージに残す |
+| パターン A が将来の mtime/inode ベースのキャッシュ無効化導入を阻害する | パターン A 自体に「自動無効化なし契約」依存である注記を残す。将来契約を変える場合はテスト群を更新する手間が必要なことを受容する |
+| パターン B が退避ポリシー変更で壊れる | 「特定エントリの追い出し」ではなく「**少なくとも 1 つは追い出される**」を WHAT として観察するように緩めて記述（パターン B 本文）。ポリシー固定が必要ならホワイトボックス側で扱う |
