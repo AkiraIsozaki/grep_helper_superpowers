@@ -26,6 +26,11 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsageC(unittest.TestCase):
+    """TestClassifyUsageC: classify_usage の C 行分類戻り値を観察するテスト。
+    各使用タイプ（#define / 条件判定 / return / 変数代入 / 関数引数 / その他）の
+    パターン分岐を網羅的に enumerate しており、E2E fixture では一部分岐しか
+    踏まないため公開契約のドキュメントとして保持する。
+    """
     def test_define定数定義を分類できる(self):
         """#define 行が「#define定数定義」に分類されることを確認する。"""
         self.assertEqual(classify_usage_c('#define MAX_SIZE 100'), "#define定数定義")
@@ -73,6 +78,10 @@ class TestClassifyUsageC(unittest.TestCase):
 
 
 class TestExtractDefineName(unittest.TestCase):
+    """TestExtractDefineName: extract_define_name の戻り値を観察するテスト。
+    `# define`（hash 後の空白）や値なし `#define` の境界条件は
+    E2E fixture（`#define X Y` 形式のみ）では網羅されないため保持する。
+    """
     def test_define行から定数名を抽出できる(self):
         """通常の #define 行から定数名を取り出せることを確認する。"""
         self.assertEqual(extract_define_name('#define STATUS "value"'), "STATUS")
@@ -91,6 +100,10 @@ class TestExtractDefineName(unittest.TestCase):
 
 
 class TestExtractVariableNameC(unittest.TestCase):
+    """TestExtractVariableNameC: extract_variable_name_c の戻り値を観察するテスト。
+    ポインタ宣言（`char *ptr`）や非変数宣言行など、E2E fixture には
+    含まれない型宣言バリエーションの公開契約を保持する。
+    """
     def test_char配列宣言から変数名を抽出できる(self):
         """char buf[32]; から変数名 buf を抽出できることを確認する。"""
         self.assertEqual(extract_variable_name_c('char buf[32];'), "buf")
