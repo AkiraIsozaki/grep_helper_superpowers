@@ -210,6 +210,61 @@ git diff grep_helper/
 ```
 を実行し空であることを確認。空でなければ mutation の取り残しがある（**絶対にコミットしない**）。`git checkout grep_helper/` で復元してから commit。
 
+### K. テストメソッド名 WHAT 改善 (selective)
+
+**目的:** WHAT が現状のメソッド名で obscure になっている箇所のみ改名し、テストの読み手が「何を観察するテストか」を一目で把握できるようにする。
+
+**理想形 (spec-as-collection):** `grep "def test_" <file>.py` の出力（メソッド名の集合）だけを読んで、対象 module / class の振る舞い仕様（仕様書）になっている状態が理想。すなわち：
+- 各名前は **観察可能な振る舞いの 1 行 spec**（input → output / cause → effect）。
+- 集合として **対象の振る舞い表面を網羅** している（重複に見える名前は実は意味的差分があるか、または 1 件に集約すべきか、判断する）。
+- テストコードを読まなくても、名前列だけで「何が保証されているか」がわかる。
+
+この理想に **近づける改名のみ** を実施する（個々の名前が WHAT を表現していても、集合として読みづらい・重複している場合は調整する）。
+
+**改名トリガー (改名する):**
+
+| 兆候 | 例 (改名前 → 改名後) |
+|---|---|
+| 末尾「こと」が冗長で WHAT 表現を弱める | `test_TSV出力の列数が9列であること` → `test_TSV出力の列数が9列である` |
+| HOW / WHY 漏れ (WHAT に絞ると簡潔になる) | `test_UTF8_BOM付きで出力されExcelで文字化けしない` → `test_TSV出力がUTF8_BOMで始まる` |
+| 漠然動詞 (`正しく` / `適切に` / `ちゃんと`) | `test_AST使用時に定数定義を正しく分類する` → `test_AST使用時の定数定義は定数_変数宣言に分類される` |
+| 同一 WHAT を別表現で複数件 (重複疑い) | 3 件で文言だけ差分 → 統一名 1 件に集約か、意味的差分があるなら明示 |
+| 関数名のみで WHAT 不明 | `test_findall` → `test_findallが全マッチ位置のリストを返す` |
+| `test_basic` / `test_works` / `test_simple` 等の generic | 観察対象を明示した名前へ |
+
+**改名禁止 (触らない):**
+
+- 既に WHAT を明示しており、表現の好み程度の違いしかない場合 (e.g. 「〜に分類する」と「〜と分類される」の能動受動だけの差) — これは stylistic につき触らない。
+- 同じファイル内で揃ってないだけで、各々は WHAT を表現できている場合 — mass standardize はしない。
+- WHAT 観察ではなく Whitebox/keep の判定で削除されるクラスのメソッド — 削除するなら改名不要。
+
+**改名手順:**
+
+1. 対象ファイルの `def test_xxx(self):` 行を grep して全メソッド名を一覧。
+2. 改名トリガーに該当するものだけマーキング (table 形式で内部メモ)。
+3. メソッド名を Edit で変更。**メソッド本体は変更しない**。
+4. 同名参照がないか念のため確認 (テスト名は通常 self-reference のみで他から呼ばれないが、`unittest` の test selector で specific 名指しされている可能性も考慮):
+   ```bash
+   grep -rn "<旧メソッド名>" tests/ scripts/ docs/ 2>/dev/null
+   ```
+5. テスト実行で全メソッドが run/pass することを確認.
+
+**コミット粒度:** メソッド名改名は **判定アクション (c/b/a) とは別の独立コミット** にする。1 ファイル内で 1 コミット。コミットメッセージ:
+
+```
+test(<file>): rename test methods for clearer WHAT (selective)
+
+WHAT が obscure になっていた N 件のメソッド名を改善：
+- <旧名> → <新名> (理由: <冗長「こと」/HOW 漏れ/重複/...>)
+- ...
+
+メソッド本体は不変、件数も不変。
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+```
+
+該当が 0 件なら commit 不要。
+
 ---
 
 ### Task 1: ベースライン確認 & Wave 2 棚卸し
@@ -367,6 +422,10 @@ precondition 不成立なら c 案 fallback（Step 3 と同じパターンで re
 
 `共通の事前確認事項 C` の形で docstring を書き換え、まとめて 1 commit。
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 
 ```bash
@@ -415,6 +474,10 @@ grep -nE "^from grep_helper" tests/test_sh_analyzer.py
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
 python -m unittest discover -s tests 2>&1 | tail -3
@@ -452,6 +515,10 @@ grep -nE "^from grep_helper" tests/test_sql_analyzer.py
 - [ ] **Step 4: b 案候補の Mutation Gate** (該当があれば、`共通の事前確認事項 D`)
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
+
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
 
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
@@ -491,6 +558,10 @@ grep -nE "^from grep_helper" tests/test_ts_analyzer.py
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
 python -m unittest discover -s tests 2>&1 | tail -3
@@ -528,6 +599,10 @@ grep -nE "^from grep_helper" tests/test_perl_analyzer.py
 - [ ] **Step 4: b 案候補の Mutation Gate** (該当があれば、`共通の事前確認事項 D`)
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
+
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
 
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
@@ -567,6 +642,10 @@ grep -nE "^from grep_helper" tests/test_plsql_analyzer.py
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
 python -m unittest discover -s tests 2>&1 | tail -3
@@ -605,6 +684,10 @@ grep -nE "^from grep_helper" tests/test_kotlin_analyzer.py
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
 python -m unittest discover -s tests 2>&1 | tail -3
@@ -642,6 +725,10 @@ grep -nE "^from grep_helper" tests/test_dotnet_analyzer.py
 - [ ] **Step 4: b 案候補の Mutation Gate** (該当があれば、`共通の事前確認事項 D`)
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
+
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
 
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
@@ -691,6 +778,10 @@ grep -nE "^from grep_helper" tests/test_groovy_analyzer.py
 クラスごとに mutation を試行、復元、削除（または fallback）を 1 サイクルとして処理。
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
+
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
 
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
@@ -742,6 +833,10 @@ python -m unittest tests.test_c_analyzer.TestE2EC 2>&1 | tail -10
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
 python -m unittest discover -s tests 2>&1 | tail -3
@@ -787,6 +882,10 @@ grep -nE "^from grep_helper" tests/test_common.py
 mutation 走行先は対象 module に依存。test_common.py の中の E2E 系クラスがあればそれを中心に、なければ整合性のある E2E (e.g. `TestE2EAll` from test_all_analyzer.py や `TestIntegration` from test_analyze.py) を走らせる。複数 mutation を試す場合、production module ごとに `git checkout` で復元する範囲を明示する。
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
+
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
 
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
@@ -842,6 +941,10 @@ python -m unittest tests.test_analyze_proc.TestE2EProc tests.test_analyze_proc.T
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
 python -m unittest discover -s tests 2>&1 | tail -3
@@ -894,6 +997,10 @@ python -m unittest tests.test_all_analyzer.TestE2EAll tests.test_all_analyzer.Te
 
 - [ ] **Step 5: a 案 / keep の docstring 整理** (該当があれば、`共通の事前確認事項 C`)
 
+- [ ] **Step 5b: テストメソッド名 WHAT 改善 (selective)** (`共通の事前確認事項 K` に従う)
+
+該当があれば、メソッド本体は不変のまま `def test_xxx(self):` 行のみ rename。判定区分とは別の独立 commit。該当 0 件なら commit 不要。
+
 - [ ] **Step 6: 全テスト green 確認**
 ```bash
 python -m unittest discover -s tests 2>&1 | tail -3
@@ -909,6 +1016,135 @@ Expected: 空。
 ```bash
 git log --oneline | head -15
 ```
+
+---
+
+### Task 15.5: 遡及メソッド名 WHAT 改善 (test_analyze.py + test_aho_corasick.py)
+
+**Files:**
+- Modify: `tests/test_analyze.py` (Wave 1 で整理済、約 92 メソッド)
+- Modify: `tests/test_aho_corasick.py` (Wave 2 Task 2 で no-op 判定済、4 メソッド)
+
+**WHY:** Wave 1 (test_analyze.py) と Wave 2 Task 2 (test_aho_corasick.py) はメソッド名 WHAT 改善の指針が確立する前に通過した。本 Task で遡及的に `共通の事前確認事項 K` を適用し、Wave 2 全体で一貫した「メソッド名集合 = 動く仕様」状態に揃える。
+
+- [ ] **Step 1: test_analyze.py のメソッド名一覧を取得**
+
+```bash
+grep -nE "^    def test_" tests/test_analyze.py
+```
+
+92 件のメソッド名を取得。クラス単位でグループ化して内部メモする。
+
+- [ ] **Step 2: test_aho_corasick.py のメソッド名一覧を取得**
+
+```bash
+grep -nE "^    def test_" tests/test_aho_corasick.py
+```
+
+4 件のメソッド名を取得。
+
+- [ ] **Step 3: K の改名トリガーで両ファイル全メソッドを評価**
+
+各メソッド名を K の改名トリガー (冗長「こと」/HOW 漏れ/漠然動詞/重複表現/関数名のみ/generic) に照らして評価。改名候補を table 形式で内部メモ:
+
+```
+| File | Class | 旧名 | 新名 | 理由 |
+|---|---|---|---|---|
+| test_analyze.py | TestX | test_old1 | test_new1 | 冗長「こと」 |
+| ... |
+```
+
+K の「改名禁止」条件に該当するものは触らない（stylistic 違いのみ・揃ってないだけ・削除予定クラスは対象外）。
+
+- [ ] **Step 4: spec-as-collection の観点で全体を見直す**
+
+Step 3 で挙げた候補に加えて、K の理想形「集合として読んで仕様になる」観点でファイルごとにメソッド名一覧を眺め、追加の改名候補がないか確認:
+- 同一 WHAT を別表現で書いてある複数件 → 統一名へ
+- クラス内で書きぶりが揃っていない (一部は能動、一部は受動 等) で、揃えると集合として読みやすくなる場合 → 統一
+
+ただし「揃ってないが各々が WHAT を表現している」だけならスキップ（K の改名禁止）。
+
+- [ ] **Step 5: test_analyze.py の改名を適用**
+
+候補に挙がったメソッド名を Edit で書き換え。本体は不変。
+
+- [ ] **Step 6: test_analyze.py 単独で green 確認**
+
+```bash
+python -m unittest tests.test_analyze 2>&1 | tail -3
+```
+
+Expected: テスト件数不変、すべて OK。
+
+- [ ] **Step 7: test_analyze.py コミット**
+
+```bash
+git add tests/test_analyze.py
+git commit -m "$(cat <<'EOF'
+test(test_analyze): rename test methods for clearer WHAT (selective, retroactive)
+
+Wave 1 完了後に Wave 2 で確立した「メソッド名 = spec」原則 (共通事項 K) を
+遡及適用。WHAT が obscure になっていた N 件のメソッド名を改善：
+- <旧名> → <新名> (理由: ...)
+- ...
+
+メソッド本体は不変、件数も不変。
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+該当 0 件なら commit 不要。
+
+- [ ] **Step 8: test_aho_corasick.py の改名を適用**
+
+候補に挙がったメソッド名を Edit で書き換え。本体は不変。
+
+- [ ] **Step 9: test_aho_corasick.py 単独で green 確認**
+
+```bash
+python -m unittest tests.test_aho_corasick 2>&1 | tail -3
+```
+
+Expected: テスト件数不変、すべて OK。
+
+- [ ] **Step 10: test_aho_corasick.py コミット**
+
+```bash
+git add tests/test_aho_corasick.py
+git commit -m "$(cat <<'EOF'
+test(test_aho_corasick): rename test methods for clearer WHAT (selective, retroactive)
+
+Wave 2 Task 2 で no-op 判定したファイルにメソッド名 WHAT 改善を遡及適用。
+WHAT が obscure になっていた N 件のメソッド名を改善：
+- <旧名> → <新名> (理由: ...)
+- ...
+
+メソッド本体は不変、件数も不変。
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+該当 0 件なら commit 不要。
+
+- [ ] **Step 11: 全テスト green 確認**
+
+```bash
+python -m unittest discover -s tests 2>&1 | tail -3
+```
+
+Expected: `Ran <件数> tests ... OK`. メソッド名改名は件数を変えないため、Task 15 後の件数を維持。
+
+- [ ] **Step 12: production 差分なし確認**
+
+```bash
+git diff grep_helper/
+```
+
+Expected: 空。
 
 ---
 
@@ -939,9 +1175,9 @@ Expected: 差分なし（全 b 案 mutation はすべて復元したはず）。
 git log --oneline <Task 1 SHA>..HEAD
 ```
 
-Expected: Task 2〜15 の各 commit が順に並ぶ（純 keep 触らずスキップした Task は commit 0 件もありうる）。
+Expected: Task 2〜15.5 の各 commit が順に並ぶ（純 keep 触らずスキップした Task は commit 0 件もありうる）。判定アクション commit と method-name 改名 commit は別々に並ぶ。
 
-- [ ] **Step 4: 最終クラス棚卸し**
+- [ ] **Step 4: 最終クラス棚卸し + メソッド名集合の俯瞰**
 
 ```bash
 for f in tests/test_aho_corasick.py tests/test_all_analyzer.py tests/test_analyze_proc.py tests/test_c_analyzer.py tests/test_common.py tests/test_dotnet_analyzer.py tests/test_groovy_analyzer.py tests/test_kotlin_analyzer.py tests/test_perl_analyzer.py tests/test_plsql_analyzer.py tests/test_python_analyzer.py tests/test_sh_analyzer.py tests/test_sql_analyzer.py tests/test_ts_analyzer.py; do
@@ -952,6 +1188,17 @@ done
 
 各ファイルでの判定結果（純 keep / a 案 / Whitebox / 削除）の最終内訳をまとめる。
 
+加えて、メソッド名集合が「動く仕様」になっているか俯瞰確認:
+
+```bash
+for f in tests/test_*.py; do
+  echo "=== $f ==="
+  grep -nE "^    def test_" "$f"
+done
+```
+
+ファイル単位で「メソッド名一覧だけを読んで対象 module の振る舞い仕様になっているか」を最終確認。明らかに spec として読みにくい箇所が残っていれば追記コミットも検討。
+
 - [ ] **Step 5: ユーザーへの報告内容**
 
 報告に含める：
@@ -959,6 +1206,7 @@ done
 - Wave 2 で **Whitebox 化したクラス**の名前と理由
 - Wave 2 で **削除したクラス**の名前と mutation 確認結果
 - Wave 2 で **b 案不成立 → c 案 fallback** したクラスがあれば名前と mutation 試行履歴
+- 各ファイルの **メソッド名改名件数** (Step 5b 由来) と Task 15.5 の遡及改名件数
 - 全体テスト件数推移 (376 → 終了時)
 - production 差分なし確認
 - 全体テストグリーン状態
