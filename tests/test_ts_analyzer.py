@@ -14,6 +14,11 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsageTs(unittest.TestCase):
+    """TestClassifyUsageTs: classify_usage(ts) の分類ラベル返り値を観察するテスト。
+    E2E (TestE2ETs) は関数引数/const定数定義のみ通過するため、
+    変数代入/条件判定/return文/デコレータ/その他 の分岐は本クラスでのみ保証される。
+    """
+
     def test_const定数定義として分類されること(self):
         """const宣言で定数が代入されている行をconst定数定義として分類することを検証する"""
         self.assertEqual(classify_usage_ts('const STATUS = "TARGET"'), "const定数定義")
@@ -52,6 +57,10 @@ class TestClassifyUsageTs(unittest.TestCase):
 
 
 class TestE2ETs(unittest.TestCase):
+    """TestE2ETs: process_grep_file → write_tsv の TypeScript 経路全体の TSV 出力を観察するテスト。
+    grep 行パース・分類・TSV 整形を含む統合経路の回帰検出を担う。
+    """
+
     TESTS_DIR = Path(__file__).parent / "ts"
 
     def test_TARGETに対するE2E解析結果が期待TSVと一致すること(self):
