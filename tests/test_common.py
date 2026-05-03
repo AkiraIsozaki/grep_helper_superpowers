@@ -255,14 +255,17 @@ class TestCachedFileLines(unittest.TestCase):
             p.write_text("a\nb\nc\n", encoding="utf-8")
             self.assertEqual(cached_file_lines(p, "utf-8"), ["a", "b", "c"])
 
-    def test_サイズ上限内ならキャッシュされる(self):
-        from grep_helper.file_cache import cached_file_lines, _file_lines_cache_clear, _file_lines_cache
+    def test_キャッシュ済みファイルは書き換えても古い値が返る(self):
+        from grep_helper.file_cache import cached_file_lines, _file_lines_cache_clear
         _file_lines_cache_clear()
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "f.txt"
-            p.write_text("a\n", encoding="utf-8")
-            cached_file_lines(p, "utf-8")
-            self.assertIn(str(p), _file_lines_cache)
+            p.write_text("first\n", encoding="utf-8")
+            first = cached_file_lines(p, "utf-8")
+            p.write_text("second\n", encoding="utf-8")
+            second = cached_file_lines(p, "utf-8")
+            self.assertEqual(first, ["first"])
+            self.assertEqual(second, ["first"])  # キャッシュ hit で古い値
 
     def test_合計サイズが上限超過で古いものを破棄する(self):
         from grep_helper.file_cache import (
