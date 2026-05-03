@@ -41,6 +41,9 @@ class TestClassifyUsageSh(unittest.TestCase):
 
 
 class TestExtractShVariableName(unittest.TestCase):
+    """TestExtractShVariableName: extract_sh_variable_name の代入文→変数名抽出を観察するテスト。
+    sh 言語の E2E 駆動テストが現状無いため、公開 API の抽出仕様を本クラスで保証する。
+    """
     def test_単純な代入から変数名を抽出する(self):
         """VAR="..." 形式から変数名 VAR を抽出できることを検証"""
         self.assertEqual(extract_sh_variable_name('MY_VAR="TARGET"'), "MY_VAR")
