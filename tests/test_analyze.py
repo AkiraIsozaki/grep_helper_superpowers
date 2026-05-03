@@ -96,7 +96,7 @@ class TestGrepParser(unittest.TestCase):
         self.assertIsNone(parse_grep_line("   "))
         self.assertIsNone(parse_grep_line("\n"))
 
-    def test_Windowsパスを含むgrep行を正しくパースできる(self):
+    def test_Windowsパスのドライブコロンを区切り文字と誤認せずパースする(self):
         line = r"C:\project\src\Constants.java:42:    String s = CODE;"
         result = parse_grep_line(line)
         self.assertIsNotNone(result)
@@ -120,10 +120,10 @@ class TestGrepParser(unittest.TestCase):
 class TestUsageClassifier(unittest.TestCase):
     """F-02: classify_usage_regex() の7種分類テスト。"""
 
-    def test_アノテーション行を正しく分類する(self):
+    def test_アノテーション行をアノテーションに分類する(self):
         self.assertEqual(classify_usage_regex('@RequestMapping("TARGET")'), "アノテーション")
 
-    def test_static_final定数定義を正しく分類する(self):
+    def test_static_final定数定義を定数定義に分類する(self):
         code = 'public static final String CODE = "TARGET";'
         self.assertEqual(classify_usage_regex(code), "定数定義")
 
@@ -137,13 +137,13 @@ class TestUsageClassifier(unittest.TestCase):
     def test_不等号を含む行を条件判定として分類する(self):
         self.assertEqual(classify_usage_regex('if (x != CODE) {'), "条件判定")
 
-    def test_return文を正しく分類する(self):
+    def test_return文をreturn文に分類する(self):
         self.assertEqual(classify_usage_regex('return CODE;'), "return文")
 
-    def test_変数代入を正しく分類する(self):
+    def test_変数代入を変数代入に分類する(self):
         self.assertEqual(classify_usage_regex('String msg = CODE;'), "変数代入")
 
-    def test_メソッド引数を正しく分類する(self):
+    def test_メソッド引数をメソッド引数に分類する(self):
         self.assertEqual(classify_usage_regex('someService.process(CODE);'), "メソッド引数")
 
     def test_コメント行をその他に分類する(self):
@@ -569,7 +569,7 @@ class TestClassifyUsage(unittest.TestCase):
     def tearDown(self):
         _ast_cache.clear()
 
-    def test_AST使用時に定数定義を正しく分類する(self):
+    def test_AST使用時に定数定義を定数定義に分類する(self):
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -582,7 +582,7 @@ class TestClassifyUsage(unittest.TestCase):
         )
         self.assertEqual(result, UsageType.CONSTANT.value)
 
-    def test_AST使用時に条件判定を正しく分類する(self):
+    def test_AST使用時に条件判定を条件判定に分類する(self):
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
@@ -606,7 +606,7 @@ class TestClassifyUsage(unittest.TestCase):
         )
         self.assertEqual(result, "return文")
 
-    def test_AST使用時にreturn文を正しく分類する(self):
+    def test_AST使用時にreturn文をreturn文に分類する(self):
         if not _JAVALANG_AVAILABLE:
             self.skipTest("javalang が未インストールです。")
         stats = ProcessStats()
