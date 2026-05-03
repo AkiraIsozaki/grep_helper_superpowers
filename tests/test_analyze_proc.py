@@ -9,8 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from grep_helper.model import GrepRecord, ProcessStats
-from grep_helper.grep_input import parse_grep_line
+from grep_helper.model import ProcessStats
 from grep_helper.tsv_output import write_tsv
 from grep_helper.languages.proc import (
     classify_usage_proc,
@@ -39,7 +38,9 @@ def _process_grep_file(path, keyword, source_dir, stats):
 # ---------------------------------------------------------------------------
 
 class TestClassifyUsageProc(unittest.TestCase):
-    """classify_usage_proc() の7種テスト"""
+    """TestClassifyUsageProc: classify_usage_proc() の 7 種類分類ラベルを観察するテスト。
+    E2E は fixture 内出現パターンしかカバーしないため、return文 / 関数引数 / 大文字小文字混在 等の網羅は本クラスで保持する。
+    """
 
     def test_EXEC_SQL文を分類できる(self):
         """EXEC SQL で始まる行は EXEC SQL文 と分類される"""
@@ -87,7 +88,9 @@ class TestClassifyUsageProc(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestExtractDefineName(unittest.TestCase):
-    """extract_define_name() のテスト"""
+    """TestExtractDefineName: extract_define_name() の戻り値（定数名 or None）を観察するテスト。
+    E2E は #define 値あり経路のみで、値なし／非 #define の None 返却までは保証されないため保持する。
+    """
 
     def test_define名を基本パターンから抽出できる(self):
         """#define <name> <value> から定数名を取り出せる"""
@@ -142,7 +145,9 @@ class TestBuildDefineMapProcWhitebox(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestExtractVariableNameProc(unittest.TestCase):
-    """extract_variable_name_proc() のテスト"""
+    """TestExtractVariableNameProc: extract_variable_name_proc() の変数名抽出を観察するテスト。
+    char[] / char[N] / int / ポインタ / 非変数宣言 の各分岐を網羅し、E2E fixture 外の形状を保証する。
+    """
 
     def test_代入を伴うchar配列の変数名を抽出できる(self):
         """char foo[] = "..." 形式から変数名を抽出できる"""
@@ -170,7 +175,9 @@ class TestExtractVariableNameProc(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestE2EProc(unittest.TestCase):
-    """E2E統合テスト: サンプルファイル群でツールを実行し、期待TSVと比較する"""
+    """TestE2EProc: TARGET fixture 群を Pro*C パイプラインに通し期待 TSV と完全一致を観察するゴールデンテスト。
+    classify_usage_proc / extract_define_name / track_define / track_variable / write_tsv の統合契約を本クラスが代表する。
+    """
 
     TESTS_DIR = Path(__file__).parent / "proc"
 
@@ -232,7 +239,9 @@ class TestE2EProc(unittest.TestCase):
 
 
 class TestE2EMixed(unittest.TestCase):
-    """混在E2Eテスト: .c と .pc が混在する grep ファイルの処理"""
+    """TestE2EMixed: .c と .pc が混在する MIXVAL fixture を処理し期待 TSV と完全一致を観察するゴールデンテスト。
+    _classify_for_filepath による拡張子ディスパッチの統合契約を本クラスが代表する。
+    """
 
     TESTS_DIR = Path(__file__).parent / "proc"
 
