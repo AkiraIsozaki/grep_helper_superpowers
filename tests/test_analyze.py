@@ -668,8 +668,11 @@ class TestGetMethodScope(unittest.TestCase):
 # TestSearchInLines
 # ---------------------------------------------------------------------------
 
-class TestSearchInLines(unittest.TestCase):
-    """F-03 内部: _search_in_lines() のテスト。"""
+class TestSearchInLinesWhitebox(unittest.TestCase):
+    """TestSearchInLinesWhitebox: _search_in_lines() の単語境界マッチと origin スキップ契約を観察するテスト。
+    private helper であり、プロダクションパスは track_constant / track_field / track_getter_calls 内部経由のみ。
+    実装変更時は本クラスも同期更新が必要。
+    """
 
     JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
@@ -751,8 +754,12 @@ class TestSearchInLines(unittest.TestCase):
 # TestTrackConstant
 # ---------------------------------------------------------------------------
 
-class TestTrackConstant(unittest.TestCase):
-    """F-03: track_constant() のテスト。"""
+class TestTrackConstantWhitebox(unittest.TestCase):
+    """TestTrackConstantWhitebox: track_constant() の参照実装テスト。
+    public 関数だがオーケストレータは _batch_track_combined 経由でしか定数追跡を行わず、
+    本関数の単独経路はプロダクション未走行。バッチパスとの等価性確認のため Whitebox として残す。
+    実装変更時は本クラスも同期更新が必要。
+    """
 
     JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
@@ -992,8 +999,12 @@ class TestFindSetterNames(unittest.TestCase):
 # TestTrackGetterCalls
 # ---------------------------------------------------------------------------
 
-class TestTrackGetterCalls(unittest.TestCase):
-    """F-04: track_getter_calls() のテスト。"""
+class TestTrackGetterCallsWhitebox(unittest.TestCase):
+    """TestTrackGetterCallsWhitebox: track_getter_calls() の参照実装テスト。
+    public 関数だがオーケストレータは _batch_track_combined 経由でしか getter 呼び出し追跡を行わず、
+    本関数の単独経路はプロダクション未走行。バッチパスとの等価性確認のため Whitebox として残す。
+    実装変更時は本クラスも同期更新が必要。
+    """
 
     JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
 
