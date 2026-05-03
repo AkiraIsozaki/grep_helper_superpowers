@@ -86,5 +86,32 @@ class TestLoadTsv(unittest.TestCase):
             )
 
 
+def _rec(filepath: str, lineno: str, ref_type: str = "直接", usage: str = "その他", keyword: str = "K") -> "measure_kpi.Record":
+    return measure_kpi.Record(
+        keyword=keyword, ref_type=ref_type, usage_type=usage,
+        filepath=filepath, lineno=lineno, code="c",
+    )
+
+
+class TestCompareCoverage(unittest.TestCase):
+    """compare() の網羅率: (file, line) ベースで expected が actual に含まれる割合。"""
+
+    def test_完全一致なら網羅率は1_0(self):
+        expected = [_rec("f.sql", "1"), _rec("f.sql", "2")]
+        actual = [_rec("f.sql", "1"), _rec("f.sql", "2")]
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.coverage_rate, 1.0)
+        self.assertEqual(result.matched_rows, 2)
+
+    def test_片方だけ取りこぼすと網羅率は0_5(self):
+        expected = [_rec("f.sql", "1"), _rec("f.sql", "2")]
+        actual = [_rec("f.sql", "1")]
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.coverage_rate, 0.5)
+        self.assertEqual(result.matched_rows, 1)
+        self.assertEqual(len(result.missing_rows), 1)
+        self.assertEqual(result.missing_rows[0].lineno, "2")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -71,3 +71,34 @@ def _load_tsv(path: Path) -> list[Record]:
                 src_lineno=padded[8],
             ))
     return records
+
+
+def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
+    """expected と actual を突合し、網羅率・分類精度・diff を算出する。
+
+    マッチング基準キー = (filepath, lineno)。
+    網羅率: matched_rows / expected_total
+    分類精度: classified_correctly / matched_rows（後続タスクで実装）
+    """
+    expected_by_key: dict[tuple[str, str], Record] = {(r.filepath, r.lineno): r for r in expected}
+    actual_by_key: dict[tuple[str, str], Record] = {(r.filepath, r.lineno): r for r in actual}
+
+    matched_keys = expected_by_key.keys() & actual_by_key.keys()
+    missing_keys = expected_by_key.keys() - actual_by_key.keys()
+
+    expected_total = len(expected)
+    matched_rows = len(matched_keys)
+
+    coverage_rate = matched_rows / expected_total if expected_total > 0 else 1.0
+
+    return ComparisonResult(
+        expected_total=expected_total,
+        matched_rows=matched_rows,
+        classified_correctly=0,  # Task 7
+        coverage_rate=coverage_rate,
+        classification_accuracy=0.0,  # Task 7
+        missing_rows=[expected_by_key[k] for k in missing_keys],
+        false_positives=[],  # Task 8
+        misclassified=[],
+        detail_diffs=[],
+    )
