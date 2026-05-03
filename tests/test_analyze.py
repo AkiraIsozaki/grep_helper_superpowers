@@ -1645,7 +1645,13 @@ class TestBatchTrackOnePassWhitebox(unittest.TestCase):
             self.assertIn(("間接（setter経由）", "setCode"), ref_types)
 
 
-class TestNoModuleGlobalEncoding(unittest.TestCase):
+class TestNoModuleGlobalEncodingWhitebox(unittest.TestCase):
+    """TestNoModuleGlobalEncodingWhitebox: analyze モジュールから _encoding_override
+    グローバル属性が削除されている不変条件を観察するリグレッションガード。
+    E2E では検証不可能な内部不変条件のため Whitebox として保持。
+    実装変更時は本クラスも同期更新が必要。
+    """
+
     def test_encoding_overrideモジュールグローバルは廃止されている(self):
         self.assertFalse(hasattr(analyze, "_encoding_override"),
             "_encoding_override は引数化されたため削除されているべき")
