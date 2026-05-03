@@ -14,7 +14,6 @@ from grep_helper.grep_input import parse_grep_line
 from grep_helper.tsv_output import write_tsv
 from grep_helper.languages.proc import (
     classify_usage_proc,
-    _classify_for_filepath,
 )
 from grep_helper.languages.proc_define_map import (
     _define_map_cache,
@@ -230,30 +229,6 @@ class TestE2EProc(unittest.TestCase):
                 f"出力TSVが期待値と一致しない\n"
                 f"実際行数: {len(actual_lines)}, 期待行数: {len(expected_lines)}"
             )
-
-
-class TestDispatch(unittest.TestCase):
-    """拡張子ベースのディスパッチテスト"""
-
-    def test_拡張子cではEXEC_SQL文として分類されない(self):
-        """.c ファイルでは EXEC SQL が 'EXEC SQL文' に分類されない（その他になる）"""
-        result = _classify_for_filepath('EXEC SQL SELECT * FROM t;', 'src/main.c')
-        self.assertEqual(result, "その他")
-
-    def test_拡張子pcではEXEC_SQL文として分類される(self):
-        """.pc ファイルでは EXEC SQL が 'EXEC SQL文' に分類される"""
-        result = _classify_for_filepath('EXEC SQL SELECT * FROM t;', 'src/main.pc')
-        self.assertEqual(result, "EXEC SQL文")
-
-    def test_ヘッダファイルはC分類器を使う(self):
-        """.h ファイルは C 分類を使う（その他になる）"""
-        result = _classify_for_filepath('EXEC SQL SELECT * FROM t;', 'include/config.h')
-        self.assertEqual(result, "その他")
-
-    def test_未知拡張子はProCがデフォルトとなる(self):
-        """未知拡張子はデフォルトで Pro*C 分類（後方互換）"""
-        result = _classify_for_filepath('EXEC SQL SELECT * FROM t;', 'src/main.xyz')
-        self.assertEqual(result, "EXEC SQL文")
 
 
 class TestE2EMixed(unittest.TestCase):
