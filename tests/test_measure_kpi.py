@@ -113,5 +113,33 @@ class TestCompareCoverage(unittest.TestCase):
         self.assertEqual(result.missing_rows[0].lineno, "2")
 
 
+class TestCompareClassificationAccuracy(unittest.TestCase):
+    """compare() の分類精度: matched 行のうち (参照種別, 使用タイプ) も一致する割合。"""
+
+    def test_全行で分類が一致すると精度は1_0(self):
+        expected = [_rec("f.sql", "1", ref_type="直接", usage="定数定義")]
+        actual = [_rec("f.sql", "1", ref_type="直接", usage="定数定義")]
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.classification_accuracy, 1.0)
+        self.assertEqual(result.classified_correctly, 1)
+
+    def test_使用タイプが違うと誤分類として記録される(self):
+        expected = [_rec("f.sql", "1", usage="定数定義"), _rec("f.sql", "2", usage="条件判定")]
+        actual = [_rec("f.sql", "1", usage="定数定義"), _rec("f.sql", "2", usage="その他")]
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.classification_accuracy, 0.5)
+        self.assertEqual(len(result.misclassified), 1)
+        exp_rec, act_rec = result.misclassified[0]
+        self.assertEqual(exp_rec.usage_type, "条件判定")
+        self.assertEqual(act_rec.usage_type, "その他")
+
+    def test_参照種別が違うと誤分類として記録される(self):
+        expected = [_rec("f.sql", "1", ref_type="直接")]
+        actual = [_rec("f.sql", "1", ref_type="間接")]
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.classification_accuracy, 0.0)
+        self.assertEqual(len(result.misclassified), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

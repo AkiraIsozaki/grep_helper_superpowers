@@ -78,7 +78,7 @@ def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
 
     マッチング基準キー = (filepath, lineno)。
     網羅率: matched_rows / expected_total
-    分類精度: classified_correctly / matched_rows（後続タスクで実装）
+    分類精度: classified_correctly / matched_rows
     """
     expected_by_key: dict[tuple[str, str], Record] = {(r.filepath, r.lineno): r for r in expected}
     actual_by_key: dict[tuple[str, str], Record] = {(r.filepath, r.lineno): r for r in actual}
@@ -89,16 +89,29 @@ def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
     expected_total = len(expected)
     matched_rows = len(matched_keys)
 
+    classified_correctly = 0
+    misclassified: list[tuple[Record, Record]] = []
+    for key in matched_keys:
+        exp = expected_by_key[key]
+        act = actual_by_key[key]
+        if exp.ref_type == act.ref_type and exp.usage_type == act.usage_type:
+            classified_correctly += 1
+        else:
+            misclassified.append((exp, act))
+
     coverage_rate = matched_rows / expected_total if expected_total > 0 else 1.0
+    classification_accuracy = (
+        classified_correctly / matched_rows if matched_rows > 0 else 0.0
+    )
 
     return ComparisonResult(
         expected_total=expected_total,
         matched_rows=matched_rows,
-        classified_correctly=0,  # Task 7
+        classified_correctly=classified_correctly,
         coverage_rate=coverage_rate,
-        classification_accuracy=0.0,  # Task 7
+        classification_accuracy=classification_accuracy,
         missing_rows=[expected_by_key[k] for k in missing_keys],
         false_positives=[],  # Task 8
-        misclassified=[],
-        detail_diffs=[],
+        misclassified=misclassified,
+        detail_diffs=[],  # Task 9
     )
