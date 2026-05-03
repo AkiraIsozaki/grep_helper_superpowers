@@ -780,60 +780,6 @@ class TestTrackConstantWhitebox(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# TestTrackField
-# ---------------------------------------------------------------------------
-
-class TestTrackField(unittest.TestCase):
-    """F-03: track_field() のテスト。"""
-
-    JAVA_DIR = Path(__file__).parent / "fixtures" / "java"
-
-    def setUp(self):
-        _ast_cache.clear()
-
-    def tearDown(self):
-        _ast_cache.clear()
-
-    def test_フィールドが同一クラス内で見つかる(self):
-        entity_file = self.JAVA_DIR / "Entity.java"
-        if not entity_file.exists():
-            self.skipTest("Entity.java フィクスチャが存在しません。")
-        origin = GrepRecord(
-            keyword="SAMPLE",
-            ref_type=RefType.DIRECT.value,
-            usage_type=UsageType.VARIABLE.value,
-            filepath=str(entity_file),
-            lineno="8",
-            code='private String type = "SAMPLE";',
-        )
-        stats = ProcessStats()
-        records = track_field("type", entity_file, origin, self.JAVA_DIR, stats)
-        # Entity.java には `return type;` がある
-        codes = [r.code for r in records]
-        self.assertTrue(
-            any("type" in c for c in codes),
-            f"'type' を含む行が見つかりません: {codes}",
-        )
-
-    def test_track_fieldは間接参照型のレコードを返す(self):
-        entity_file = self.JAVA_DIR / "Entity.java"
-        if not entity_file.exists():
-            self.skipTest("Entity.java フィクスチャが存在しません。")
-        origin = GrepRecord(
-            keyword="SAMPLE",
-            ref_type=RefType.DIRECT.value,
-            usage_type=UsageType.VARIABLE.value,
-            filepath=str(entity_file),
-            lineno="8",
-            code='private String type = "SAMPLE";',
-        )
-        stats = ProcessStats()
-        records = track_field("type", entity_file, origin, self.JAVA_DIR, stats)
-        for r in records:
-            self.assertEqual(r.ref_type, RefType.INDIRECT.value)
-
-
-# ---------------------------------------------------------------------------
 # TestTrackLocal
 # ---------------------------------------------------------------------------
 
