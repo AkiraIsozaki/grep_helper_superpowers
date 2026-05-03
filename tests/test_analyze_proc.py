@@ -43,7 +43,6 @@ class TestClassifyUsageProc(unittest.TestCase):
     """
 
     def test_EXEC_SQL文を分類できる(self):
-        """EXEC SQL で始まる行は EXEC SQL文 と分類される"""
         self.assertEqual(classify_usage_proc("EXEC SQL SELECT * FROM t INTO :v;"), "EXEC SQL文")
 
     def test_EXEC_SQL文は大文字小文字を区別しない(self):
@@ -51,7 +50,6 @@ class TestClassifyUsageProc(unittest.TestCase):
         self.assertEqual(classify_usage_proc("exec sql commit;"), "EXEC SQL文")
 
     def test_define定数定義を分類できる(self):
-        """#define で始まる行は #define定数定義 と分類される"""
         self.assertEqual(classify_usage_proc('#define SAMPLE_CODE "TARGET"'), "#define定数定義")
 
     def test_define行は空白を含むハッシュでも分類できる(self):
@@ -59,15 +57,12 @@ class TestClassifyUsageProc(unittest.TestCase):
         self.assertEqual(classify_usage_proc('#  define MY_CONST 100'), "#define定数定義")
 
     def test_if文の条件判定を分類できる(self):
-        """if 文中で比較に用いる行は条件判定として分類される"""
         self.assertEqual(classify_usage_proc("if (x == TARGET) {"), "条件判定")
 
     def test_strcmpを使った条件判定を分類できる(self):
-        """strcmp による比較も条件判定として分類される"""
         self.assertEqual(classify_usage_proc('if (strcmp(buf, TARGET) == 0)'), "条件判定")
 
     def test_return文を分類できる(self):
-        """return で始まる行は return文 と分類される"""
         self.assertEqual(classify_usage_proc("return TARGET;"), "return文")
 
     def test_変数代入を分類できる(self):
@@ -75,11 +70,9 @@ class TestClassifyUsageProc(unittest.TestCase):
         self.assertEqual(classify_usage_proc("char localVar[] = TARGET;"), "変数代入")
 
     def test_関数引数を分類できる(self):
-        """関数呼び出し引数として渡される行は関数引数として分類される"""
         self.assertEqual(classify_usage_proc("process(TARGET);"), "関数引数")
 
     def test_未分類はその他になる(self):
-        """どのパターンにも合致しない行はその他として分類される"""
         self.assertEqual(classify_usage_proc("TARGET"), "その他")
 
 
@@ -97,11 +90,9 @@ class TestExtractDefineName(unittest.TestCase):
         self.assertEqual(extract_define_name('#define SAMPLE_CODE "TARGET"'), "SAMPLE_CODE")
 
     def test_ハッシュとdefineの間の空白を許容する(self):
-        """# と define の間に空白があっても定数名を抽出できる"""
         self.assertEqual(extract_define_name('#  define MY_CONST 100'), "MY_CONST")
 
     def test_define以外の行ではNoneを返す(self):
-        """#define 以外のコードからは定数名を抽出しない"""
         self.assertIsNone(extract_define_name("int x = 0;"))
 
     def test_値のないdefineではNoneを返す(self):
@@ -109,7 +100,6 @@ class TestExtractDefineName(unittest.TestCase):
         self.assertIsNone(extract_define_name("#define NAME"))
 
     def test_数値リテラルを伴うdefineを抽出できる(self):
-        """数値値を持つ #define からも定数名を抽出できる"""
         self.assertEqual(extract_define_name("#define MAX_LEN 256"), "MAX_LEN")
 
 
@@ -158,7 +148,6 @@ class TestExtractVariableNameProc(unittest.TestCase):
         self.assertEqual(extract_variable_name_proc("char hostVar[256];"), "hostVar")
 
     def test_int代入文の変数名を抽出できる(self):
-        """int 型変数の宣言と初期化から変数名を抽出できる"""
         self.assertEqual(extract_variable_name_proc("int count = 0;"), "count")
 
     def test_ポインタ変数の変数名を抽出できる(self):
