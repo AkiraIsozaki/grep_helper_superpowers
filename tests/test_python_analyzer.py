@@ -14,6 +14,10 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsagePython(unittest.TestCase):
+    """TestClassifyUsagePython: classify_usage(python) の分類ラベル返り値を観察するテスト。
+    E2E (TestE2EPython) は変数代入/条件判定のみ通過するため、return文/デコレータ/関数引数/その他 の分岐は本クラスでのみ保証される。
+    """
+
     def test_単純な変数代入を変数代入と分類する(self):
         """シンボルを右辺に持つ代入文が変数代入と判定されること"""
         self.assertEqual(classify_usage_python('STATUS = "TARGET"'), "変数代入")
@@ -48,6 +52,10 @@ class TestClassifyUsagePython(unittest.TestCase):
 
 
 class TestE2EPython(unittest.TestCase):
+    """TestE2EPython: pipeline.process_grep_file → write_tsv の Python 経路全体の TSV 出力を観察するテスト。
+    grep 行パース・分類・TSV 整形を含む統合経路の回帰検出を担う。
+    """
+
     TESTS_DIR = Path(__file__).parent / "python"
 
     def test_TARGETシンボルのE2E解析結果が期待TSVと一致する(self):
