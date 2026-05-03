@@ -34,6 +34,9 @@ def process_grep_lines_all_compat(lines, keyword, source_dir, stats, encoding=No
 
 
 class TestDetectLanguage(unittest.TestCase):
+    """TestDetectLanguage: detect_handler の言語判定戻り値を観察するテスト。
+    E2E は 5 fixture しか通らず、30 種超の拡張子/シェバン分岐を観察できないため keep。
+    """
 
     def test_java拡張子はjavaと判定される(self):
         """.java 拡張子は java 言語として判定される。"""
@@ -217,7 +220,9 @@ class TestDetectLanguage(unittest.TestCase):
 
 
 class TestDirectClassification(unittest.TestCase):
-    """各言語の行が正しい usage_type に分類されることを確認する。"""
+    """TestDirectClassification: process_grep_lines_all の直接分類戻り値を観察するテスト。
+    E2E は実 fixture のみで、不正 grep 行/バイナリ行のスキップ分岐を覆わないため keep。
+    """
 
     def _make_direct_records(self, grep_lines: list[str], source_dir: Path) -> list:
         stats = ProcessStats()
@@ -305,6 +310,9 @@ class TestDirectClassification(unittest.TestCase):
 
 
 class TestIndirectTracking(unittest.TestCase):
+    """TestIndirectTracking: apply_indirect_tracking の間接参照戻り値を観察するテスト。
+    E2E は間接件数を assertion せず、return [] mutation を見逃すため keep。
+    """
 
     def test_groovyのstatic_final定数は間接参照を追跡する(self):
         """Groovy の static final 定数定義から参照する別ファイルを間接参照として検出する。"""
@@ -375,6 +383,10 @@ class TestIndirectTracking(unittest.TestCase):
 
 
 class TestE2EAll(unittest.TestCase):
+    """TestE2EAll: 全言語ディスパッチャー end-to-end のシナリオ観察を行う E2E gate。
+    実 fixture (Java/Groovy/sh/xml/cleanup) を入力に grep 行→TSV 出力までの全パスを通す。
+    """
+
     TESTS_DIR = Path(__file__).parent / "all"
 
     def test_全grep行がTSV出力に含まれる(self):
@@ -450,6 +462,10 @@ class TestE2EAll(unittest.TestCase):
 
 
 class TestProcessGrepLinesAllIterable(unittest.TestCase):
+    """TestProcessGrepLinesAllIterable: process_grep_lines_all の Iterable 受理を観察するテスト。
+    E2E は list 入力のみで、generator reject mutation を見逃すため keep。
+    """
+
     def test_ジェネレータ入力を受け付ける(self):
         """list ではなくジェネレータも受け取れる。"""
         stats = ProcessStats()
