@@ -126,50 +126,6 @@ class TestGrepFilterFiles(unittest.TestCase):
             self.assertIn("事前フィルタ完了", buf.getvalue())
 
 
-class TestDetectEncodingStreaming(unittest.TestCase):
-    def test_read_bytesを呼ばない(self):
-        from grep_helper.encoding import detect_encoding
-        from unittest.mock import patch
-        # chardet のモデル遅延ロードが read_bytes を使うため、先に初期化しておく
-        try:
-            import chardet as _cd
-            _cd.detect(b"warmup")
-        except Exception:
-            pass
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "f.txt"
-            p.write_bytes(b"hello world\n" * 100)
-            orig_read_bytes = Path.read_bytes
-            def boom(self_path):
-                if str(self_path) == str(p):
-                    raise AssertionError("read_bytes should not be called on target file")
-                return orig_read_bytes(self_path)
-            with patch.object(Path, "read_bytes", boom):
-                enc = detect_encoding(p)
-                self.assertIsInstance(enc, str)
-
-    def test_最大4KBまでしか読まない(self):
-        from grep_helper.encoding import detect_encoding
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d) / "big.txt"
-            p.write_bytes(b"A" * 100_000)
-            sizes: list[int] = []
-            real_open = open
-            def tracking_open(*args, **kwargs):
-                f = real_open(*args, **kwargs)
-                orig_read = f.read
-                def read(n=-1):
-                    sizes.append(n if n >= 0 else 10**12)
-                    return orig_read(n)
-                f.read = read
-                return f
-            import grep_helper.encoding
-            with unittest.mock.patch.object(grep_helper.encoding, "open", tracking_open, create=True):
-                detect_encoding(p)
-            self.assertTrue(len(sizes) > 0, "tracking_open was never called")
-            self.assertTrue(all(n <= 4096 for n in sizes), sizes)
-
-
 class TestIterGrepLines(unittest.TestCase):
     def test_grep行を順序通りに取り出せる(self):
         from grep_helper.grep_input import iter_grep_lines
@@ -347,6 +303,55 @@ class TestBatchScannerSelectorWhitebox(unittest.TestCase):
         from grep_helper.scanner import build_batch_scanner
         scanner = build_batch_scanner(["A", "B", "C"])
         self.assertEqual(scanner.backend, "regex")
+
+
+class TestDetectEncodingStreamingWhitebox(unittest.TestCase):
+    """detect_encoding が先頭 4096 byte のみ読むという実装契約のテスト。
+    巨大ファイルに対するメモリ・レイテンシ非機能要件を担保する。
+    実装を変更したら本クラスも同期更新する必要がある。
+    """
+
+    def test_read_bytesを呼ばない(self):
+        from grep_helper.encoding import detect_encoding
+        from unittest.mock import patch
+        # chardet のモデル遅延ロードが read_bytes を使うため、先に初期化しておく
+        try:
+            import chardet as _cd
+            _cd.detect(b"warmup")
+        except Exception:
+            pass
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "f.txt"
+            p.write_bytes(b"hello world\n" * 100)
+            orig_read_bytes = Path.read_bytes
+            def boom(self_path):
+                if str(self_path) == str(p):
+                    raise AssertionError("read_bytes should not be called on target file")
+                return orig_read_bytes(self_path)
+            with patch.object(Path, "read_bytes", boom):
+                enc = detect_encoding(p)
+                self.assertIsInstance(enc, str)
+
+    def test_最大4KBまでしか読まない(self):
+        from grep_helper.encoding import detect_encoding
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "big.txt"
+            p.write_bytes(b"A" * 100_000)
+            sizes: list[int] = []
+            real_open = open
+            def tracking_open(*args, **kwargs):
+                f = real_open(*args, **kwargs)
+                orig_read = f.read
+                def read(n=-1):
+                    sizes.append(n if n >= 0 else 10**12)
+                    return orig_read(n)
+                f.read = read
+                return f
+            import grep_helper.encoding
+            with unittest.mock.patch.object(grep_helper.encoding, "open", tracking_open, create=True):
+                detect_encoding(p)
+            self.assertTrue(len(sizes) > 0, "tracking_open was never called")
+            self.assertTrue(all(n <= 4096 for n in sizes), sizes)
 
 
 if __name__ == "__main__":
