@@ -313,22 +313,40 @@ class TestCachedFileLines(unittest.TestCase):
 
 
 class TestBatchScannerSelector(unittest.TestCase):
-    def test_パターン数が多いとAhoCorasickを選ぶ(self):
-        from grep_helper.scanner import build_batch_scanner
-        scanner = build_batch_scanner([f"NAME{i:04d}" for i in range(200)])
-        self.assertEqual(scanner.backend, "ahocorasick")
-
-    def test_パターン数が少ないとregexを選ぶ(self):
-        from grep_helper.scanner import build_batch_scanner
-        scanner = build_batch_scanner(["A", "B", "C"])
-        self.assertEqual(scanner.backend, "regex")
-
     def test_findallが単語境界でマッチする(self):
         from grep_helper.scanner import build_batch_scanner
         scanner = build_batch_scanner(["FOO"])
         line = "x = FOO + FOOBAR;"
         results = [name for _, name in scanner.findall(line)]
         self.assertEqual(results, ["FOO"])
+
+    def test_数パターンでも数百パターンでも同じマッチ結果になる(self):
+        from grep_helper.scanner import build_batch_scanner
+        small = build_batch_scanner(["A", "B", "C"])
+        large_patterns = [f"NAME{i:04d}" for i in range(200)] + ["A", "B", "C"]
+        large = build_batch_scanner(large_patterns)
+        line = "use A and B and C here"
+        small_hits = sorted(name for _, name in small.findall(line))
+        large_hits = sorted(name for _, name in large.findall(line) if name in {"A", "B", "C"})
+        self.assertEqual(small_hits, ["A", "B", "C"])
+        self.assertEqual(large_hits, ["A", "B", "C"])
+
+
+class TestBatchScannerSelectorWhitebox(unittest.TestCase):
+    """build_batch_scanner のバックエンド選択は内部最適化の実装契約。
+    public な振る舞い（マッチ結果）はパターン数に依らず同一だが、
+    性能劣化の早期検知のため backend 名を固定する。リファクタ時に同期更新が必要。
+    """
+
+    def test_パターン数が閾値以上ならahocorasickバックエンドが選ばれる(self):
+        from grep_helper.scanner import build_batch_scanner
+        scanner = build_batch_scanner([f"NAME{i:04d}" for i in range(200)])
+        self.assertEqual(scanner.backend, "ahocorasick")
+
+    def test_パターン数が閾値未満ならregexバックエンドが選ばれる(self):
+        from grep_helper.scanner import build_batch_scanner
+        scanner = build_batch_scanner(["A", "B", "C"])
+        self.assertEqual(scanner.backend, "regex")
 
 
 if __name__ == "__main__":
