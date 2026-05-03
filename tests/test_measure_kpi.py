@@ -160,5 +160,22 @@ class TestCompareFalsePositive(unittest.TestCase):
         self.assertEqual(len(result.false_positives), 2)
 
 
+class TestCompareEdgeCases(unittest.TestCase):
+    """compare() のゼロ除算エッジケース。spec §ゼロ除算エッジケース に準拠。"""
+
+    def test_期待TSVが空なら網羅率は1_0扱い(self):
+        result = measure_kpi.compare([], [])
+        self.assertEqual(result.coverage_rate, 1.0)
+        self.assertEqual(result.expected_total, 0)
+
+    def test_全件取りこぼしなら網羅率も精度も0_0(self):
+        expected = [_rec("f.sql", "1"), _rec("f.sql", "2")]
+        actual = []
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.coverage_rate, 0.0)
+        self.assertEqual(result.classification_accuracy, 0.0)
+        self.assertEqual(result.matched_rows, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
