@@ -112,6 +112,17 @@ class TestGrepParser(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result["code"], "int x = 1;")
 
+    def test_filepathにNULバイトを含む行はNoneを返す(self):
+        # jar 等のバイナリ混入で生じる疑似 grep 行（NUL 始まりの filepath）は不正扱い
+        line = "garbage\x00\x01\x02foo:1:something"
+        self.assertIsNone(parse_grep_line(line))
+
+    def test_filepathがOSパス上限を超える長さの行はNoneを返す(self):
+        # バイナリ列の中で偶然 ":N:" にマッチした場合 filepath が巨大化する
+        huge_filepath = "x" * 5000
+        line = f"{huge_filepath}:1:code"
+        self.assertIsNone(parse_grep_line(line))
+
 
 # ---------------------------------------------------------------------------
 # TestUsageClassifier

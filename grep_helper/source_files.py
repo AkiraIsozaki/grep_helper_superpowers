@@ -82,12 +82,16 @@ def resolve_file_cached(filepath: str, src_dir: Path) -> Path | None:
         return _resolve_file_cache[key]
     candidate = Path(filepath)
     result: Path | None
-    if candidate.is_absolute():
-        result = candidate if candidate.exists() else None
-    elif candidate.exists():
-        result = candidate
-    else:
-        resolved = src_dir / filepath
-        result = resolved if resolved.exists() else None
+    try:
+        if candidate.is_absolute():
+            result = candidate if candidate.exists() else None
+        elif candidate.exists():
+            result = candidate
+        else:
+            resolved = src_dir / filepath
+            result = resolved if resolved.exists() else None
+    except OSError:
+        # ENAMETOOLONG など、stat 段で OS が拒否する病的パスは未解決扱い
+        result = None
     _resolve_file_cache[key] = result
     return result

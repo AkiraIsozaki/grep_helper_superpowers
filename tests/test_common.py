@@ -239,6 +239,14 @@ class TestResolveFileCached(unittest.TestCase):
             r2 = resolve_file_cached("x.txt", p)
             self.assertEqual(r1, r2)  # キャッシュから同じ結果が返る
 
+    def test_OSパス上限を超える長さのパスを渡してもOSErrorではなくNoneを返す(self):
+        # バイナリ混入で parse_grep_line をすり抜けても、resolve 段で安全に弾く防御
+        from grep_helper.source_files import resolve_file_cached, _resolve_file_cache_clear
+        _resolve_file_cache_clear()
+        with tempfile.TemporaryDirectory() as d:
+            huge = "x" * 5000
+            self.assertIsNone(resolve_file_cached(huge, Path(d)))
+
 
 class TestCachedFileLines(unittest.TestCase):
     """TestCachedFileLines: cached_file_lines の LRU キャッシュ挙動を観察するテスト。

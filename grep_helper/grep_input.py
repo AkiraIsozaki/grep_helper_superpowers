@@ -6,6 +6,7 @@ from pathlib import Path
 
 _BINARY_PATTERN = re.compile(r'^Binary file .+ matches$')
 _GREP_LINE_PATTERN = re.compile(r':(\d+):')
+_FILEPATH_MAX_BYTES = 4096  # Linux PATH_MAX 相当。これを超える filepath はバイナリ混入の疑い
 
 
 def iter_grep_lines(path: Path, encoding: str):
@@ -30,5 +31,7 @@ def parse_grep_line(line: str) -> dict | None:
         return None
     filepath, lineno, code = parts
     if not filepath or not lineno:
+        return None
+    if "\x00" in filepath or len(filepath) > _FILEPATH_MAX_BYTES:
         return None
     return {"filepath": filepath, "lineno": lineno, "code": code.strip()}
