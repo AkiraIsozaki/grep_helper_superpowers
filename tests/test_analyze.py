@@ -1581,8 +1581,12 @@ class TestIntenseE2E(unittest.TestCase):
 # TestBatchTrackSetters
 # ---------------------------------------------------------------------------
 
-class TestBatchTrackSetters(unittest.TestCase):
-    """Java-4: _batch_track_setters() のテスト。"""
+class TestBatchTrackSettersWhitebox(unittest.TestCase):
+    """TestBatchTrackSettersWhitebox: _batch_track_setters() の単独パスを観察するテスト。
+    プロダクションコードからの呼び出しなし（_batch_track_combined の setter 部分の参照実装）。
+    将来未到達コードとして削除も検討するが、当面 Whitebox として保持。
+    実装変更時は本クラスも同期更新が必要。
+    """
 
     def test_setter呼び出しを検出できる(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1646,7 +1650,12 @@ class TestNoModuleGlobalEncoding(unittest.TestCase):
             "_encoding_override は引数化されたため削除されているべき")
 
 
-class TestParallelBatchTrack(unittest.TestCase):
+class TestParallelBatchTrackWhitebox(unittest.TestCase):
+    """TestParallelBatchTrackWhitebox: _batch_track_combined の workers 引数とワーカー間結果一致を観察するテスト。
+    並列性の不変条件は E2E TSV では観察不能なため Whitebox として保持。
+    実装変更時は本クラスも同期更新が必要。
+    """
+
     def test_batch_track_combinedはworkers引数を受け取る(self):
         import inspect
         sig = inspect.signature(_batch_track_combined)
