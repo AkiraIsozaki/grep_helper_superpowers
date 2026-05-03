@@ -8,6 +8,11 @@ from grep_helper.source_files import grep_filter_files
 import tempfile, csv
 
 class TestCommonImports(unittest.TestCase):
+    """TestCommonImports: model / grep_input / tsv_output 横断の公開 API smoke test。
+    `GrepRecord` のフィールド既定値、`parse_grep_line` の返り値、`write_tsv` の BOM /
+    ソート出力という、複数モジュールの最小限の WHAT を 1 箇所で観察する sanity layer。
+    """
+
     def test_GrepRecordのフィールドが正しく設定される(self):
         r = GrepRecord("kw", "直接", "その他", "f.sql", "1", "code")
         self.assertEqual(r.keyword, "kw")
@@ -45,6 +50,11 @@ class TestCommonImports(unittest.TestCase):
             self.assertEqual(rows[1][1], "間接")
 
 class TestGrepFilterFiles(unittest.TestCase):
+    """TestGrepFilterFiles: grep_filter_files の事前フィルタ結果を観察するテスト。
+    拡張子フィルタ・空キーワード・ソート・stderr label 出力という公開契約を網羅する。
+    E2E fixture は単一言語のみのため、拡張子バリエーションは本クラスで補う。
+    """
+
     def test_マッチするファイルが結果に含まれる(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:
@@ -127,6 +137,11 @@ class TestGrepFilterFiles(unittest.TestCase):
 
 
 class TestIterGrepLines(unittest.TestCase):
+    """TestIterGrepLines: iter_grep_lines のストリーミング読込を観察するテスト。
+    順序保証・デコードエラー時の置換継続・巨大ファイル時の早期 yield 契約を観察。
+    streaming 性能は非機能要件で E2E では計測しないため、本クラスで担保する。
+    """
+
     def test_grep行を順序通りに取り出せる(self):
         from grep_helper.grep_input import iter_grep_lines
         with tempfile.TemporaryDirectory() as d:
@@ -159,6 +174,11 @@ class TestIterGrepLines(unittest.TestCase):
 
 
 class TestIterSourceFiles(unittest.TestCase):
+    """TestIterSourceFiles: iter_source_files のキャッシュ挙動を観察するテスト。
+    拡張子セット単位の keying と、後から追加された file が再列挙されない契約を観察。
+    `_source_files_cache_clear` は前提条件リセット用で観測対象は公開戻り値のみ。
+    """
+
     def test_拡張子セットごとにキャッシュする(self):
         from grep_helper.source_files import iter_source_files, _source_files_cache_clear
         _source_files_cache_clear()
@@ -186,6 +206,11 @@ class TestIterSourceFiles(unittest.TestCase):
 
 
 class TestResolveFileCached(unittest.TestCase):
+    """TestResolveFileCached: resolve_file_cached のキャッシュ挙動を観察するテスト。
+    存在ファイル解決・None 返却・hit 後の削除でも同一結果という公開契約を観察。
+    `_resolve_file_cache_clear` は前提条件リセット用途で観測対象は公開戻り値のみ。
+    """
+
     def test_src_dirからの相対パスを解決できる(self):
         from grep_helper.source_files import resolve_file_cached, _resolve_file_cache_clear
         _resolve_file_cache_clear()
@@ -216,6 +241,11 @@ class TestResolveFileCached(unittest.TestCase):
 
 
 class TestCachedFileLines(unittest.TestCase):
+    """TestCachedFileLines: cached_file_lines の LRU キャッシュ挙動を観察するテスト。
+    行リスト返却・キャッシュ hit 時の古値返却・容量上限超過時の追い出し再読込という
+    公開契約を観察。LRU の eviction は E2E では再現性が低いため本クラスで担保する。
+    """
+
     def test_行リストを返す(self):
         from grep_helper.file_cache import cached_file_lines, _file_lines_cache_clear
         _file_lines_cache_clear()
@@ -269,6 +299,11 @@ class TestCachedFileLines(unittest.TestCase):
 
 
 class TestBatchScannerSelector(unittest.TestCase):
+    """TestBatchScannerSelector: build_batch_scanner の公開マッチ結果を観察するテスト。
+    単語境界 findall と、パターン数規模に依らない結果同一性という公開契約を観察。
+    backend 切替の内部実装は対の Whitebox クラスで別途固定する。
+    """
+
     def test_findallが単語境界でマッチする(self):
         from grep_helper.scanner import build_batch_scanner
         scanner = build_batch_scanner(["FOO"])
@@ -289,6 +324,11 @@ class TestBatchScannerSelector(unittest.TestCase):
 
 
 class TestDetectEncoding(unittest.TestCase):
+    """TestDetectEncoding: detect_encoding の公開戻り値を観察するテスト。
+    override 引数の short-circuit と、存在しないファイルでの cp932 fallback という
+    公開契約を観察。streaming 読込の実装契約は対の Whitebox クラスで別途固定する。
+    """
+
     def test_overrideを与えるとそのまま返る(self):
         from grep_helper.encoding import detect_encoding
         with tempfile.TemporaryDirectory() as d:
