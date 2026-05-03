@@ -14,6 +14,10 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsagePerl(unittest.TestCase):
+    """TestClassifyUsagePerl: classify_usage_perl の分類ラベル返り値を観察するテスト。
+    各分類種別の個別ケースは E2E に包摂されないため本クラスで保持する。
+    """
+
     def test_use_constant定義を分類できる(self):
         """use constant の定義行を「use constant定義」に分類する"""
         self.assertEqual(classify_usage_perl('use constant STATUS => "TARGET";'), "use constant定義")
@@ -60,6 +64,10 @@ class TestClassifyUsagePerl(unittest.TestCase):
 
 
 class TestE2EPerl(unittest.TestCase):
+    """TestE2EPerl: process_grep_file (Perl) の全体パイプライン出力を観察するテスト。
+    fixture ファイルを用いた入出力一致確認で回帰を防ぐ。
+    """
+
     TESTS_DIR = Path(__file__).parent / "perl"
 
     def test_E2EでTARGET定数の解析結果が期待TSVと一致する(self):
