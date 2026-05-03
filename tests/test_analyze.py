@@ -1612,10 +1612,11 @@ class TestBatchTrackSettersWhitebox(unittest.TestCase):
             self.assertTrue(all(r.ref_type == RefType.SETTER.value for r in results))
 
 
-class TestBatchTrackOnePass(unittest.TestCase):
-    def test_batch_track_combinedが1パスで定数とgetterとsetterを処理する(self):
-        from grep_helper.languages import java_track
-        self.assertTrue(hasattr(java_track, "_batch_track_combined"))
+class TestBatchTrackOnePassWhitebox(unittest.TestCase):
+    """TestBatchTrackOnePassWhitebox: _batch_track_combined の ref_type 混合出力を観察するテスト。
+    E2E ゴールデンで一部の ref_type 混合が観察できないため、最小ケースで直接検証する。
+    実装変更時は本クラスも同期更新が必要。
+    """
 
     def test_combinedが定数とgetterとsetterのレコードを混合で返す(self):
         with tempfile.TemporaryDirectory() as d:
