@@ -7,7 +7,7 @@
 - `tests/golden/<lang>/`（新規, 全12言語）
 - `tests/test_measure_kpi.py`（新規）
 - `grep_helper/pipeline.py`（in-process エントリ追加）
-- `pyproject.toml` または `pytest.ini`（pytest 収集除外）
+- `pytest.ini`（新規作成、pytest 収集除外）
 - `.gitignore`（出力先除外）
 
 ---
@@ -82,7 +82,7 @@ B も E も実装を変えると false negative / false positive を生みやす
 ```
 tests/golden/                    # KPI 計測用ゴールデンセットのルート（pytest 収集対象外）
   java/
-    src/                         # Java 深堀り (~70サンプルファイル相当)
+    src/                         # Java 深堀り (20〜30 ファイル想定、~70 サンプル箇所)
     inputs/                      # 手書き grep 結果
     expected/                    # 手書き 期待TSV
     README.md                    # サンプル設計ノート
@@ -127,12 +127,16 @@ output/
 
 #### pytest 収集対象から外す
 
-`tests/golden/<lang>/src/` に入る `.java` / `.kt` / `.py` 等のソースは、ファイル名が `test_*.py` になることはないため pytest のデフォルト収集ルールでは拾われない。ただし将来 `conftest.py` を誤配置するリスクがあるため、`pyproject.toml`（または `pytest.ini`）に以下を追加する：
+現リポジトリには `pyproject.toml` / `pytest.ini` / `setup.cfg` のいずれも存在しない。pytest のデフォルト収集ルールでは `tests/golden/<lang>/src/` 配下の非 `.py` ファイル（`.java` / `.kt` / `.py` 以外）や `test_` で始まらない `.py` ファイルは収集対象外なので、設定追加は**現時点では必須ではない**。
+
+ただし将来 `conftest.py` を誤配置するリスクへの予防として、最小限の `pytest.ini` を新規作成して以下を入れる方針とする（`pyproject.toml` を新設するほどの動機はないため、最小ファイルの `pytest.ini` を採用）：
 
 ```ini
-[tool.pytest.ini_options]
-norecursedirs = ["tests/golden", ...既存値]
+[pytest]
+norecursedirs = tests/golden
 ```
+
+writing-plans 段階で「`pytest.ini` を新規作成する」を1タスクとして明示する。
 
 ### データフロー
 
@@ -180,7 +184,9 @@ output/kpi/<lang>-<YYYYMMDD-HHMMSS>.md（詳細レポート）+ stdout サマリ
 
 合計 ~86 件のスモークサンプル。Java 500件超 + スモーク ~86件 = 全体 ~586件 のゴールデンセット。
 
-各言語の使用タイプは `docs/tool-overview.md §4-2` および `docs/product-requirements.md F-02` を正とする。
+**使用タイプの正本**: 各言語の使用タイプ名は `docs/tool-overview.md §4-2` を正とする（`docs/product-requirements.md F-02` とは表記が微妙に異なる箇所があるため、両方を正としない）。`scripts/measure_kpi.py` 内の `lang_spec` 定数および期待TSV のカラム値もこれに揃える。
+
+**SQL / Shell の間接参照スコープ**: 表に「同一ファイル内×1」と書いた根拠は実コード（`grep_helper/languages/sql.py` および `sh.py` の `batch_track_indirect`）の挙動に基づく仮置き。`tool-overview.md §5` の見出しでは SQL / Shell が間接追跡対応言語として明記されていないため、writing-plans 段階で実装の追跡スコープ（同一ファイル内に閉じるか・どこまで広がるか）を確認した上でゴールデンセットを設計する。
 
 ---
 
@@ -209,7 +215,18 @@ python scripts/measure_kpi.py --lang <name> [--samples-dir tests/golden] [--outp
 
 ### 内部処理フロー
 
-1. `--lang all` の場合は12言語ぶん順次ループ。各言語の処理は以下：
+#### `--lang all` の失敗時規約
+
+いずれかの言語で計測が失敗しても、**残りの言語は続行する**。これは「F-1 で Java だけ整備して `--lang all` を走らせる」「F-2 で他言語を順次追加していく」運用を想定しているため。
+
+- ある言語で **入力エラー（exit code 1 相当）**: 期待TSV未整備・ディレクトリ欠損・ペアリング不一致など。サマリレポートに「未整備」と記録し、次の言語へ進む
+- ある言語で **実行時例外（exit code 2 相当）**: 例外内容をサマリレポートに記録し、次の言語へ進む
+- 最終 exit code: 全言語の最大コードを返す（**優先度: 2 > 1 > 0**。例: 11言語成功 + 1言語が入力エラー → exit 1）
+- `_summary-<timestamp>.md` は **常に出力**し、各言語の状態（成功 / 未整備 / 例外）と KPI 値を一覧表化する
+
+#### 各言語の処理
+
+1. `--lang <single>` の場合は単言語ぶん、`--lang all` の場合は上記の規約で12言語ぶん順次ループ。各言語の処理は以下：
 2. `samples-dir/<lang>/` を確認、`inputs/` と `expected/` の対応を検証
    - `inputs/` にあるが `expected/` にない、またはその逆 → exit code `1`
 3. handler モジュールをロード:
@@ -232,8 +249,10 @@ python scripts/measure_kpi.py --lang <name> [--samples-dir tests/golden] [--outp
 
 **本 spec は (a) を採用する前提でフローを記述している**（上記 §内部処理フロー の手順5）。writing-plans フェーズでは (a) の API シグネチャを最終確定する：
 
-- **(a) 採用**: `grep_helper/pipeline.py` に `run_full_pipeline(source_dir, input_dir, output_dir, handler, workers=1)` を追加する。既存 `process_grep_file` + 間接追跡 + getter/setter 追跡の3段階を1関数に集約し、KPI スクリプトと CLI の両方から再利用できる構造にする。`cli.run()` も内部でこの関数を呼ぶようにリファクタすると重複も避けられる
+- **(a) 採用**: `grep_helper/pipeline.py` に `run_full_pipeline(source_dir, input_dir, output_dir, handler, workers=1)` を追加する。既存 `process_grep_file`（直接参照）と `handler.batch_track_indirect`（間接追跡。Java/Groovy では getter/setter もこの中で実行される）の **2段階** を1関数に集約し、KPI スクリプトと CLI の両方から再利用できる構造にする。`cli.run()` も内部でこの関数を呼ぶようにリファクタすると重複も避けられる
 - **(b) 代替案**: `grep_helper/cli.py` の `run()` を引数化（`run(handler, args=None)` で `args` 省略時のみ `parse_args()` を呼ぶ）。writing-plans で (a) が困難と判明したときのバックアッププラン
+
+**注**: 上記 2段階は実コード（`grep_helper/cli.py` の `run()` 実装）に基づく見積もり。`handler.batch_track_indirect` の内部実装と getter/setter 追跡の関係は writing-plans の最初のステップで確認する。
 
 (a) の方が API 表面を限定でき、KPI スクリプトとの結合が薄くなるため採用。
 
@@ -319,6 +338,12 @@ C_SPEC = {
 ```
 
 各言語の `lang_spec` は `scripts/measure_kpi.py` 内に定数として持つ（外部 YAML 等は使わず、hard-coded で十分。言語数が12と限定的なため）。
+
+**`lang_spec` の正式スキーマ確定**: 上記 `JAVA_SPEC` / `C_SPEC` の例で示した dict 構造は概念モデルであり、以下は writing-plans の最初のステップで確定する：
+
+- `min_per_type` を単一 int にするか、使用タイプ別の dict にするか（Java の「その他」は性質上多めになるため、type 別しきい値が必要かもしれない）
+- `reference_kinds_required` の値が TSV カラム値（`grep_helper.model.RefType` enum 等）と完全一致するかの確認
+- `usage_types` のキー値も同様に `grep_helper/languages/<lang>.py` の `classify_usage` 戻り値と完全一致させる必要がある
 
 ### 期待TSV の手書きルール
 
@@ -413,7 +438,7 @@ C_SPEC = {
 | `assert_coverage_distribution()` | ブラックボックス: 使用タイプが満たされている / 不足している場合の警告生成 |
 | `load_expected_tsv()` / `load_actual_tsv()` | ブラックボックス: UTF-8 BOM・タブ区切り・空行・想定外カラム数の入力 |
 | `format_summary()` / `format_detail_report()` | **完全一致のスナップショットは取らない**。「主要数値（網羅率・分類精度・FP件数）が文字列に含まれる」「WARN/OK ラベルが正しい条件で出る」レベルで検証（`feedback_test_style §5` 変更耐性と整合） |
-| エンドツーエンド | `tests/golden/java/` の最小サブセットを使い、`run()` を呼んで KPI = 100% / 100% を返すことを検証（ゴールデンセット自体の整合性チェック兼用）。各言語ぶん最低1つの E2E テストを書く |
+| エンドツーエンド | **各言語の使用タイプ各1件に絞った「最小サブセット」**（`tests/golden/<lang>/` のフルセットではない、テスト専用のミニセット）を使い、`run()` を呼んでクラッシュせず最後まで実行されることを検証する。最小サブセットでは coverage_rate == 1.0 を assert する。**フルセットでの 100% 達成は §成功条件 5/6 で別途規定**（pytest では検証しない、`scripts/measure_kpi.py` の手動実行で確認する） |
 
 **ゴールデンセット自体の妥当性**は手動レビューで担保する（合成最小例なので、各サンプルファイルと期待TSVをセットでレビュー可能）。さらに `assert_coverage_distribution()` で「使用タイプが揃っているか」だけは自動チェックする。
 
@@ -470,6 +495,36 @@ C_SPEC = {
 | 変更 | `pyproject.toml` または `pytest.ini` | `norecursedirs` に `tests/golden` を追加 |
 | 変更 | `.gitignore` | `output/kpi/` を除外 |
 | 変更 | `README.md` | KPI 計測の使い方を1セクション追記 |
+
+---
+
+## 実装計画分割の推奨
+
+本 spec の成果物は単一の writing-plans でカバーするには大きい（スクリプト本体 + Java 深堀り 500+ 件 + 他11言語 ~86 件 + テスト + pipeline 拡張 + pytest.ini）。writing-plans に渡す際は、以下の3フェーズに分けることを推奨する。各フェーズは独立した実装計画 / PR として閉じる：
+
+### F-1: スクリプト本体 + Java 深堀り
+
+- `grep_helper/pipeline.py` に `run_full_pipeline()` を追加
+- `pytest.ini` を新規作成（`norecursedirs`）
+- `scripts/measure_kpi.py` 本体（`compare` / `format_*` / `assert_coverage_distribution` / `run` 等）
+- `tests/golden/java/`（500件超）
+- `tests/test_measure_kpi.py`（compare/format/assert/load_*/E2E Java）
+- `.gitignore` に `output/kpi/` 追加
+
+このフェーズだけで KPI の「Java 網羅率 100% / 分類精度 90% 以上」を達成できる。`--lang java` のみが動く状態。
+
+### F-2: 他11言語のスモークセット整備
+
+- `tests/golden/{c,proc,sql,sh,kotlin,plsql,ts,python,perl,dotnet,groovy}/`（各 6〜11 件）
+- `lang_spec` 定数を全12言語ぶんに拡張
+- `--lang all` ロジックの実装（失敗時規約含む）
+- E2E テストを11言語ぶん追加
+- `README.md` に KPI 計測の使い方を追記
+
+### F-3 (任意): cli.py のリファクタ
+
+- `grep_helper/cli.py` の `run()` を `run_full_pipeline()` 経由にリファクタして重複削減
+- F-1/F-2 と独立して着手可能
 
 ---
 
