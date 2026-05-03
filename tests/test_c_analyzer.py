@@ -108,7 +108,12 @@ class TestExtractVariableNameC(unittest.TestCase):
         self.assertIsNone(extract_variable_name_c('if (x == 1)'))
 
 
-class TestBuildDefineMap(unittest.TestCase):
+class TestBuildDefineMapWhitebox(unittest.TestCase):
+    """TestBuildDefineMapWhitebox: _build_define_map のキャッシュ挙動を観察するテスト。
+    `_define_map_cache` への直接 peek（`assertIs`/`assertIsNot`）と
+    `_DEFINE_ALIAS_PAT` の文字列リテラル除外契約を検証する。
+    実装変更時は本クラスも同期更新が必要。
+    """
     def test_単純なdefineエイリアスを収集できる(self):
         """#define ALIAS TARGET 形式から ALIAS->TARGET のマップが作られることを確認する。"""
         with tempfile.TemporaryDirectory() as d:
