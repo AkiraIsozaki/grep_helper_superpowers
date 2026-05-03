@@ -18,6 +18,10 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsageDotnet(unittest.TestCase):
+    """TestClassifyUsageDotnet: classify_usage_dotnet の各分岐の分類結果を観察するテスト。
+    E2E TSV では具体ケースのみ現れ、CS/VB 両構文の各分岐を区別観察できないため keep。
+    """
+
     def test_CSのconst定義を定数定義として分類する(self):
         """C# の const 宣言が定数定義(Const/readonly)に分類されることを確認"""
         self.assertEqual(classify_usage_dotnet('public const string STATUS = "TARGET";'), "定数定義(Const/readonly)")
@@ -76,6 +80,10 @@ class TestClassifyUsageDotnet(unittest.TestCase):
 
 
 class TestExtractConstNameDotnet(unittest.TestCase):
+    """TestExtractConstNameDotnet: extract_const_name_dotnet の抽出有無を観察するテスト。
+    None 返却（定義以外の行）の WHAT は E2E TSV からは観察できないため keep。
+    """
+
     def test_CSのconst宣言から定数名を抽出する(self):
         """C# の const 宣言から定数名 STATUS が抽出されることを確認"""
         self.assertEqual(extract_const_name_dotnet('public const string STATUS = "TARGET";'), "STATUS")
@@ -98,6 +106,10 @@ class TestExtractConstNameDotnet(unittest.TestCase):
 
 
 class TestTrackConstDotnet(unittest.TestCase):
+    """TestTrackConstDotnet: track_const_dotnet の間接参照検出と定義行除外を観察するテスト。
+    定義行が結果から除外される WHAT は E2E TSV からは直接観察しにくいため keep。
+    """
+
     def test_CSとVBの両方で定数の利用箇所を検出する(self):
         """.cs と .vb の両方から間接参照の利用箇所を検出することを確認"""
         with tempfile.TemporaryDirectory() as d:
@@ -141,6 +153,8 @@ class TestTrackConstDotnet(unittest.TestCase):
 
 
 class TestE2EDotnet(unittest.TestCase):
+    """E2E統合テスト: .NET フィクスチャでツールを実行し、期待TSVと比較する"""
+
     TESTS_DIR = Path(__file__).parent / "dotnet"
 
     def test_TARGETキーワードのE2E解析結果が期待TSVと一致する(self):
