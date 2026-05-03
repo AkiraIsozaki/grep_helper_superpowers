@@ -32,31 +32,24 @@ class TestClassifyUsageC(unittest.TestCase):
     踏まないため公開契約のドキュメントとして保持する。
     """
     def test_define定数定義を分類できる(self):
-        """#define 行が「#define定数定義」に分類されることを確認する。"""
         self.assertEqual(classify_usage_c('#define MAX_SIZE 100'), "#define定数定義")
 
     def test_hashとdefineの間に空白がある場合も分類できる(self):
-        """# define のように空白があっても #define定数定義 と分類されることを確認する。"""
         self.assertEqual(classify_usage_c('# define STATUS "value"'), "#define定数定義")
 
     def test_if文を条件判定として分類できる(self):
-        """if (...) 形式が「条件判定」と分類されることを確認する。"""
         self.assertEqual(classify_usage_c('if (code == STATUS)'), "条件判定")
 
     def test_strcmp呼び出しを条件判定として分類できる(self):
-        """strcmp 呼び出しが「条件判定」と分類されることを確認する。"""
         self.assertEqual(classify_usage_c('strcmp(code, STATUS)'), "条件判定")
 
     def test_strncmp呼び出しを条件判定として分類できる(self):
-        """strncmp 呼び出しが「条件判定」と分類されることを確認する。"""
         self.assertEqual(classify_usage_c('strncmp(code, STATUS, 4)'), "条件判定")
 
     def test_switch文を条件判定として分類できる(self):
-        """switch 文が「条件判定」と分類されることを確認する。"""
         self.assertEqual(classify_usage_c('switch (code) {'), "条件判定")
 
     def test_return文を分類できる(self):
-        """return 文が「return文」と分類されることを確認する。"""
         self.assertEqual(classify_usage_c('return STATUS;'), "return文")
 
     def test_変数代入を分類できる(self):
@@ -64,7 +57,6 @@ class TestClassifyUsageC(unittest.TestCase):
         self.assertEqual(classify_usage_c('char buf[32] = STATUS;'), "変数代入")
 
     def test_関数引数を分類できる(self):
-        """関数呼び出しの引数として渡される場合「関数引数」と分類されることを確認する。"""
         self.assertEqual(classify_usage_c('process(STATUS)'), "関数引数")
 
     def test_その他の出現を分類できる(self):
@@ -72,7 +64,6 @@ class TestClassifyUsageC(unittest.TestCase):
         self.assertEqual(classify_usage_c('STATUS'), "その他")
 
     def test_EXEC_SQL文はC側では分類されない(self):
-        """C アナライザは EXEC SQL 行を「EXEC SQL文」として分類しないことを確認する。"""
         result = classify_usage_c('EXEC SQL SELECT * FROM t;')
         self.assertNotEqual(result, "EXEC SQL文")
 
@@ -83,19 +74,15 @@ class TestExtractDefineName(unittest.TestCase):
     E2E fixture（`#define X Y` 形式のみ）では網羅されないため保持する。
     """
     def test_define行から定数名を抽出できる(self):
-        """通常の #define 行から定数名を取り出せることを確認する。"""
         self.assertEqual(extract_define_name('#define STATUS "value"'), "STATUS")
 
     def test_hashの後に空白があっても定数名を抽出できる(self):
-        """# define のように空白があっても定数名を取り出せることを確認する。"""
         self.assertEqual(extract_define_name('# define STATUS "value"'), "STATUS")
 
     def test_define以外の行ではNoneを返す(self):
-        """#define ではない行に対しては None を返すことを確認する。"""
         self.assertIsNone(extract_define_name('if (x == STATUS)'))
 
     def test_値を持たないdefineではNoneを返す(self):
-        """値が指定されていない #define 行に対しては None を返すことを確認する。"""
         self.assertIsNone(extract_define_name('#define STATUS'))
 
 
@@ -117,7 +104,6 @@ class TestExtractVariableNameC(unittest.TestCase):
         self.assertEqual(extract_variable_name_c('char *ptr;'), "ptr")
 
     def test_変数宣言ではない行ではNoneを返す(self):
-        """変数宣言でない行に対しては None を返すことを確認する。"""
         self.assertIsNone(extract_variable_name_c('if (x == 1)'))
 
 
@@ -137,7 +123,6 @@ class TestBuildDefineMapWhitebox(unittest.TestCase):
             self.assertEqual(dm.get("ALIAS"), "TARGET")
 
     def test_文字列リテラル値のdefineは無視される(self):
-        """値が文字列リテラルの #define はエイリアスマップに含まれないことを確認する。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "a.c").write_text('#define STATUS "value"\n')
@@ -157,7 +142,6 @@ class TestBuildDefineMapWhitebox(unittest.TestCase):
             self.assertIs(dm1, dm2)
 
     def test_定義マップキャッシュがエンコーディング別に分かれる(self):
-        """encoding が異なる場合は別キャッシュエントリになる。"""
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
             (src / "a.c").write_text('#define ALIAS TARGET\n')
@@ -189,7 +173,6 @@ class TestCollectDefineAliasesWhitebox(unittest.TestCase):
         self.assertLessEqual(len(aliases), 10)
 
     def test_該当エイリアスがない場合は空リストを返す(self):
-        """対象キーワードへ向かう #define が存在しない場合は空リストを返すことを確認する。"""
         define_map = {"X": "Y"}
         aliases = _collect_define_aliases("A", define_map)
         self.assertEqual(aliases, [])
