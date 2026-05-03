@@ -99,6 +99,9 @@ def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
         else:
             misclassified.append((exp, act))
 
+    fp_keys = actual_by_key.keys() - expected_by_key.keys()
+    false_positives = [actual_by_key[k] for k in fp_keys]
+
     coverage_rate = matched_rows / expected_total if expected_total > 0 else 1.0
     classification_accuracy = (
         classified_correctly / matched_rows if matched_rows > 0 else 0.0
@@ -111,7 +114,7 @@ def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
         coverage_rate=coverage_rate,
         classification_accuracy=classification_accuracy,
         missing_rows=[expected_by_key[k] for k in missing_keys],
-        false_positives=[],  # Task 8
+        false_positives=false_positives,
         misclassified=misclassified,
         detail_diffs=[],  # Task 9
     )

@@ -141,5 +141,24 @@ class TestCompareClassificationAccuracy(unittest.TestCase):
         self.assertEqual(len(result.misclassified), 1)
 
 
+class TestCompareFalsePositive(unittest.TestCase):
+    """compare() の FP: actual のみに存在する行は false_positives に入る（KPI不算入）。"""
+
+    def test_actualのみに存在する行はfalse_positivesに入る(self):
+        expected = [_rec("f.sql", "1")]
+        actual = [_rec("f.sql", "1"), _rec("g.sql", "5")]
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(len(result.false_positives), 1)
+        self.assertEqual(result.false_positives[0].filepath, "g.sql")
+
+    def test_FP件数は網羅率と分類精度に影響しない(self):
+        expected = [_rec("f.sql", "1")]
+        actual = [_rec("f.sql", "1"), _rec("g.sql", "5"), _rec("h.sql", "9")]
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.coverage_rate, 1.0)
+        self.assertEqual(result.classification_accuracy, 1.0)
+        self.assertEqual(len(result.false_positives), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
