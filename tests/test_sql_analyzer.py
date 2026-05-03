@@ -5,6 +5,9 @@ from grep_helper.languages.sql import classify_usage as classify_usage_sql, extr
 
 
 class TestClassifyUsageSql(unittest.TestCase):
+    """TestClassifyUsageSql: classify_usage の SQL コード行→使用タイプ分類を観察するテスト。
+    SQL 言語の E2E 駆動テストが現状無いため、公開 API の分類仕様を本クラスで保証する。
+    """
     def test_例外エラー処理を分類できる(self):
         """RAISE_APPLICATION_ERROR を含む行が「例外・エラー処理」に分類されること"""
         self.assertEqual(
