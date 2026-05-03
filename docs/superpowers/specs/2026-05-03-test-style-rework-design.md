@@ -236,3 +236,20 @@ class TestSearchInLines(unittest.TestCase):
 | パイロット中に production バグが見つかる | テスト見直しは止めず、別 PR で扱う旨をコミットメッセージに残す |
 | パターン A が将来の mtime/inode ベースのキャッシュ無効化導入を阻害する | パターン A 自体に「自動無効化なし契約」依存である注記を残す。将来契約を変える場合はテスト群を更新する手間が必要なことを受容する |
 | パターン B が退避ポリシー変更で壊れる | 「特定エントリの追い出し」ではなく「**少なくとも 1 つは追い出される**」を WHAT として観察するように緩めて記述（パターン B 本文）。ポリシー固定が必要ならホワイトボックス側で扱う |
+
+## パイロットでのスパイク所見（パターン G）
+
+`tests/test_analyze.py:688-720` の `TestGetMethodScope` を試験翻訳した結果：
+
+- **対象**: `test_メソッド内の行番号からスタートとエンドのタプルが返る`（および同クラス内の `test_get_method_scopeは存在しないファイルでNoneを返す` / `test_メソッドより前の行はNoneを返す`）
+- **判定**: **b 案（E2E ゴールデンに包摂されているため削除可能）**
+- **理由**:
+  - `_get_method_scope` は `grep_helper/languages/java_track.py:54` に定義されている private helper。
+  - `grep_helper/languages/java_track.py` 内の公開関数 (`track_constant` / `track_field` / `track_local` / `find_getter_names`) は `_get_method_scope` を**直接は呼んでいない**。呼び出しは一段上の orchestrator (`grep_helper/languages/java.py:119`、`:309`) にあり、`scope == "method"` のとき `_get_method_scope` の結果を `track_local` に渡す経路として使われる。
+  - したがって「公開 API（`track_local` 等）を直接叩く a 案」は本当の意味では成立せず、`_get_method_scope` の振る舞いを観察する自然な公開境界は **`java.py` 経由の analyze フロー = E2E** になる。
+  - E2E ゴールデン `tests/fixtures/expected/SAMPLE.tsv` には `Constants.java` の 9 行目（定数定義）・**13 行目（条件判定）**・19 行目（return 文）の 3 行が登録されている。試験翻訳対象の `lineno=13` の振る舞いはこの「条件判定」行で踏まれており、`_get_method_scope` が `(start, end)` を正しく返さないとそもそも `track_local` 経路がトリガーされない（= ゴールデン差分として現れる）。
+  - 「存在しないファイルで `None`」「メソッドより前の行で `None`」という 2 ケースは E2E ゴールデンに直接の対応行はないが、これらは defensive な早期 return であり、production の他の入力経路（不正な記録の混入、ヘッダコメント等の非メソッド行）でも踏まれるため、独立した unit としての価値は薄い。仮に守りたければ Whitebox 隔離（c 案）に 1 ケースだけ残す選択肢もあるが、まずは b 案で削除して回帰が出れば追加する方針で十分。
+- **スイープ第一弾への影響**:
+  - `TestGetMethodScope` クラス全体（`tests/test_analyze.py:688-720` の 3 メソッド）は **削除候補**。代替カバレッジは E2E ゴールデン (`SAMPLE.tsv`) と、`_get_method_scope` が `None` を返したときに `track_local` が呼ばれないこと（＝ゴールデン行が増えないこと）で間接観察される。
+  - 同ファイルの `_search_in_lines` / `_batch_track_*` 直接ユニットテストも同類の構造（private helper を fixture 直叩き）と想定されるが、各クラス開始時に「公開 API が直接呼ぶか／orchestrator 経由か／E2E に行が出るか」の 3 点を再確認してから a / b / c を判定する。判定根拠を曖昧にしたまま削除しない。
+  - 削除前に手動 mutation スポットチェック（パイロット原則ステップ 5）を E2E テスト側に対して 1 度実施する：`_get_method_scope` の `return None` を `return (1, 99999)` 等に書き換えてゴールデンが赤くなることを確認してから削除する。赤くならなければ b 案は不成立で、その時点で c 案（Whitebox 隔離）にフォールバックする。
