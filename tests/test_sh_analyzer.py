@@ -5,6 +5,9 @@ from grep_helper.languages.sh import classify_usage as classify_usage_sh, extrac
 
 
 class TestClassifyUsageSh(unittest.TestCase):
+    """TestClassifyUsageSh: classify_usage の sh コード行→使用タイプ分類結果を観察するテスト。
+    sh 言語の E2E 駆動テストが現状無いため、公開 API の分類仕様を本クラスで保証する。
+    """
     def test_export文を環境変数エクスポートとして分類する(self):
         """export 構文が環境変数エクスポートに分類されることを検証"""
         self.assertEqual(classify_usage_sh('export TARGET_VAR="TARGET"'), "環境変数エクスポート")
