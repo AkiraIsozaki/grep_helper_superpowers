@@ -21,6 +21,10 @@ def _process_grep_file(path, keyword, source_dir, stats):
 
 
 class TestClassifyUsageGroovy(unittest.TestCase):
+    """TestClassifyUsageGroovy: classify_usage_groovy の各分岐の分類結果を観察するテスト。
+    E2E TSV では具体ケースのみ現れ、7 種パターン (static final/変数代入/条件判定/return/アノテーション/メソッド引数/その他) を網羅観察できないため keep。
+    """
+
     def test_static_final定数定義を分類できる(self):
         """static final宣言を「static final定数定義」として分類することを確認"""
         self.assertEqual(classify_usage_groovy('static final String STATUS = "TARGET"'), "static final定数定義")
@@ -59,6 +63,10 @@ class TestClassifyUsageGroovy(unittest.TestCase):
 
 
 class TestExtractStaticFinalName(unittest.TestCase):
+    """TestExtractStaticFinalName: extract_static_final_name の抽出有無を観察するテスト。
+    None 返却（static final でない行）の WHAT は E2E TSV に現れないため keep。
+    """
+
     def test_基本的なstatic_final宣言から名前を抽出する(self):
         """static final宣言から定数名を取り出せることを確認"""
         self.assertEqual(extract_static_final_name('static final String STATUS = "TARGET"'), "STATUS")
@@ -73,6 +81,10 @@ class TestExtractStaticFinalName(unittest.TestCase):
 
 
 class TestIsClassLevelField(unittest.TestCase):
+    """TestIsClassLevelField: is_class_level_field の真偽判定を観察するテスト。
+    本テスト E2E は変数代入経由の class field 認識パスを通らず、5 ケース (private/protected/public/def/インデント) を独立観察するため keep。
+    """
+
     def test_privateフィールドをクラスレベルと判定する(self):
         """private修飾子付きの宣言をクラスレベルフィールドと判定することを確認"""
         self.assertTrue(is_class_level_field('private String type = STATUS'))
@@ -95,6 +107,10 @@ class TestIsClassLevelField(unittest.TestCase):
 
 
 class TestFindGetterNamesGroovy(unittest.TestCase):
+    """TestFindGetterNamesGroovy: find_getter_names_groovy の getter 名候補抽出を観察するテスト。
+    本テスト E2E は getter/setter バッチ追跡パスを通らず、標準/非標準 getter の検出 WHAT を独立観察するため keep。
+    """
+
     def test_命名規則に従ったgetterを検出する(self):
         """getXxx形式の標準的なgetterを検出できることを確認"""
         names = find_getter_names_groovy("type", [
@@ -115,6 +131,10 @@ class TestFindGetterNamesGroovy(unittest.TestCase):
 
 
 class TestFindSetterNamesGroovy(unittest.TestCase):
+    """TestFindSetterNamesGroovy: find_setter_names_groovy の setter 名候補抽出を観察するテスト。
+    本テスト E2E は getter/setter バッチ追跡パスを通らず、標準/非標準 setter の検出 WHAT を独立観察するため keep。
+    """
+
     def test_命名規則に従ったsetterを検出する(self):
         """setXxx形式の標準的なsetterを検出できることを確認"""
         names = find_setter_names_groovy("type", [
@@ -135,6 +155,10 @@ class TestFindSetterNamesGroovy(unittest.TestCase):
 
 
 class TestTrackStaticFinalGroovy(unittest.TestCase):
+    """TestTrackStaticFinalGroovy: track_static_final_groovy の間接参照検出と ref_type 設定を観察するテスト。
+    別ファイルからの利用を間接参照 (RefType.INDIRECT) として返す WHAT は E2E TSV では結合結果のみで分離観察できないため keep。
+    """
+
     def test_groovyファイル内のstatic_final利用箇所を追跡できる(self):
         """static final定数の利用箇所を他のGroovyファイルから間接参照として検出できることを確認"""
         with tempfile.TemporaryDirectory() as d:
@@ -157,6 +181,8 @@ class TestTrackStaticFinalGroovy(unittest.TestCase):
 
 
 class TestE2EGroovy(unittest.TestCase):
+    """E2E統合テスト: Groovy フィクスチャでパイプラインを実行し、期待TSVと比較する。"""
+
     TESTS_DIR = Path(__file__).parent / "groovy"
 
     def test_TARGETキーワードのE2E解析結果が期待TSVと一致する(self):
