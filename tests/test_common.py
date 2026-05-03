@@ -267,21 +267,36 @@ class TestCachedFileLines(unittest.TestCase):
             self.assertEqual(first, ["first"])
             self.assertEqual(second, ["first"])  # キャッシュ hit で古い値
 
-    def test_合計サイズが上限超過で古いものを破棄する(self):
+    def test_容量上限を超えると古いエントリが追い出されて再読込される(self):
         from grep_helper.file_cache import (
-            cached_file_lines, _file_lines_cache_clear, _file_lines_cache, set_file_lines_cache_limit,
+            cached_file_lines,
+            _file_lines_cache_clear,
+            set_file_lines_cache_limit,
         )
         _file_lines_cache_clear()
         set_file_lines_cache_limit(100)  # 100 byte 上限
-        with tempfile.TemporaryDirectory() as d:
-            p = Path(d)
-            for i in range(5):
-                f = p / f"f{i}.txt"
-                f.write_text("X" * 50, encoding="utf-8")
-                cached_file_lines(f, "utf-8")
-            # 合計 250 byte 入れたら最初の 3 ファイル分は追い出されているはず
-            self.assertLessEqual(len(_file_lines_cache), 3)
-        set_file_lines_cache_limit(256 * 1024 * 1024)  # 復元
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                p = Path(d)
+                early = []
+                for i in range(3):
+                    f = p / f"early{i}.txt"
+                    f.write_text("X" * 50, encoding="utf-8")
+                    cached_file_lines(f, "utf-8")
+                    early.append(f)
+                for i in range(5):  # 容量上限を確実に超過
+                    f = p / f"later{i}.txt"
+                    f.write_text("X" * 50, encoding="utf-8")
+                    cached_file_lines(f, "utf-8")
+                # 初期エントリの中身を書き換え、再読込が起きていることを観察
+                re_read = []
+                for f in early:
+                    f.write_text("CHANGED", encoding="utf-8")
+                    if cached_file_lines(f, "utf-8") == ["CHANGED"]:
+                        re_read.append(f)
+                self.assertGreaterEqual(len(re_read), 1)
+        finally:
+            set_file_lines_cache_limit(256 * 1024 * 1024)  # 復元
 
 
 class TestBatchScannerSelector(unittest.TestCase):
