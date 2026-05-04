@@ -16,6 +16,7 @@ SHEBANGS: tuple[str, ...] = ("perl",)
 
 _PERL_USAGE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\buse\s+constant\b'),                          "use constant定義"),
+    (re.compile(r'\buse\s+\w+\b'),                                "その他"),
     (re.compile(r'\bif\s*\(|\bunless\s*\(|==|\bne\b|\beq\b'),   "条件判定"),
     (re.compile(r'\$\w+\s*=|\bmy\b.*=|\bour\b.*='),             "変数代入"),
     (re.compile(r'\bprint\b|\bsay\b|\bprintf\b'),                "print/say出力"),

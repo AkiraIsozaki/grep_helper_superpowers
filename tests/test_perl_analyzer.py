@@ -55,6 +55,10 @@ class TestClassifyUsagePerl(unittest.TestCase):
         """既知パターンに合致しない単独利用を「その他」に分類する"""
         self.assertEqual(classify_usage_perl('STATUS'), "その他")
 
+    def test_use_Module_qwのインポート宣言はその他と判定する(self):
+        """use Sample qw(STATUS); はインポート宣言なので関数呼び出しではなくその他に分類する"""
+        self.assertEqual(classify_usage_perl('use Sample qw(STATUS_CODE);'), "その他")
+
 
 class TestE2EPerl(unittest.TestCase):
     """TestE2EPerl: process_grep_file (Perl) の全体パイプライン出力を観察するテスト。
