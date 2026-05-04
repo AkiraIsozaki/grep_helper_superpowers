@@ -75,5 +75,162 @@ class TestE2EPython(unittest.TestCase):
             self.assertEqual(actual, expected)
 
 
+from grep_helper.languages.python import (
+    extract_module_const_name,
+    track_module_const,
+    batch_track_indirect,
+)
+from grep_helper.model import GrepRecord, RefType
+
+
+class TestExtractModuleConstName(unittest.TestCase):
+    """TestExtractModuleConstName: extract_module_const_name の抽出有無を観察するテスト。
+    None 返却（小文字代入や非代入行）の WHAT は E2E TSV からは観察できないため keep。
+    """
+
+    def test_全大文字定数定義から名前を抽出する(self):
+        self.assertEqual(extract_module_const_name('STATUS_CODE = "777"'), "STATUS_CODE")
+
+    def test_型注釈付き全大文字定数定義から名前を抽出する(self):
+        self.assertEqual(extract_module_const_name('MAX_RETRY: int = 5'), "MAX_RETRY")
+
+    def test_インデント付き全大文字定数からも名前を抽出する(self):
+        self.assertEqual(extract_module_const_name('    MY_CONST = 1'), "MY_CONST")
+
+    def test_小文字シングルトンからは抽出しない(self):
+        self.assertIsNone(extract_module_const_name('app = Flask(__name__)'))
+
+    def test_小文字インデントなし代入からは抽出しない(self):
+        self.assertIsNone(extract_module_const_name('db = SQLAlchemy()'))
+
+    def test_dunder名は抽出しない(self):
+        self.assertIsNone(extract_module_const_name('__all__ = ["x"]'))
+
+    def test_等価比較は抽出しない(self):
+        self.assertIsNone(extract_module_const_name('if x == STATUS_CODE:'))
+
+    def test_非代入行は抽出しない(self):
+        self.assertIsNone(extract_module_const_name('return STATUS_CODE'))
+
+
+class TestTrackModuleConst(unittest.TestCase):
+    """TestTrackModuleConst: track_module_const の間接参照検出と定義行除外を観察するテスト。"""
+
+    def test_別ファイルでの参照を間接レコードとして記録する(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.py").write_text('STATUS_CODE = "777"\n')
+            (src / "service.py").write_text('if x == STATUS_CODE:\n    pass\n')
+            record = GrepRecord(
+                keyword="777",
+                ref_type=RefType.DIRECT.value,
+                usage_type="変数代入",
+                filepath=str(src / "constants.py"),
+                lineno="1",
+                code='STATUS_CODE = "777"',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_module_const("STATUS_CODE", src, record, stats)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("service.py" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
+    def test_定義行自身は間接レコードに含まれない(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.py").write_text('STATUS_CODE = "777"\n')
+            record = GrepRecord(
+                keyword="777",
+                ref_type=RefType.DIRECT.value,
+                usage_type="変数代入",
+                filepath=str(src / "constants.py"),
+                lineno="1",
+                code='STATUS_CODE = "777"',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_module_const("STATUS_CODE", src, record, stats)
+            self.assertEqual(results, [])
+
+
+class TestBatchTrackIndirectPython(unittest.TestCase):
+    """TestBatchTrackIndirectPython: batch_track_indirect の起点フィルタ・集約を観察するテスト。
+    主要な公開 API のブラックボックステスト。
+    """
+
+    def test_変数代入usage_typeのレコードのみ起点となる(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.py").write_text('STATUS_CODE = "777"\n')
+            (src / "service.py").write_text('if x == STATUS_CODE:\n    pass\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入",
+                    filepath=str(src / "constants.py"),
+                    lineno="1",
+                    code='STATUS_CODE = "777"',
+                ),
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="条件判定",
+                    filepath=str(src / "service.py"),
+                    lineno="1",
+                    code='if x == STATUS_CODE:',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect(records, src, None, workers=1)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("service.py" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
+    def test_小文字シングルトンは起点にならない(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "app_init.py").write_text('app = Flask(__name__)\n')
+            (src / "service.py").write_text('app.run()\n')
+            records = [
+                GrepRecord(
+                    keyword="app",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入",
+                    filepath=str(src / "app_init.py"),
+                    lineno="1",
+                    code='app = Flask(__name__)',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect(records, src, None, workers=1)
+            self.assertEqual(results, [])
+
+    def test_workers_2と1で同じレコード集合を返す(self):
+        """Linux fork 前提の並列テスト（spawn 環境はスコープ外）。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.py").write_text('STATUS_CODE = "777"\n')
+            (src / "service.py").write_text('if x == STATUS_CODE:\n    pass\n')
+            (src / "worker.py").write_text('process(STATUS_CODE)\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入",
+                    filepath=str(src / "constants.py"),
+                    lineno="1",
+                    code='STATUS_CODE = "777"',
+                ),
+            ]
+            _file_lines_cache_clear()
+            serial = batch_track_indirect(records, src, None, workers=1)
+            _file_lines_cache_clear()
+            parallel = batch_track_indirect(records, src, None, workers=2)
+            key = lambda r: (r.filepath, r.lineno, r.ref_type)
+            self.assertEqual(sorted(serial, key=key), sorted(parallel, key=key))
+
+
 if __name__ == "__main__":
     unittest.main()
