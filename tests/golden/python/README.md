@@ -33,8 +33,10 @@
 |---|---|---|
 | 777.grep | 777 | 使用タイプ網羅。全6件（直接のみ） |
 
-## ファイル一覧（src/ 配下、1 ファイル）
-- sample.py — 6使用タイプを単一モジュールに集約
+## ファイル一覧（src/ 配下、3 ファイル）
+- sample.py — 6使用タイプを単一モジュールに集約（直接参照の起点）
+- service.py — sample.py の `STATUS_CODE` を import して条件判定で使う（間接参照の利用側）
+- worker.py — sample.py の `STATUS_CODE` を import して関数引数 / return で使う（間接参照の利用側）
 
 ## pytest 収集除外
 本ディレクトリは `tests/golden/` 配下にあり、`pytest.ini` の `norecursedirs = tests/golden` により pytest 収集から除外される。`python -m pytest tests/ -q --collect-only 2>&1 | grep "tests/golden"` が無結果（または "no collect from golden, OK"）であれば設定は有効。

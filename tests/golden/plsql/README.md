@@ -36,8 +36,9 @@
 |---|---|---|
 | 777.grep | 777 | 使用タイプ網羅。全8件（直接のみ） |
 
-## ファイル一覧（src/ 配下、1 ファイル）
-- sample.pkb — 7使用タイプを単一パッケージボディに集約
+## ファイル一覧（src/ 配下、2 ファイル）
+- sample.pkb — 7使用タイプを単一パッケージボディに集約（直接参照の起点）
+- other.pkb — sample_pkg.c_default_code を別パッケージから参照する（間接参照の利用側）
 
 ## 期待TSV 手書きルール
 共通 spec を参照: `docs/superpowers/specs/2026-05-03-kpi-golden-set-design.md` §期待TSV の手書きルール

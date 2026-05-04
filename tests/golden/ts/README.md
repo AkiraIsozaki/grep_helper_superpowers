@@ -34,8 +34,10 @@
 |---|---|---|
 | 777.grep | 777 | 使用タイプ網羅。全7件（直接のみ） |
 
-## ファイル一覧（src/ 配下、1 ファイル）
-- sample.ts — 7使用タイプを単一クラスに集約
+## ファイル一覧（src/ 配下、3 ファイル）
+- sample.ts — 7使用タイプを単一モジュールに集約（直接参照の起点）
+- service.ts — sample.ts の `STATUS_CODE` を import して条件判定で使う（間接参照の利用側）
+- worker.ts — sample.ts の `STATUS_CODE` を import して関数引数で使う（間接参照の利用側）
 
 ## 期待TSV 手書きルール
 共通 spec を参照: `docs/superpowers/specs/2026-05-03-kpi-golden-set-design.md` §期待TSV の手書きルール
