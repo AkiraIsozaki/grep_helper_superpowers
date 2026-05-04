@@ -1,0 +1,9 @@
+Sample.groovy:3:@Deprecated("777")
+Sample.groovy:5:    static final String STATUS_CODE = "777"
+Sample.groovy:6:    public String type = "777"
+Sample.groovy:17:        def localCode = "777"
+Sample.groovy:18:        if (input == "777") {
+Sample.groovy:24:        logValue("777")
+Sample.groovy:29:        return "777"
+Sample.groovy:32:    // "777" のコメント — その他に分類されることを期待
+Caller.groovy:7:        s.setType("777")
