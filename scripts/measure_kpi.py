@@ -45,7 +45,107 @@ LANG_SPECS: dict[str, LangSpec] = {
             "直接", "間接", "間接（getter経由）", "間接（setter経由）",
         ],
     },
-    # 他言語は Step 5 (Task 19) で追加
+    "c": {
+        "module": "grep_helper.languages.c",
+        "usage_types": [
+            "#define定数定義", "条件判定", "return文",
+            "変数代入", "関数引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接", "間接"],
+    },
+    "proc": {
+        "module": "grep_helper.languages.proc",
+        "usage_types": [
+            "EXEC SQL文", "#define定数定義", "条件判定", "return文",
+            "変数代入", "関数引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接", "間接"],
+    },
+    "sql": {
+        "module": "grep_helper.languages.sql",
+        "usage_types": [
+            "例外・エラー処理", "定数・変数定義", "WHERE条件",
+            "比較・DECODE", "INSERT/UPDATE値", "SELECT/INTO", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接", "間接"],
+    },
+    "sh": {
+        "module": "grep_helper.languages.sh",
+        "usage_types": [
+            "環境変数エクスポート", "変数代入", "条件判定",
+            "echo/print出力", "コマンド引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接", "間接"],
+    },
+    "kotlin": {
+        "module": "grep_helper.languages.kotlin",
+        "usage_types": [
+            "const定数定義", "変数代入", "条件判定", "return文",
+            "アノテーション", "関数引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接", "間接"],
+    },
+    "plsql": {
+        "module": "grep_helper.languages.plsql",
+        "usage_types": [
+            "定数/変数宣言", "EXCEPTION処理", "条件判定",
+            "カーソル定義", "INSERT/UPDATE値", "WHERE条件", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接"],
+    },
+    "ts": {
+        "module": "grep_helper.languages.ts",
+        "usage_types": [
+            "const定数定義", "変数代入(let/var)", "条件判定", "return文",
+            "デコレータ", "関数引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接"],
+    },
+    "python": {
+        "module": "grep_helper.languages.python",
+        "usage_types": [
+            "変数代入", "条件判定", "return文", "デコレータ",
+            "関数引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接"],
+    },
+    "perl": {
+        "module": "grep_helper.languages.perl",
+        "usage_types": [
+            "use constant定義", "変数代入", "条件判定",
+            "print/say出力", "関数引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接"],
+    },
+    "dotnet": {
+        "module": "grep_helper.languages.dotnet",
+        "usage_types": [
+            "定数定義(Const/readonly)", "変数代入", "条件判定", "return文",
+            "属性(Attribute)", "メソッド引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": ["直接", "間接"],
+    },
+    "groovy": {
+        "module": "grep_helper.languages.groovy",
+        "usage_types": [
+            "static final定数定義", "変数代入", "条件判定", "return文",
+            "アノテーション", "メソッド引数", "その他",
+        ],
+        "min_per_type": 1,
+        "reference_kinds_required": [
+            "直接", "間接", "間接（getter経由）", "間接（setter経由）",
+        ],
+    },
 }
 
 
