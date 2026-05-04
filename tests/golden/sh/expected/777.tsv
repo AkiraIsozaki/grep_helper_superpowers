@@ -1,0 +1,8 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+777	直接	環境変数エクスポート	sample.sh	2	"export STATUS_CODE=""777"""			
+777	直接	変数代入	sample.sh	3	"local_code=""777"""			
+777	直接	条件判定	sample.sh	4	"if [ ""$local_code"" = ""777"" ]; then"			
+777	間接	条件判定	sample.sh	4	"if [ ""$local_code"" = ""777"" ]; then"	local_code	sample.sh	3
+777	直接	echo/print出力	sample.sh	5	"echo ""777 detected"""			
+777	直接	コマンド引数	sample.sh	6	"notify_cmd ""777"" --tag info"			
+777	直接	その他	sample.sh	8	"# ""777"" のコメント — その他に分類されることを期待"			

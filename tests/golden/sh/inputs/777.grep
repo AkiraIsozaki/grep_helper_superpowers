@@ -1,0 +1,6 @@
+sample.sh:2:export STATUS_CODE="777"
+sample.sh:3:local_code="777"
+sample.sh:4:if [ "$local_code" = "777" ]; then
+sample.sh:5:    echo "777 detected"
+sample.sh:6:    notify_cmd "777" --tag info
+sample.sh:8:# "777" のコメント — その他に分類されることを期待
