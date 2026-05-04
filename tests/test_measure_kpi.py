@@ -288,5 +288,45 @@ class TestRunCli(unittest.TestCase):
         self.assertEqual(result, 1)
 
 
+class TestRunCliEndToEndJava(unittest.TestCase):
+    """E2E: tests/golden/java/ の最小サブセットで run() がクラッシュせず coverage 1.0 を返す。
+    フルセット 100% は §成功条件 5/6（手動確認）で別途規定。
+    """
+
+    def test_javaの最小ゴールデンセットで例外なくrunが完了する(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code = measure_kpi.run([
+                "--lang", "java",
+                "--samples-dir", "tests/golden",
+                "--output-dir", tmp,
+                "--quiet",
+            ])
+            self.assertEqual(exit_code, 0)
+            # レポートが書き出されていること
+            reports = list(Path(tmp).glob("java-*.md"))
+            self.assertEqual(len(reports), 1)
+
+    def test_javaの最小ゴールデンセットで網羅率は1_0(self):
+        # ロード&compare を直接呼んで coverage を assert
+        expected = measure_kpi.load_expected_tsv(
+            Path("tests/golden/java/expected/777.tsv")
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            from grep_helper.languages import java as java_handler
+            from grep_helper.pipeline import run_full_pipeline
+            tmp_path = Path(tmp)
+            run_full_pipeline(
+                source_dir=Path("tests/golden/java/src"),
+                input_dir=Path("tests/golden/java/inputs"),
+                output_dir=tmp_path,
+                handler=java_handler,
+                workers=1,
+            )
+            actual = measure_kpi.load_actual_tsv(tmp_path / "777.tsv")
+        result = measure_kpi.compare(expected, actual)
+        self.assertEqual(result.coverage_rate, 1.0,
+                         f"missing_rows={result.missing_rows}")
+
+
 if __name__ == "__main__":
     unittest.main()
