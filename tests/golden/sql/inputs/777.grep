@@ -1,0 +1,11 @@
+sample.sql:2:    v_status_code VARCHAR2(8) := '777';
+sample.sql:3:    c_default_code CONSTANT VARCHAR2(8) := '777';
+sample.sql:6:    IF v_status_code = '777' THEN
+sample.sql:7:        INSERT INTO log_table (code, label) VALUES ('777', 'OK');
+sample.sql:8:        UPDATE master SET code = '777';
+sample.sql:9:        SELECT '777' INTO v_status_code FROM dual;
+sample.sql:11:    IF DECODE(v_status_code, '777', 'OK', 'NG') = 'OK' THEN
+sample.sql:12:        v_status_code := '777';
+sample.sql:14:    SELECT count(*) INTO v_status_code FROM tab WHERE id = '777';
+sample.sql:17:        RAISE_APPLICATION_ERROR(-20001, '777 が見つかりません');
+sample.sql:21:-- '777' のコメント — その他に分類されることを期待
