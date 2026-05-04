@@ -1,0 +1,6 @@
+sample.py:3:STATUS_CODE = "777"
+sample.py:6:@deprecated("777")
+sample.py:8:    if input_value == "777":
+sample.py:10:    log_value("777")
+sample.py:15:    return "777"
+sample.py:18:# "777" のコメント — その他に分類されることを期待

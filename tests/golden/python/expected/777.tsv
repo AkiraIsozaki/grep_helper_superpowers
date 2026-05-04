@@ -1,0 +1,7 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+777	直接	変数代入	sample.py	3	"STATUS_CODE = ""777"""			
+777	直接	デコレータ	sample.py	6	"@deprecated(""777"")"			
+777	直接	条件判定	sample.py	8	"if input_value == ""777"":"			
+777	直接	関数引数	sample.py	10	"log_value(""777"")"			
+777	直接	return文	sample.py	15	"return ""777"""			
+777	直接	その他	sample.py	18	"# ""777"" のコメント — その他に分類されることを期待"			
