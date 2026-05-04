@@ -1,0 +1,6 @@
+Sample.pm:4:use constant STATUS_CODE => "777";
+Sample.pm:8:    my $local_code = "777";
+Sample.pm:9:    if ($input eq "777") {
+Sample.pm:12:    print "777 detected\n";
+Sample.pm:13:    do_notify("777");
+Sample.pm:17:# "777" のコメント — その他に分類されることを期待
