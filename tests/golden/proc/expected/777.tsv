@@ -1,0 +1,10 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+777	直接	#define定数定義	sample.pc	3	"#define STATUS_CODE ""777"""			
+777	直接	変数代入	sample.pc	6	"char status_code[16] = ""777"";"			
+777	直接	EXEC SQL文	sample.pc	10	EXEC SQL SELECT code INTO :status_code FROM master WHERE id = '777';			
+777	間接	EXEC SQL文	sample.pc	10	EXEC SQL SELECT code INTO :status_code FROM master WHERE id = '777';	status_code	sample.pc	6
+777	直接	条件判定	sample.pc	11	"if (strcmp(input, ""777"") == 0) {"			
+777	間接	条件判定	sample.pc	14	if (strcmp(input, STATUS_CODE) == 0) {	STATUS_CODE	sample.pc	3
+777	直接	関数引数	sample.pc	17	"log_value(""777"");"			
+777	直接	return文	sample.pc	22	"return ""777"";"			
+777	直接	その他	sample.pc	25	"/* ""777"" のコメント — その他に分類されることを期待 */"			

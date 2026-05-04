@@ -1,0 +1,7 @@
+sample.pc:3:#define STATUS_CODE "777"
+sample.pc:6:    char status_code[16] = "777";
+sample.pc:10:    EXEC SQL SELECT code INTO :status_code FROM master WHERE id = '777';
+sample.pc:11:    if (strcmp(input, "777") == 0) {
+sample.pc:17:    log_value("777");
+sample.pc:22:    return "777";
+sample.pc:25:/* "777" のコメント — その他に分類されることを期待 */

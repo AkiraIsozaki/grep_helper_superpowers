@@ -1,0 +1,28 @@
+#include <string.h>
+
+#define STATUS_CODE "777"
+
+EXEC SQL BEGIN DECLARE SECTION;
+    char status_code[16] = "777";
+EXEC SQL END DECLARE SECTION;
+
+int fetch_status(const char *input) {
+    EXEC SQL SELECT code INTO :status_code FROM master WHERE id = '777';
+    if (strcmp(input, "777") == 0) {
+        return 1;
+    }
+    if (strcmp(input, STATUS_CODE) == 0) {
+        return 0;
+    }
+    log_value("777");
+    return -1;
+}
+
+const char *get_code(void) {
+    return "777";
+}
+
+/* "777" のコメント — その他に分類されることを期待 */
+int dummy(void) {
+    return 0;
+}
