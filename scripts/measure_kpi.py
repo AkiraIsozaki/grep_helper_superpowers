@@ -319,7 +319,13 @@ def format_summary(result: ComparisonResult) -> str:
     return "\n".join(lines)
 
 
-def format_detail_report(result: ComparisonResult, *, lang: str = "", timestamp: str = "") -> str:
+def format_detail_report(
+    result: ComparisonResult,
+    *,
+    lang: str = "",
+    timestamp: str = "",
+    distribution_warnings: list[str] | None = None,
+) -> str:
     """Markdown 詳細レポートを生成する。spec §詳細レポート の章構成に準拠。"""
     header = f"# KPI 計測レポート"
     if lang:
@@ -357,6 +363,14 @@ def format_detail_report(result: ComparisonResult, *, lang: str = "", timestamp:
             parts.append(f"| {r.filepath} | {r.lineno} | {r.usage_type} |")
     else:
         parts.append("（なし）")
+
+    parts.append("")
+    parts.append("## サンプル分布チェック警告")
+    if distribution_warnings:
+        for w in distribution_warnings:
+            parts.append(f"- {w}")
+    else:
+        parts.append("（警告なし）")
 
     return "\n".join(parts) + "\n"
 
@@ -470,7 +484,12 @@ def _run_single(lang: str, samples_dir: Path, output_dir: Path, *, quiet: bool) 
     output_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / f"{lang}-{timestamp}.md"
     report_path.write_text(
-        format_detail_report(aggregated, lang=lang, timestamp=timestamp),
+        format_detail_report(
+            aggregated,
+            lang=lang,
+            timestamp=timestamp,
+            distribution_warnings=distribution_warnings,
+        ),
         encoding="utf-8",
     )
 

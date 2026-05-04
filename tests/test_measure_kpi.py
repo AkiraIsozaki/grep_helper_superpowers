@@ -17,6 +17,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 import measure_kpi
 
+# ゴールデンセットのルート（cwd 非依存）
+GOLDEN_DIR = Path(__file__).parent / "golden"
+
 
 class TestRecord(unittest.TestCase):
     """Record は期待TSV / actual TSV をパースしたあとの軽量レコード。"""
@@ -277,6 +280,26 @@ class TestFormatDetailReport(unittest.TestCase):
         self.assertIn("missing.sql", out)
         self.assertIn("42", out)
 
+    def test_サンプル分布チェック警告セクションが含まれる(self):
+        result = measure_kpi.ComparisonResult(
+            expected_total=1, matched_rows=1, classified_correctly=1,
+            coverage_rate=1.0, classification_accuracy=1.0,
+        )
+        out = measure_kpi.format_detail_report(
+            result, distribution_warnings=["使用タイプ「Foo」: 0 件"],
+        )
+        self.assertIn("## サンプル分布チェック警告", out)
+        self.assertIn("Foo", out)
+
+    def test_警告ゼロなら_警告なし_と表示される(self):
+        result = measure_kpi.ComparisonResult(
+            expected_total=1, matched_rows=1, classified_correctly=1,
+            coverage_rate=1.0, classification_accuracy=1.0,
+        )
+        out = measure_kpi.format_detail_report(result)
+        self.assertIn("## サンプル分布チェック警告", out)
+        self.assertIn("（警告なし）", out)
+
 
 class TestRunCli(unittest.TestCase):
     """run() の CLI 振る舞い。"""
@@ -303,7 +326,7 @@ class TestRunCliEndToEndJava(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             exit_code = measure_kpi.run([
                 "--lang", "java",
-                "--samples-dir", "tests/golden",
+                "--samples-dir", str(GOLDEN_DIR),
                 "--output-dir", tmp,
                 "--quiet",
             ])
@@ -315,15 +338,15 @@ class TestRunCliEndToEndJava(unittest.TestCase):
     def test_javaの最小ゴールデンセットで網羅率は1_0(self):
         # ロード&compare を直接呼んで coverage を assert
         expected = measure_kpi.load_expected_tsv(
-            Path("tests/golden/java/expected/777.tsv")
+            GOLDEN_DIR / "java" / "expected" / "777.tsv"
         )
         with tempfile.TemporaryDirectory() as tmp:
             from grep_helper.languages import java as java_handler
             from grep_helper.pipeline import run_full_pipeline
             tmp_path = Path(tmp)
             run_full_pipeline(
-                source_dir=Path("tests/golden/java/src"),
-                input_dir=Path("tests/golden/java/inputs"),
+                source_dir=GOLDEN_DIR / "java" / "src",
+                input_dir=GOLDEN_DIR / "java" / "inputs",
                 output_dir=tmp_path,
                 handler=java_handler,
                 workers=1,
@@ -344,7 +367,7 @@ class TestRunAllSemantics(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             exit_code = measure_kpi.run([
                 "--lang", "all",
-                "--samples-dir", "tests/golden",
+                "--samples-dir", str(GOLDEN_DIR),
                 "--output-dir", tmp,
                 "--quiet",
             ])
@@ -359,7 +382,7 @@ class TestRunAllSemantics(unittest.TestCase):
              tempfile.TemporaryDirectory() as out_tmp:
             samples_path = Path(samples_tmp)
             # java だけコピー、他言語は欠損状態
-            shutil.copytree("tests/golden/java", samples_path / "java")
+            shutil.copytree(GOLDEN_DIR / "java", samples_path / "java")
             exit_code = measure_kpi.run([
                 "--lang", "all",
                 "--samples-dir", str(samples_path),
@@ -389,7 +412,7 @@ class TestRunCliEndToEndOtherLanguages(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as tmp:
                     exit_code = measure_kpi.run([
                         "--lang", lang,
-                        "--samples-dir", "tests/golden",
+                        "--samples-dir", str(GOLDEN_DIR),
                         "--output-dir", tmp,
                         "--quiet",
                     ])
@@ -402,9 +425,9 @@ class TestRunCliEndToEndOtherLanguages(unittest.TestCase):
             with self.subTest(lang=lang):
                 spec = measure_kpi.LANG_SPECS[lang]
                 handler = importlib.import_module(spec["module"])
-                src_dir = Path(f"tests/golden/{lang}/src")
-                inputs_dir = Path(f"tests/golden/{lang}/inputs")
-                expected_dir = Path(f"tests/golden/{lang}/expected")
+                src_dir = GOLDEN_DIR / lang / "src"
+                inputs_dir = GOLDEN_DIR / lang / "inputs"
+                expected_dir = GOLDEN_DIR / lang / "expected"
                 with tempfile.TemporaryDirectory() as tmp:
                     from grep_helper.pipeline import run_full_pipeline
                     tmp_path = Path(tmp)
