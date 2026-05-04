@@ -87,5 +87,180 @@ class TestE2EPerl(unittest.TestCase):
             self.assertEqual(actual, expected)
 
 
+from grep_helper.languages.perl import (
+    extract_perl_constant_name,
+    extract_perl_our_name,
+    extract_perl_constant_hash_names,
+    track_perl_constant,
+    batch_track_indirect as batch_track_indirect_perl,
+)
+from grep_helper.model import GrepRecord, RefType
+
+
+class TestExtractPerlConstantName(unittest.TestCase):
+    """TestExtractPerlConstantName: extract_perl_constant_name の抽出有無を観察する。"""
+
+    def test_use_constantから定数名を抽出する(self):
+        self.assertEqual(extract_perl_constant_name('use constant STATUS_CODE => "777";'), "STATUS_CODE")
+
+    def test_use_constantのハッシュ形式は単体抽出ではNoneを返す(self):
+        self.assertIsNone(extract_perl_constant_name('use constant {A => 1, B => 2};'))
+
+    def test_非constant行はNoneを返す(self):
+        self.assertIsNone(extract_perl_constant_name('our $FOO = "x";'))
+
+
+class TestExtractPerlOurName(unittest.TestCase):
+    """TestExtractPerlOurName: extract_perl_our_name の抽出有無を観察する。"""
+
+    def test_our宣言から変数名を抽出する(self):
+        self.assertEqual(extract_perl_our_name('our $FOO = "x";'), "FOO")
+
+    def test_my宣言からは抽出しない(self):
+        self.assertIsNone(extract_perl_our_name('my $FOO = "x";'))
+
+    def test_use_constant行からは抽出しない(self):
+        self.assertIsNone(extract_perl_our_name('use constant FOO => "x";'))
+
+
+class TestExtractPerlConstantHashNames(unittest.TestCase):
+    """TestExtractPerlConstantHashNames: ハッシュ形式から複数キー抽出を観察する。"""
+
+    def test_use_constantのハッシュ形式から複数の名前を抽出する(self):
+        names = extract_perl_constant_hash_names('use constant {A => 1, B => 2, C => 3};')
+        self.assertEqual(set(names), {"A", "B", "C"})
+
+    def test_単一形式のuse_constantからは空リストを返す(self):
+        self.assertEqual(extract_perl_constant_hash_names('use constant FOO => "x";'), [])
+
+    def test_非use_constant行からは空リストを返す(self):
+        self.assertEqual(extract_perl_constant_hash_names('our $FOO = "x";'), [])
+
+
+class TestTrackPerlConstant(unittest.TestCase):
+    """TestTrackPerlConstant: track_perl_constant の間接参照検出と定義行除外を観察する。"""
+
+    def test_別pmファイルでの定数参照を間接レコードとして記録する(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Sample.pm").write_text('package Sample;\nuse constant STATUS_CODE => "777";\n1;\n')
+            (src / "Service.pm").write_text('if ($x eq STATUS_CODE) { return 1; }\n')
+            record = GrepRecord(
+                keyword="777",
+                ref_type=RefType.DIRECT.value,
+                usage_type="use constant定義",
+                filepath=str(src / "Sample.pm"),
+                lineno="2",
+                code='use constant STATUS_CODE => "777";',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_perl_constant("STATUS_CODE", src, record, stats, kind="bareword")
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("Service.pm" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
+    def test_our_scalar変数の参照を間接レコードとして記録する(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Sample.pm").write_text('package Sample;\nour $FOO = "777";\n1;\n')
+            (src / "Service.pm").write_text('print $FOO;\n')
+            record = GrepRecord(
+                keyword="777",
+                ref_type=RefType.DIRECT.value,
+                usage_type="変数代入",
+                filepath=str(src / "Sample.pm"),
+                lineno="2",
+                code='our $FOO = "777";',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_perl_constant("FOO", src, record, stats, kind="scalar")
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("Service.pm" in fp for fp in filepaths))
+
+
+class TestBatchTrackIndirectPerl(unittest.TestCase):
+    """TestBatchTrackIndirectPerl: batch_track_indirect の起点フィルタ・集約を観察する。"""
+
+    def test_use_constantとour両方のレコードから間接追跡する(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Sample.pm").write_text(
+                'package Sample;\n'
+                'use constant STATUS_CODE => "777";\n'
+                'our $FOO = "x";\n'
+                '1;\n'
+            )
+            (src / "Service.pm").write_text(
+                'if ($x eq STATUS_CODE) { return 1; }\n'
+                'print $Sample::FOO;\n'
+            )
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="use constant定義",
+                    filepath=str(src / "Sample.pm"),
+                    lineno="2",
+                    code='use constant STATUS_CODE => "777";',
+                ),
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入",
+                    filepath=str(src / "Sample.pm"),
+                    lineno="3",
+                    code='our $FOO = "x";',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_perl(records, src, None, workers=1)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("Service.pm" in fp for fp in filepaths))
+
+    def test_my宣言は起点にならない(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Sample.pm").write_text('my $LOCAL = "x";\n')
+            (src / "other.pm").write_text('print $LOCAL;\n')
+            records = [
+                GrepRecord(
+                    keyword="x",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入",
+                    filepath=str(src / "Sample.pm"),
+                    lineno="1",
+                    code='my $LOCAL = "x";',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_perl(records, src, None, workers=1)
+            self.assertEqual(results, [])
+
+    def test_workers_2と1で同じレコード集合を返す(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Sample.pm").write_text('use constant STATUS_CODE => "777";\n')
+            (src / "Service.pm").write_text('if ($x eq STATUS_CODE) { return 1; }\n')
+            (src / "Worker.pm").write_text('do_notify(STATUS_CODE);\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="use constant定義",
+                    filepath=str(src / "Sample.pm"),
+                    lineno="1",
+                    code='use constant STATUS_CODE => "777";',
+                ),
+            ]
+            _file_lines_cache_clear()
+            serial = batch_track_indirect_perl(records, src, None, workers=1)
+            _file_lines_cache_clear()
+            parallel = batch_track_indirect_perl(records, src, None, workers=2)
+            key = lambda r: (r.filepath, r.lineno, r.ref_type)
+            self.assertEqual(sorted(serial, key=key), sorted(parallel, key=key))
+
+
 if __name__ == "__main__":
     unittest.main()
