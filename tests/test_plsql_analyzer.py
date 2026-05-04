@@ -87,5 +87,130 @@ class TestE2EPlsql(unittest.TestCase):
             )
 
 
+from grep_helper.languages.plsql import (
+    extract_plsql_constant_name,
+    track_plsql_constant,
+    batch_track_indirect as batch_track_indirect_plsql,
+)
+from grep_helper.model import GrepRecord, RefType
+
+
+class TestExtractPlsqlConstantName(unittest.TestCase):
+    """TestExtractPlsqlConstantName: extract_plsql_constant_name の抽出有無を観察する。"""
+
+    def test_constant宣言から名前を抽出する(self):
+        self.assertEqual(extract_plsql_constant_name('c_x CONSTANT VARCHAR2(8) := \'777\';'), "c_x")
+
+    def test_大文字混在のCONSTANT宣言から名前を抽出する(self):
+        self.assertEqual(extract_plsql_constant_name('C_X Constant Number := 1;'), "C_X")
+
+    def test_インデント付き宣言からも抽出する(self):
+        self.assertEqual(extract_plsql_constant_name('    c_y CONSTANT NUMBER := 5;'), "c_y")
+
+    def test_constantキーワード無しの変数宣言は抽出しない(self):
+        self.assertIsNone(extract_plsql_constant_name('v_count NUMBER := 0;'))
+
+    def test_条件判定行は抽出しない(self):
+        self.assertIsNone(extract_plsql_constant_name('IF p_input = c_x THEN'))
+
+
+class TestTrackPlsqlConstant(unittest.TestCase):
+    """TestTrackPlsqlConstant: track_plsql_constant の間接参照検出と定義行除外を観察する。"""
+
+    def test_別pkbファイルでの参照を間接レコードとして記録する(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "sample.pkb").write_text('PACKAGE BODY sample IS\n  c_x CONSTANT NUMBER := 777;\nEND;\n')
+            (src / "other.pkb").write_text('IF p_input = sample.c_x THEN\n  NULL;\nEND IF;\n')
+            record = GrepRecord(
+                keyword="777",
+                ref_type=RefType.DIRECT.value,
+                usage_type="定数/変数宣言",
+                filepath=str(src / "sample.pkb"),
+                lineno="2",
+                code='  c_x CONSTANT NUMBER := 777;',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_plsql_constant("c_x", src, record, stats)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("other.pkb" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
+    def test_大文字小文字を区別せず参照を検出する(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "sample.pkb").write_text('  C_X CONSTANT NUMBER := 1;\n')
+            (src / "other.pkb").write_text('  RETURN c_x;\n')
+            record = GrepRecord(
+                keyword="1",
+                ref_type=RefType.DIRECT.value,
+                usage_type="定数/変数宣言",
+                filepath=str(src / "sample.pkb"),
+                lineno="1",
+                code='  C_X CONSTANT NUMBER := 1;',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_plsql_constant("C_X", src, record, stats)
+            self.assertTrue(any("other.pkb" in r.filepath for r in results))
+
+
+class TestBatchTrackIndirectPlsql(unittest.TestCase):
+    """TestBatchTrackIndirectPlsql: batch_track_indirect の起点フィルタ・集約を観察する。"""
+
+    def test_constantキーワードのレコードのみ起点となる(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "sample.pkb").write_text('  c_x CONSTANT NUMBER := 777;\n')
+            (src / "other.pkb").write_text('  IF p = sample.c_x THEN NULL; END IF;\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="定数/変数宣言",
+                    filepath=str(src / "sample.pkb"),
+                    lineno="1",
+                    code='  c_x CONSTANT NUMBER := 777;',
+                ),
+                GrepRecord(
+                    keyword="0",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="定数/変数宣言",
+                    filepath=str(src / "sample.pkb"),
+                    lineno="2",
+                    code='  v_count NUMBER := 0;',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_plsql(records, src, None, workers=1)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("other.pkb" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
+    def test_workers_2と1で同じレコード集合を返す(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "sample.pkb").write_text('  c_x CONSTANT NUMBER := 777;\n')
+            (src / "a.pkb").write_text('  IF p = sample.c_x THEN NULL; END IF;\n')
+            (src / "b.pkb").write_text('  RETURN sample.c_x;\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="定数/変数宣言",
+                    filepath=str(src / "sample.pkb"),
+                    lineno="1",
+                    code='  c_x CONSTANT NUMBER := 777;',
+                ),
+            ]
+            _file_lines_cache_clear()
+            serial = batch_track_indirect_plsql(records, src, None, workers=1)
+            _file_lines_cache_clear()
+            parallel = batch_track_indirect_plsql(records, src, None, workers=2)
+            key = lambda r: (r.filepath, r.lineno, r.ref_type)
+            self.assertEqual(sorted(serial, key=key), sorted(parallel, key=key))
+
+
 if __name__ == "__main__":
     unittest.main()
