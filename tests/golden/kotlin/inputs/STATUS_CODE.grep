@@ -1,0 +1,2 @@
+Sample.kt:4:    const val STATUS_CODE = "777"
+Sample.kt:14:        if (input == Constants.STATUS_CODE) {

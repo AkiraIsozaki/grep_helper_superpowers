@@ -1,0 +1,9 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+777	直接	const定数定義	Sample.kt	4	"const val STATUS_CODE = ""777"""			
+777	直接	アノテーション	Sample.kt	7	"@Deprecated(""777"")"			
+777	直接	変数代入	Sample.kt	10	"var localCode = ""777"""			
+777	直接	条件判定	Sample.kt	11	"if (input == ""777"") {"			
+777	間接	条件判定	Sample.kt	14	if (input == Constants.STATUS_CODE) {	STATUS_CODE	Sample.kt	4
+777	直接	関数引数	Sample.kt	17	"logValue(""777"")"			
+777	直接	return文	Sample.kt	22	"return ""777"""			
+777	直接	その他	Sample.kt	25	"// ""777"" のコメント — その他に分類されることを期待"			

@@ -1,0 +1,7 @@
+Sample.kt:4:    const val STATUS_CODE = "777"
+Sample.kt:7:@Deprecated("777")
+Sample.kt:10:        var localCode = "777"
+Sample.kt:11:        if (input == "777") {
+Sample.kt:17:        logValue("777")
+Sample.kt:22:        return "777"
+Sample.kt:25:    // "777" のコメント — その他に分類されることを期待
