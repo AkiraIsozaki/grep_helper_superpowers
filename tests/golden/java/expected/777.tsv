@@ -1,0 +1,7 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+777	間接	定数定義	Demo.java	4	"public static final String CODE = ""777"";"	CODE	src/Demo.java	4
+777	直接	定数定義	src/Demo.java	4	"public static final String CODE = ""777"";"			
+777	直接	条件判定	src/Demo.java	8	"if (input.equals(""777"")) {"			
+777	直接	return文	src/Demo.java	9	"return ""777"";"			
+777	直接	変数代入	src/Demo.java	11	"String local = ""777"";"			
+777	直接	メソッド引数	src/Demo.java	16	"System.out.println(""777"");"			

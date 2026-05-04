@@ -1,0 +1,5 @@
+src/Demo.java:4:    public static final String CODE = "777";
+src/Demo.java:8:        if (input.equals("777")) {
+src/Demo.java:9:            return "777";
+src/Demo.java:11:        String local = "777";
+src/Demo.java:16:        System.out.println("777");
