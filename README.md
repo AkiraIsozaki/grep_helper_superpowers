@@ -180,6 +180,46 @@ python analyze_sql.py --source-dir ./src --input-dir input --output-dir output
 
 ---
 
+## KPI 計測（網羅率・分類精度）
+
+ゴールデンセットを使って網羅率・分類精度を計測する。要件 §成功指標 (KPI) を継続的に確認するためのスクリプト。
+
+### 単一言語
+
+```bash
+python scripts/measure_kpi.py --lang java
+```
+
+stdout に網羅率・分類精度・FP 件数が表示され、`output/kpi/java-<YYYYMMDD-HHMMSS>.md` に詳細レポートが書き出される。
+
+### 全12言語まとめて
+
+```bash
+python scripts/measure_kpi.py --lang all
+```
+
+各言語ごとに `<lang>-<timestamp>.md` が、全体サマリが `_summary-<timestamp>.md` が出力される。
+
+### しきい値の扱い
+
+要件しきい値（網羅率 100% / 分類精度 90%）に達しない場合は **stdout に WARN 表示**するが、**exit code は 0** を返す（CIゲートしない方針）。
+
+| Exit code | 意味 |
+|---|---|
+| 0 | 計測完了 |
+| 1 | 入力エラー（ゴールデンセット未整備、`--lang` 未対応など） |
+| 2 | 実行時例外 |
+
+### ゴールデンセットの場所
+
+`tests/golden/<lang>/` 配下。各言語ディレクトリの `README.md` にサンプル設計の意図と追加手順を記載している。
+
+### 詳細
+
+`docs/superpowers/specs/2026-05-03-kpi-golden-set-design.md` を参照。
+
+---
+
 ## テスト
 
 ```bash
