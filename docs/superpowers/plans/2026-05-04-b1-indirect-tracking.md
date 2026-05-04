@@ -40,6 +40,11 @@
 | `tests/golden/plsql/src/other.pkb` | 新規 | （PL/SQL 版、別パッケージから参照）|
 | `tests/golden/plsql/expected/777.tsv` | 既存改修 | |
 | `tests/golden/plsql/README.md` | 既存改修 | |
+| `README.md` | 既存改修 | L9 言語別追跡能力の記述更新（B-1 完了後）|
+| `docs/tool-overview.md` | 既存改修 | L17-28 機能マトリクス更新（4 言語の間接追跡欄）|
+| `docs/architecture.md` | 既存改修 | L45 Tracker ボックス + 言語別段階対応表更新 |
+| `docs/functional-design.md` | 既存改修 | L102-116 4 言語の受け入れ条件更新 |
+| `docs/product-requirements.md` | 既存改修（必要時）| 言語マトリクスの更新（該当箇所がある場合）|
 
 `grep_helper/pipeline.py` は **無変更**。
 
@@ -2181,7 +2186,113 @@ Run: `grep -l "間接参照サンプル" tests/golden/python/README.md tests/gol
 
 Expected: 4 ファイルすべてヒットする。ヒットしない場合は Step 1 の Task で追加忘れがあるので追加。
 
-### Task 6.4: spec の §成功条件を点検
+### Task 6.4: ドキュメント（docs/ 配下と README.md）の最新化
+
+B-1 完了に伴い「PL/SQL / TypeScript・JS / Python / Perl は直接参照のみ」と書かれている箇所がすべて嘘になる。これらをまとめて修正する。
+
+**Files:**
+- Modify: `README.md`
+- Modify: `docs/tool-overview.md`
+- Modify: `docs/architecture.md`
+- Modify: `docs/functional-design.md`
+- Modify: `docs/product-requirements.md`
+
+- [ ] **Step 1: `README.md` L9 の言語別追跡能力の記述を修正**
+
+`README.md` L9 の以下の文を:
+```
+（Java/Groovy: 4段階（直接 + 間接 + getter/setter経由）、C/Pro*C/Kotlin/C#・VB.NET: 直接参照 + 定数・変数経由の間接参照、Shell/SQL: 直接参照 + 同一ファイル内変数代入の間接参照、PL/SQL/TypeScript・JS/Python/Perl: 直接参照のみ）
+```
+
+以下に修正:
+```
+（Java/Groovy: 4段階（直接 + 間接 + getter/setter経由）、C/Pro*C/Kotlin/C#・VB.NET/PL/SQL/TypeScript・JS/Python/Perl: 直接参照 + 定数経由の間接参照、Shell/SQL: 直接参照 + 同一ファイル内変数代入の間接参照）
+```
+
+- [ ] **Step 2: `docs/tool-overview.md` の機能マトリクスを修正**
+
+L17-28 の表で 4 言語の「間接追跡」欄を `—` から `✓ (定数経由)` に変更:
+
+```markdown
+| 言語 | スクリプト | 間接追跡 | getter/setter追跡 |
+|---|---|---|---|
+| ...
+| PL/SQL | `analyze_plsql.py` | ✓ (CONSTANT経由) | — |
+| TypeScript / JavaScript | `analyze_ts.py` | ✓ (const経由) | — |
+| Python | `analyze_python.py` | ✓ (ALL_CAPS定数経由) | — |
+| Perl | `analyze_perl.py` | ✓ (use constant / our \$ 経由) | — |
+```
+
+- [ ] **Step 3: `docs/architecture.md` の「直接参照のみ」記述を修正**
+
+L37 の見出し「Java 以外の言語 — 直接参照 + 言語別の間接追跡」は変更不要（包括表現）。
+
+L45 の Tracker ボックス内テキストを修正。以下を:
+```
+Tracker["間接追跡（言語別）\nC/Pro*C: batch_track_indirect（#define追跡）\nShell: batch_track_indirect（変数追跡）\nSQL: batch_track_indirect（変数追跡）\nKotlin: batch_track_indirect（const val追跡）\n.NET: batch_track_indirect（const/readonly追跡）\nGroovy: batch_track_indirect（static final/getter/setter追跡）\n（PL/SQL / TS / Python / Perl は直接参照のみ）"]
+```
+
+以下に修正:
+```
+Tracker["間接追跡（言語別）\nC/Pro*C: batch_track_indirect（#define追跡）\nShell: batch_track_indirect（変数追跡）\nSQL: batch_track_indirect（変数追跡）\nKotlin: batch_track_indirect（const val追跡）\n.NET: batch_track_indirect（const/readonly追跡）\nGroovy: batch_track_indirect（static final/getter/setter追跡）\nPL/SQL: batch_track_indirect（CONSTANT追跡）\nTS: batch_track_indirect（const追跡）\nPython: batch_track_indirect（ALL_CAPS定数追跡）\nPerl: batch_track_indirect（use constant / our \$追跡）"]
+```
+
+L413 と L478 周辺に言語別段階対応表があるので、4 言語の「第2段階（間接）」欄を「✓」に更新:
+
+```bash
+# まず現状を確認
+grep -nE "PL/SQL|TypeScript|Python|Perl" /workspaces/grep_helper_superpowers/docs/architecture.md | grep -E "—|なし|無し"
+```
+
+ヒットした行を「✓ (クロスファイル)」のような表現に書き換える（既存の表現に合わせる）。
+
+- [ ] **Step 4: `docs/functional-design.md` の受け入れ条件を修正**
+
+L102-116 周辺の以下 4 ブロックを修正:
+
+```markdown
+**受け入れ条件（PL/SQL: `analyze_plsql.py`）**:
+- ...
+- [ ] 直接参照のみ（間接追跡なし）   ← この行を以下に置換
+```
+
+各言語ぶん以下に変更:
+
+```markdown
+**受け入れ条件（PL/SQL: `analyze_plsql.py`）**:
+- ...
+- [x] CONSTANT 宣言行から定数名を抽出し、`.pls`/`.pkb`/`.pks`/etc ファイルを対象にプロジェクト全体を追跡する（間接参照、case-insensitive）
+
+**受け入れ条件（TypeScript/JavaScript: `analyze_ts.py`）**:
+- ...
+- [x] `const` 定義行から定数名を抽出し、`.ts`/`.tsx`/`.js`/`.jsx` ファイルを対象にプロジェクト全体を追跡する（間接参照）
+
+**受け入れ条件（Python: `analyze_python.py`）**:
+- ...
+- [x] ALL_CAPS 命名のモジュール定数定義行から定数名を抽出し、`.py` ファイルを対象にプロジェクト全体を追跡する（間接参照、小文字シングルトンは除外）
+
+**受け入れ条件（Perl: `analyze_perl.py`）**:
+- ...
+- [x] `use constant` および `our \$` 定義行から名前を抽出し、`.pl`/`.pm` ファイルを対象にプロジェクト全体を追跡する（間接参照、`my` レキシカルは除外）
+```
+
+- [ ] **Step 5: `docs/product-requirements.md` の言語マトリクスを確認**
+
+```bash
+grep -nE "PL/SQL|TypeScript|Python|Perl" /workspaces/grep_helper_superpowers/docs/product-requirements.md | grep -E "直接参照のみ|—|なし|無し"
+```
+
+ヒットした行があれば、`docs/functional-design.md` と同様に「直接参照 + 定数経由の間接参照」と修正する。ヒットしなければスキップ。
+
+- [ ] **Step 6: 修正後の整合性確認**
+
+Run: `grep -rn "直接参照のみ" /workspaces/grep_helper_superpowers/docs/ /workspaces/grep_helper_superpowers/README.md`
+
+Expected: 4 言語（PL/SQL / TS / Python / Perl）に紐づく「直接参照のみ」記述が**ゼロ件**になっている。残っている場合は該当ファイルを修正。
+
+ただし、Shell / SQL は「直接参照 + 同一ファイル内変数代入の間接参照」と表現される箇所があり、これは正しい記述なのでヒットしてよい（誤検知）。
+
+### Task 6.5: spec の §成功条件を点検
 
 - [ ] **Step 1: spec の成功条件 8 項目を1つずつ確認**
 
@@ -2198,16 +2309,37 @@ Expected: 4 ファイルすべてヒットする。ヒットしない場合は S
 
 すべてチェックついたら次のタスクへ。
 
-### Task 6.5: 最終コミット（Step 6 完了 = B-1 完了）
+### Task 6.6: 最終コミット（Step 6 完了 = B-1 完了）
 
-- [ ] **Step 1: README やドキュメントの追加変更があればコミット**
-
-`git status` を確認し、`tests/golden/<lang>/README.md` の README 追加変更分など漏れがあればコミット。
+- [ ] **Step 1: ドキュメント更新分をコミット**
 
 ```bash
-git add -A
+git add README.md docs/tool-overview.md docs/architecture.md docs/functional-design.md docs/product-requirements.md
+git status
+git commit -m "$(cat <<'EOF'
+docs(b1): update language capability matrix after indirect tracking added
+
+After B-1 lands, PL/SQL / TS / Python / Perl handlers all support
+cross-file indirect tracking. Updated:
+- README.md: feature description
+- docs/tool-overview.md: language matrix
+- docs/architecture.md: tracker diagram and stage matrix
+- docs/functional-design.md: per-language acceptance criteria
+- docs/product-requirements.md: where applicable
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+- [ ] **Step 2: 残った差分があれば追加コミット**
+
+`git status` を確認し、`tests/golden/<lang>/README.md` 追記など Step 1 で漏れた変更があればコミット。
+
+```bash
 git status
 # 差分があれば
+git add -A
 git commit -m "$(cat <<'EOF'
 docs(b1): add indirect-sample notes to 4 golden README files
 
@@ -2221,10 +2353,10 @@ EOF
 
 差分が無ければスキップ。
 
-- [ ] **Step 2: 完了確認**
+- [ ] **Step 3: 完了確認**
 
-Run: `git log --oneline -10`
+Run: `git log --oneline -12`
 
-Expected: B-1 関連のコミットが 6 本（Step 1 共通準備、Step 2-5 各言語、Step 6 ドキュメント or なし）並んでいる。
+Expected: B-1 関連のコミットが 6-7 本（Step 1 共通準備、Step 2-5 各言語、Step 6 ドキュメント、+ 任意で golden README 追記）並んでいる。
 
 B-1 実装完了。次の B-4（Java 慣用句追加）は別 spec として brainstorming-skill から始める。
