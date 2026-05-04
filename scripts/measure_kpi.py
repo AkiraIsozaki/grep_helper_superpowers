@@ -19,7 +19,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple, TypedDict
 
-from grep_helper.pipeline import run_full_pipeline
+# プロジェクトルートを sys.path に追加（直接 python scripts/measure_kpi.py 実行に対応）
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from grep_helper.pipeline import run_full_pipeline  # noqa: E402
 
 
 class LangSpec(TypedDict):
