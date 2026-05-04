@@ -207,6 +207,27 @@ class TestBatchTrackIndirectPython(unittest.TestCase):
             results = batch_track_indirect(records, src, None, workers=1)
             self.assertEqual(results, [])
 
+    def test_別言語ファイルのレコードは起点にならない(self):
+        """detect_handler ゲートの観察: .kt ファイル由来のレコードは
+        usage_type が python の起点条件に合致しても起点にしない。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Constants.kt").write_text('STATUS_CODE = "777"\n')
+            (src / "service.py").write_text('if x == STATUS_CODE: pass\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入",
+                    filepath=str(src / "Constants.kt"),
+                    lineno="1",
+                    code='STATUS_CODE = "777"',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect(records, src, None, workers=1)
+            self.assertEqual(results, [])
+
     def test_workers_2と1で同じレコード集合を返す(self):
         """Linux fork 前提の並列テスト（spawn 環境はスコープ外）。"""
         with tempfile.TemporaryDirectory() as d:

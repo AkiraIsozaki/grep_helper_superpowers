@@ -188,6 +188,28 @@ class TestBatchTrackIndirectPlsql(unittest.TestCase):
             self.assertTrue(any("other.pkb" in fp for fp in filepaths))
             self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
 
+    def test_別言語ファイルのレコードは起点にならない(self):
+        """detect_handler ゲートの観察: .kt ファイル由来のレコードは
+        usage_type / CONSTANT キーワードが plsql の起点条件に合致しても
+        起点にしない。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Constants.kt").write_text('  c_x CONSTANT NUMBER := 777;\n')
+            (src / "other.pkb").write_text('  IF p = sample.c_x THEN NULL; END IF;\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="定数/変数宣言",
+                    filepath=str(src / "Constants.kt"),
+                    lineno="1",
+                    code='  c_x CONSTANT NUMBER := 777;',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_plsql(records, src, None, workers=1)
+            self.assertEqual(results, [])
+
     def test_同一行に複数の参照がある場合は出現回数分のレコードを返す(self):
         """multi-emit 一貫性の観察: 一行に c_x が2回現れる場合、間接レコードも
         2件返す（python/ts/perl/kotlin と同じ挙動）。1行1emit にすると

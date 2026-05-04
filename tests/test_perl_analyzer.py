@@ -266,6 +266,27 @@ class TestBatchTrackIndirectPerl(unittest.TestCase):
             results = batch_track_indirect_perl(records, src, None, workers=1)
             self.assertEqual(results, [])
 
+    def test_別言語ファイルのレコードは起点にならない(self):
+        """detect_handler ゲートの観察: .py ファイル由来のレコードは
+        usage_type が perl の起点条件に合致しても起点にしない。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Constants.py").write_text('use constant STATUS_CODE => "777";\n')
+            (src / "Service.pm").write_text('if ($x eq STATUS_CODE) { return 1; }\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="use constant定義",
+                    filepath=str(src / "Constants.py"),
+                    lineno="1",
+                    code='use constant STATUS_CODE => "777";',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_perl(records, src, None, workers=1)
+            self.assertEqual(results, [])
+
     def test_workers_2と1で同じレコード集合を返す(self):
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
