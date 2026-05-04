@@ -133,12 +133,17 @@ class TestCompareClassificationAccuracy(unittest.TestCase):
         self.assertEqual(exp_rec.usage_type, "条件判定")
         self.assertEqual(act_rec.usage_type, "その他")
 
-    def test_参照種別が違うと誤分類として記録される(self):
+    def test_参照種別が違うと別行として扱われ網羅率が下がる(self):
+        # spec §出力フォーマット 比較ロジック: マッチング基準キー = (file, line, 参照種別)。
+        # 同一 (file, line) でも参照種別が違えば別エンティティとして扱う。
+        # 結果: expected は missing、actual は false_positive となり、
+        # 「同一行で別の参照種別が出ている」事実が KPI に正しく反映される。
         expected = [_rec("f.sql", "1", ref_type="直接")]
         actual = [_rec("f.sql", "1", ref_type="間接")]
         result = measure_kpi.compare(expected, actual)
-        self.assertEqual(result.classification_accuracy, 0.0)
-        self.assertEqual(len(result.misclassified), 1)
+        self.assertEqual(result.coverage_rate, 0.0)
+        self.assertEqual(len(result.missing_rows), 1)
+        self.assertEqual(len(result.false_positives), 1)
 
 
 class TestCompareFalsePositive(unittest.TestCase):

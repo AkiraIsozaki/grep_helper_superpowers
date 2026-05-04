@@ -446,8 +446,10 @@
 777	直接	メソッド引数	MoreCallers.java	21	"new StringBuilder(""777"");"			
 777	直接	メソッド引数	MoreCallers.java	25	"new StringBuilder(""777"");"			
 777	直接	変数代入	Mutator.java	12	"String value = ""777"";"			
+777	間接	メソッド引数	Mutator.java	13	entity.setType(value);	value	Mutator.java	12
 777	間接（setter経由）	メソッド引数	Mutator.java	13	entity.setType(value);	setType	Entity.java	9
 777	直接	変数代入	Mutator.java	17	"String value = ""777"";"			
+777	間接	メソッド引数	Mutator.java	18	entity.setType(value);	value	Mutator.java	17
 777	間接（setter経由）	メソッド引数	Mutator.java	18	entity.setType(value);	setType	Entity.java	9
 777	直接	return文	Returner.java	8	"public String r1() { return ""777""; }"			
 777	直接	return文	Returner.java	9	"public String r2() { return ""777""; }"			

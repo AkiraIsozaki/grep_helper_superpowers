@@ -108,12 +108,15 @@ def _load_tsv(path: Path) -> list[Record]:
 def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
     """expected と actual を突合し、網羅率・分類精度・diff を算出する。
 
-    マッチング基準キー = (filepath, lineno)。
+    マッチング基準キー = (filepath, lineno, ref_type)。
+    spec §出力フォーマット 比較ロジック の指示に従い、同一 (file, line) に
+    複数行（直接 + 間接（setter経由）など）が来ても重複潰しが起きないよう
+    ref_type を2次キーに含める。
     網羅率: matched_rows / expected_total
     分類精度: classified_correctly / matched_rows
     """
-    expected_by_key: dict[tuple[str, str], Record] = {(r.filepath, r.lineno): r for r in expected}
-    actual_by_key: dict[tuple[str, str], Record] = {(r.filepath, r.lineno): r for r in actual}
+    expected_by_key: dict[tuple[str, str, str], Record] = {(r.filepath, r.lineno, r.ref_type): r for r in expected}
+    actual_by_key: dict[tuple[str, str, str], Record] = {(r.filepath, r.lineno, r.ref_type): r for r in actual}
 
     matched_keys = expected_by_key.keys() & actual_by_key.keys()
     missing_keys = expected_by_key.keys() - actual_by_key.keys()
@@ -126,7 +129,8 @@ def compare(expected: list[Record], actual: list[Record]) -> ComparisonResult:
     for key in matched_keys:
         exp = expected_by_key[key]
         act = actual_by_key[key]
-        if exp.ref_type == act.ref_type and exp.usage_type == act.usage_type:
+        # キーで ref_type は既に一致。残る usage_type のみ比較する。
+        if exp.usage_type == act.usage_type:
             classified_correctly += 1
         else:
             misclassified.append((exp, act))
