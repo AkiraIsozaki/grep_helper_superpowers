@@ -2,8 +2,14 @@
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 
-from grep_helper.model import ClassifyContext
+from grep_helper.model import ClassifyContext, GrepRecord, ProcessStats, RefType
+from grep_helper.scanner import build_batch_scanner
+from grep_helper.file_cache import cached_file_lines
+from grep_helper.encoding import detect_encoding
+from grep_helper.source_files import grep_filter_files, iter_source_files, resolve_file_cached
 
 EXTENSIONS: tuple[str, ...] = (".ts", ".tsx", ".js", ".jsx")
 
@@ -24,3 +30,189 @@ def classify_usage(code: str, *, ctx: ClassifyContext | None = None) -> str:  # 
         if pattern.search(stripped):
             return usage_type
     return "その他"
+
+
+_TS_CONST_PAT = re.compile(r'\b(?:export\s+)?const\s+(\w+)\s*(?::\s*[^=]+?)?\s*=(?!=)')
+
+
+def extract_const_name(code: str) -> str | None:
+    """TS const 定数名を抽出する。型注釈付き(const X: number = 5)も対応。
+    分割代入 const {a, b} = obj は最初の \\w+ にマッチしないため None を返す。"""
+    m = _TS_CONST_PAT.search(code)
+    return m.group(1) if m else None
+
+
+def track_const(
+    const_name: str,
+    src_dir: Path,
+    record: GrepRecord,
+    stats: ProcessStats,
+    encoding_override: str | None = None,
+) -> list[GrepRecord]:
+    """TS const 定数の使用箇所を src_dir 配下の .ts/.tsx/.js/.jsx ファイルでスキャンする。"""
+    results: list[GrepRecord] = []
+    pattern = re.compile(r'\b' + re.escape(const_name) + r'\b')
+    def_file = resolve_file_cached(record.filepath, src_dir)
+
+    src_files = iter_source_files(src_dir, [".ts", ".tsx", ".js", ".jsx"])
+    for src_file in src_files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+
+        lines = cached_file_lines(Path(src_file), detect_encoding(Path(src_file), encoding_override), stats)
+        for i, line in enumerate(lines, 1):
+            if (def_file is not None
+                    and src_file.resolve() == def_file.resolve()
+                    and i == int(record.lineno)):
+                continue
+            if pattern.search(line):
+                results.append(GrepRecord(
+                    keyword=record.keyword,
+                    ref_type=RefType.INDIRECT.value,
+                    usage_type=classify_usage(line.strip()),
+                    filepath=filepath_str,
+                    lineno=str(i),
+                    code=line.strip(),
+                    src_var=const_name,
+                    src_file=record.filepath,
+                    src_lineno=record.lineno,
+                ))
+    return results
+
+
+def _scan_files_for_ts_const(
+    files: list[Path],
+    src_dir: Path,
+    encoding: str | None,
+    names: list[str],
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]],
+) -> list[GrepRecord]:
+    """ProcessPool worker: TS const を一括スキャン。"""
+    scanner = build_batch_scanner(names)
+    results: list[GrepRecord] = []
+    for src_file in files:
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
+        for i, line in enumerate(lines, 1):
+            code = line.strip()
+            for _pos, name in scanner.findall(line):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage(code),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+    return results
+
+
+def _batch_track_ts_const(
+    tasks: dict[str, list[GrepRecord]],
+    src_dir: Path,
+    stats: ProcessStats,
+    encoding: str | None,
+    *,
+    workers: int = 1,
+) -> list[GrepRecord]:
+    """TS const をプロジェクト全体に対して 1 パスでバッチスキャンする。"""
+    if not tasks:
+        return []
+    names = list(tasks.keys())
+    src_files = grep_filter_files(names, src_dir, [".ts", ".tsx", ".js", ".jsx"], label="TS定数追跡")
+    if not src_files:
+        return []
+    total = len(src_files)
+
+    tasks_ext: dict[str, list[tuple[GrepRecord, Path | None, int]]] = {}
+    for name, origins in tasks.items():
+        ext_list = []
+        for origin in origins:
+            def_path = resolve_file_cached(origin.filepath, src_dir)
+            ext_list.append((origin, def_path.resolve() if def_path else None, int(origin.lineno)))
+        tasks_ext[name] = ext_list
+
+    if workers >= 2 and total >= 2:
+        from concurrent.futures import ProcessPoolExecutor
+        chunks = [src_files[i::workers] for i in range(workers)]
+        results: list[GrepRecord] = []
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futures = [
+                ex.submit(_scan_files_for_ts_const, chunk, src_dir, encoding, names, tasks_ext)
+                for chunk in chunks if chunk
+            ]
+            for fut in futures:
+                results.extend(fut.result())
+        print(f"  [TS定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
+        return results
+
+    scanner = build_batch_scanner(names)
+    results = []
+    for idx, src_file in enumerate(src_files, 1):
+        if total >= 100 and idx % 100 == 0:
+            pct = idx * 100 // total
+            print(f"  [TS定数追跡] {idx}/{total} ファイル処理済み ({pct}%)", file=sys.stderr, flush=True)
+        try:
+            filepath_str = str(src_file.relative_to(src_dir))
+        except ValueError:
+            filepath_str = str(src_file)
+        src_resolved = src_file.resolve()
+        lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
+        for i, line in enumerate(lines, 1):
+            code = line.strip()
+            for _pos, name in scanner.findall(line):
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
+                    if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
+                        continue
+                    results.append(GrepRecord(
+                        keyword=origin.keyword,
+                        ref_type=RefType.INDIRECT.value,
+                        usage_type=classify_usage(code),
+                        filepath=filepath_str,
+                        lineno=str(i),
+                        code=code,
+                        src_var=name,
+                        src_file=origin.filepath,
+                        src_lineno=origin.lineno,
+                    ))
+
+    print(f"  [TS定数追跡] 完了: {total} ファイルスキャン / 参照 {len(results)} 件発見", file=sys.stderr, flush=True)
+    return results
+
+
+def batch_track_indirect(
+    direct_records: list[GrepRecord],
+    src_dir: Path,
+    encoding: str | None,
+    *,
+    workers: int = 1,
+) -> list[GrepRecord]:
+    """TS の間接参照（const 経由）をバッチ追跡する。"""
+    from grep_helper.languages import detect_handler
+    self_module = sys.modules[__name__]
+
+    tasks: dict[str, list[GrepRecord]] = {}
+    for r in direct_records:
+        if detect_handler(r.filepath, src_dir) is not self_module:
+            continue
+        if r.usage_type != "const定数定義":
+            continue
+        name = extract_const_name(r.code)
+        if name:
+            tasks.setdefault(name, []).append(r)
+    if not tasks:
+        return []
+    stats = ProcessStats()
+    return _batch_track_ts_const(tasks, src_dir, stats, encoding, workers=workers)

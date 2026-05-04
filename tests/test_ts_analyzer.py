@@ -78,5 +78,133 @@ class TestE2ETs(unittest.TestCase):
             self.assertEqual(actual, expected)
 
 
+from grep_helper.languages.ts import (
+    extract_const_name as extract_const_name_ts,
+    track_const as track_const_ts,
+    batch_track_indirect as batch_track_indirect_ts,
+)
+from grep_helper.model import GrepRecord, RefType
+
+
+class TestExtractConstNameTs(unittest.TestCase):
+    """TestExtractConstNameTs: extract_const_name の抽出有無を観察するテスト。"""
+
+    def test_const宣言から定数名を抽出する(self):
+        self.assertEqual(extract_const_name_ts('const STATUS_CODE = "777";'), "STATUS_CODE")
+
+    def test_export_constから定数名を抽出する(self):
+        self.assertEqual(extract_const_name_ts('export const STATUS_CODE = "777";'), "STATUS_CODE")
+
+    def test_型注釈付きconstから名前を抽出する(self):
+        self.assertEqual(extract_const_name_ts('const COUNT: number = 5;'), "COUNT")
+
+    def test_let宣言からは抽出しない(self):
+        self.assertIsNone(extract_const_name_ts('let x = STATUS_CODE;'))
+
+    def test_var宣言からは抽出しない(self):
+        self.assertIsNone(extract_const_name_ts('var x = STATUS_CODE;'))
+
+    def test_分割代入は抽出しない(self):
+        self.assertIsNone(extract_const_name_ts('const { a, b } = obj;'))
+
+
+class TestTrackConstTs(unittest.TestCase):
+    """TestTrackConstTs: track_const_ts の間接参照検出と定義行除外を観察する。"""
+
+    def test_別tsファイルでの参照を間接レコードとして記録する(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.ts").write_text('const STATUS_CODE = "777";\n')
+            (src / "service.ts").write_text('if (x === STATUS_CODE) { return; }\n')
+            record = GrepRecord(
+                keyword="777",
+                ref_type=RefType.DIRECT.value,
+                usage_type="const定数定義",
+                filepath=str(src / "constants.ts"),
+                lineno="1",
+                code='const STATUS_CODE = "777";',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_const_ts("STATUS_CODE", src, record, stats)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("service.ts" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
+    def test_定義行自身は間接レコードに含まれない(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.ts").write_text('const STATUS_CODE = "777";\n')
+            record = GrepRecord(
+                keyword="777",
+                ref_type=RefType.DIRECT.value,
+                usage_type="const定数定義",
+                filepath=str(src / "constants.ts"),
+                lineno="1",
+                code='const STATUS_CODE = "777";',
+            )
+            stats = ProcessStats()
+            _file_lines_cache_clear()
+            results = track_const_ts("STATUS_CODE", src, record, stats)
+            self.assertEqual(results, [])
+
+
+class TestBatchTrackIndirectTs(unittest.TestCase):
+    """TestBatchTrackIndirectTs: batch_track_indirect の起点フィルタ・集約を観察する。"""
+
+    def test_const定数定義のレコードのみ起点となる(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.ts").write_text('const STATUS_CODE = "777";\n')
+            (src / "service.ts").write_text('if (x === STATUS_CODE) { return; }\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="const定数定義",
+                    filepath=str(src / "constants.ts"),
+                    lineno="1",
+                    code='const STATUS_CODE = "777";',
+                ),
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入(let/var)",
+                    filepath=str(src / "service.ts"),
+                    lineno="1",
+                    code='let local = STATUS_CODE;',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_ts(records, src, None, workers=1)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("service.ts" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
+    def test_workers_2と1で同じレコード集合を返す(self):
+        """Linux fork 前提の並列テスト。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "constants.ts").write_text('const STATUS_CODE = "777";\n')
+            (src / "service.ts").write_text('if (x === STATUS_CODE) { return; }\n')
+            (src / "worker.ts").write_text('process(STATUS_CODE);\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="const定数定義",
+                    filepath=str(src / "constants.ts"),
+                    lineno="1",
+                    code='const STATUS_CODE = "777";',
+                ),
+            ]
+            _file_lines_cache_clear()
+            serial = batch_track_indirect_ts(records, src, None, workers=1)
+            _file_lines_cache_clear()
+            parallel = batch_track_indirect_ts(records, src, None, workers=2)
+            key = lambda r: (r.filepath, r.lineno, r.ref_type)
+            self.assertEqual(sorted(serial, key=key), sorted(parallel, key=key))
+
+
 if __name__ == "__main__":
     unittest.main()
