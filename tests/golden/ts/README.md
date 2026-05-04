@@ -3,7 +3,7 @@
 ## 役割
 区分: **スモーク**（最小カバレッジ）
 
-各使用タイプ最低1件を含む。**間接追跡なし**（TS ハンドラは `batch_track_indirect` を持たない）。
+各使用タイプ最低1件を含む。間接追跡（クロスファイル）も B-1 で対応。
 
 ## 使用タイプ × サンプルファイル マトリクス
 | 使用タイプ | サンプル | 行 | 件数（直接） |
@@ -21,8 +21,13 @@
 | シナリオ | 件数 | 配置 |
 |---|---|---|
 | 直接 | 7 | sample.ts の各行 |
+| 間接 | 3 | service.ts / worker.ts の各行 |
 
-注: TypeScript / JavaScript ハンドラは間接追跡を実装していない（spec §TS に準拠）。
+## 間接参照サンプル
+
+- `src/service.ts` / `src/worker.ts`: `sample.ts` の `STATUS_CODE` を別ファイルから参照する。
+  クロスファイル間接追跡（B-1）の検証用。
+- 期待行: `expected/777.tsv` に間接行 3 件あり（service.ts の import 行 / if 行、worker.ts の logValue 行）。
 
 ## grep ファイル一覧
 | ファイル | 文言 | 役割 |

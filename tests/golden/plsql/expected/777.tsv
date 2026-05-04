@@ -7,3 +7,6 @@
 777	直接	定数/変数宣言	sample.pkb	12	v_msg := '777 not found';			
 777	直接	EXCEPTION処理	sample.pkb	13	RAISE error_777;			
 777	直接	その他	sample.pkb	16	-- '777' のコメント — その他に分類されることを期待			
+777	間接	条件判定	other.pkb	4	IF p_input = sample_pkg.c_default_code THEN	c_default_code	sample.pkb	2
+777	間接	INSERT/UPDATE値	other.pkb	5	INSERT INTO log_table (code) VALUES (sample_pkg.c_default_code);	c_default_code	sample.pkb	2
+777	間接	その他	other.pkb	7	RETURN sample_pkg.c_default_code;	c_default_code	sample.pkb	2

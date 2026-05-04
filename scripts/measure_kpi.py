@@ -97,7 +97,7 @@ LANG_SPECS: dict[str, LangSpec] = {
             "カーソル定義", "INSERT/UPDATE値", "WHERE条件", "その他",
         ],
         "min_per_type": 1,
-        "reference_kinds_required": ["直接"],
+        "reference_kinds_required": ["直接", "間接"],
     },
     "ts": {
         "module": "grep_helper.languages.ts",
@@ -106,7 +106,7 @@ LANG_SPECS: dict[str, LangSpec] = {
             "デコレータ", "関数引数", "その他",
         ],
         "min_per_type": 1,
-        "reference_kinds_required": ["直接"],
+        "reference_kinds_required": ["直接", "間接"],
     },
     "python": {
         "module": "grep_helper.languages.python",
@@ -115,7 +115,7 @@ LANG_SPECS: dict[str, LangSpec] = {
             "関数引数", "その他",
         ],
         "min_per_type": 1,
-        "reference_kinds_required": ["直接"],
+        "reference_kinds_required": ["直接", "間接"],
     },
     "perl": {
         "module": "grep_helper.languages.perl",
@@ -124,7 +124,7 @@ LANG_SPECS: dict[str, LangSpec] = {
             "print/say出力", "関数引数", "その他",
         ],
         "min_per_type": 1,
-        "reference_kinds_required": ["直接"],
+        "reference_kinds_required": ["直接", "間接"],
     },
     "dotnet": {
         "module": "grep_helper.languages.dotnet",

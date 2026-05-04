@@ -6,3 +6,6 @@
 777	直接	関数引数	sample.ts	10	"logValue(""777"");"			
 777	直接	return文	sample.ts	15	"return ""777"";"			
 777	直接	その他	sample.ts	18	"// ""777"" のコメント — その他に分類されることを期待"			
+777	間接	その他	service.ts	1	import { STATUS_CODE } from './sample';	STATUS_CODE	sample.ts	1
+777	間接	条件判定	service.ts	4	if (input === STATUS_CODE) {	STATUS_CODE	sample.ts	1
+777	間接	関数引数	worker.ts	4	logValue(STATUS_CODE);	STATUS_CODE	sample.ts	1

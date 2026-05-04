@@ -5,3 +5,6 @@
 777	直接	print/say出力	Sample.pm	12	"print ""777 detected\n"";"			
 777	直接	関数引数	Sample.pm	13	"do_notify(""777"");"			
 777	直接	その他	Sample.pm	17	"# ""777"" のコメント — その他に分類されることを期待"			
+777	間接	条件判定	Service.pm	6	if ($input eq STATUS_CODE) {	STATUS_CODE	Sample.pm	4
+777	間接	関数引数	Worker.pm	5	do_notify(STATUS_CODE);	STATUS_CODE	Sample.pm	4
+777	間接	その他	Service.pm	2	use Sample qw(STATUS_CODE);	STATUS_CODE	Sample.pm	4

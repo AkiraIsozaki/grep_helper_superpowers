@@ -5,3 +5,6 @@
 777	直接	関数引数	sample.py	10	"log_value(""777"")"			
 777	直接	return文	sample.py	15	"return ""777"""			
 777	直接	その他	sample.py	18	"# ""777"" のコメント — その他に分類されることを期待"			
+777	間接	条件判定	service.py	5	if input_value == STATUS_CODE:	STATUS_CODE	sample.py	3
+777	間接	関数引数	service.py	5	if input_value == STATUS_CODE:	STATUS_CODE	sample.py	3
+777	間接	関数引数	worker.py	5	log_value(STATUS_CODE)	STATUS_CODE	sample.py	3
