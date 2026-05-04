@@ -26,7 +26,7 @@
 
 - `src/service.py` / `src/worker.py`: `sample.py` の `STATUS_CODE` を別ファイルから参照する。
   クロスファイル間接追跡（B-1）の検証用。
-- 期待行: `expected/777.tsv` に間接行 3 件あり（service.py の if 行 / 関数引数行、worker.py の log_value 行）。
+- 期待行: `expected/777.tsv` に間接行 3 件あり（service.py の if 行 = 条件判定、worker.py の log_value 行 = 関数引数、worker.py の return 行 = return文）。
 
 ## grep ファイル一覧
 | ファイル | 文言 | 役割 |
