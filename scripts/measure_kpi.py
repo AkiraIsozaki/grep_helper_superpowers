@@ -14,14 +14,23 @@ import datetime
 import importlib
 import sys
 import tempfile
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TypedDict
 
 from grep_helper.pipeline import run_full_pipeline
 
 
-LANG_SPECS: dict[str, dict] = {
+class LangSpec(TypedDict):
+    """言語仕様の型定義。LangSpec値のキー名をタイプチェック時に検証する。"""
+    module: str
+    usage_types: list[str]
+    min_per_type: int
+    reference_kinds_required: list[str]
+
+
+LANG_SPECS: dict[str, LangSpec] = {
     "java": {
         "module": "grep_helper.languages.java",
         "usage_types": [
@@ -274,8 +283,9 @@ def run(argv: list[str] | None = None) -> int:
     except FileNotFoundError as e:
         print(f"エラー: {e}", file=sys.stderr)
         return 1
-    except Exception as e:
-        print(f"予期しないエラー: {e}", file=sys.stderr)
+    except Exception:
+        print("予期しないエラー:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         return 2
 
 
