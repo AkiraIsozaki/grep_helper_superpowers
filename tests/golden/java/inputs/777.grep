@@ -1,5 +1,431 @@
-src/Demo.java:4:    public static final String CODE = "777";
-src/Demo.java:8:        if (input.equals("777")) {
-src/Demo.java:9:            return "777";
-src/Demo.java:11:        String local = "777";
-src/Demo.java:16:        System.out.println("777");
+Annotated.java:7: * アノテーション (`@Annotation("777")`) パターンを多く含む。
+Annotated.java:16:    @Tag("777")
+Annotated.java:20:    @Tag("777")
+Annotated.java:24:    @Tag("777")
+Annotated.java:28:    @Tag("777")
+Annotated.java:32:    @Tag("777")
+Annotated.java:36:    @Tag("777")
+Annotated.java:40:    @Tag("777")
+Annotated.java:44:    @Tag("777")
+Annotated.java:48:    @Tag("777")
+Annotated.java:52:    @Tag("777")
+Annotated.java:56:    @Tag("777")
+Annotated.java:60:    @Tag("777")
+Status.java:8:    public static final String SUCCESS = "777";
+Status.java:9:    public static final String FAILURE = "777";
+Status.java:10:    public static final String PENDING = "777";
+Caller.java:9:        System.out.println("777");
+Caller.java:13:        System.out.println("777");
+Caller.java:17:        System.out.println("777");
+Caller.java:21:        System.err.println("777");
+Caller.java:25:        System.err.println("777");
+Caller.java:29:        log("777");
+Caller.java:33:        log("777");
+Caller.java:37:        log("777");
+Caller.java:41:        log("777");
+Caller.java:45:        log("777");
+Caller.java:49:        log("777");
+Caller.java:53:        log("777");
+BigConstants.java:8:    public static final String C01 = "777";
+BigConstants.java:9:    public static final String C02 = "777";
+BigConstants.java:10:    public static final String C03 = "777";
+BigConstants.java:11:    public static final String C04 = "777";
+BigConstants.java:12:    public static final String C05 = "777";
+BigConstants.java:13:    public static final String C06 = "777";
+BigConstants.java:14:    public static final String C07 = "777";
+BigConstants.java:15:    public static final String C08 = "777";
+BigConstants.java:16:    public static final String C09 = "777";
+BigConstants.java:17:    public static final String C10 = "777";
+BigConstants.java:18:    public static final String C11 = "777";
+BigConstants.java:19:    public static final String C12 = "777";
+BigConstants.java:20:    public static final String C13 = "777";
+BigConstants.java:21:    public static final String C14 = "777";
+BigConstants.java:22:    public static final String C15 = "777";
+BigConstants.java:23:    public static final String C16 = "777";
+BigConstants.java:24:    public static final String C17 = "777";
+BigConstants.java:25:    public static final String C18 = "777";
+BigConstants.java:26:    public static final String C19 = "777";
+BigConstants.java:27:    public static final String C20 = "777";
+Returner.java:8:    public String r1() { return "777"; }
+Returner.java:9:    public String r2() { return "777"; }
+Returner.java:10:    public String r3() { return "777"; }
+Returner.java:11:    public String r4() { return "777"; }
+Returner.java:12:    public String r5() { return "777"; }
+Demo.java:4:    public static final String DEMO_CODE = "777";
+Demo.java:8:        if (input.equals("777")) {
+Demo.java:9:            return "777";
+Demo.java:11:        String local = "777";
+Demo.java:16:        System.out.println("777");
+Handler.java:12:        String literal = "777";
+Handler.java:18:        String literal = "777";
+Entity.java:5: * 同一クラス内で値が "777" になり、Handler / Mutator から getter / setter 経由で参照される。
+Entity.java:9:    private String type = "777";
+Mutator.java:12:        String value = "777";
+Mutator.java:17:        String value = "777";
+Comments.java:3:// 777 のコメント1
+Comments.java:4:// 777 のコメント2
+Comments.java:5:// 777 のコメント3
+Comments.java:6:// 777 のコメント4
+Comments.java:7:// 777 のコメント5
+Comments.java:8:// 777 のコメント6
+Comments.java:9:// 777 のコメント7
+Comments.java:10:// 777 のコメント8
+Comments.java:11:// 777 のコメント9
+Comments.java:12:// 777 のコメント10
+Comments.java:13:// 777 のコメント11
+Comments.java:14:// 777 のコメント12
+Comments.java:16:    // 単に "777" を含むコメント行を集めた、ロジック上意味のない宣言クラス
+BigCaller.java:9:        System.out.println("777");
+BigCaller.java:13:        System.out.println("777");
+BigCaller.java:17:        System.out.println("777");
+BigCaller.java:21:        System.out.println("777");
+BigCaller.java:25:        System.out.println("777");
+BigCaller.java:29:        System.out.println("777");
+BigCaller.java:33:        System.out.println("777");
+BigCaller.java:37:        System.out.println("777");
+BigCaller.java:41:        System.out.println("777");
+BigCaller.java:45:        System.out.println("777");
+BigCaller.java:49:        System.out.println("777");
+BigCaller.java:53:        System.out.println("777");
+BigCaller.java:57:        System.out.println("777");
+BigCaller.java:61:        System.out.println("777");
+BigCaller.java:65:        System.out.println("777");
+BigCaller.java:69:        System.out.println("777");
+BigCaller.java:73:        System.out.println("777");
+BigCaller.java:77:        System.out.println("777");
+BigCaller.java:81:        System.out.println("777");
+BigCaller.java:85:        System.out.println("777");
+BigCaller.java:89:        System.out.println("777");
+BigCaller.java:93:        System.out.println("777");
+BigCaller.java:97:        System.out.println("777");
+BigCaller.java:101:        System.out.println("777");
+BigCaller.java:105:        System.out.println("777");
+BigCaller.java:109:        System.out.println("777");
+BigCaller.java:113:        System.out.println("777");
+BigCaller.java:117:        System.out.println("777");
+BigCaller.java:121:        System.out.println("777");
+BigCaller.java:125:        System.out.println("777");
+BigCaller.java:129:        System.out.println("777");
+BigCaller.java:133:        System.out.println("777");
+BigCaller.java:137:        System.out.println("777");
+BigCaller.java:141:        System.out.println("777");
+BigCaller.java:145:        System.out.println("777");
+BigCaller.java:149:        System.out.println("777");
+BigCaller.java:153:        System.out.println("777");
+BigCaller.java:157:        System.out.println("777");
+BigCaller.java:161:        System.out.println("777");
+BigCaller.java:165:        System.out.println("777");
+BigCaller.java:169:        System.out.println("777");
+BigCaller.java:173:        System.out.println("777");
+BigCaller.java:177:        System.out.println("777");
+BigCaller.java:181:        System.out.println("777");
+BigCaller.java:185:        System.out.println("777");
+BigCaller.java:189:        System.out.println("777");
+BigCaller.java:193:        System.out.println("777");
+BigCaller.java:197:        System.out.println("777");
+BigCaller.java:201:        System.out.println("777");
+BigCaller.java:205:        System.out.println("777");
+BigComments.java:3:// 777 のコメント追加 1
+BigComments.java:4:// 777 のコメント追加 2
+BigComments.java:5:// 777 のコメント追加 3
+BigComments.java:6:// 777 のコメント追加 4
+BigComments.java:7:// 777 のコメント追加 5
+BigComments.java:8:// 777 のコメント追加 6
+BigComments.java:9:// 777 のコメント追加 7
+BigComments.java:10:// 777 のコメント追加 8
+BigComments.java:11:// 777 のコメント追加 9
+BigComments.java:12:// 777 のコメント追加 10
+BigComments.java:13:// 777 のコメント追加 11
+BigComments.java:14:// 777 のコメント追加 12
+BigComments.java:15:// 777 のコメント追加 13
+BigComments.java:16:// 777 のコメント追加 14
+BigComments.java:17:// 777 のコメント追加 15
+BigComments.java:18:// 777 のコメント追加 16
+BigComments.java:19:// 777 のコメント追加 17
+BigComments.java:20:// 777 のコメント追加 18
+BigComments.java:21:// 777 のコメント追加 19
+BigComments.java:22:// 777 のコメント追加 20
+BigComments.java:23:// 777 のコメント追加 21
+BigComments.java:24:// 777 のコメント追加 22
+BigComments.java:25:// 777 のコメント追加 23
+BigComments.java:26:// 777 のコメント追加 24
+BigComments.java:27:// 777 のコメント追加 25
+BigComments.java:28:// 777 のコメント追加 26
+BigComments.java:29:// 777 のコメント追加 27
+BigComments.java:30:// 777 のコメント追加 28
+BigComments.java:31:// 777 のコメント追加 29
+BigComments.java:32:// 777 のコメント追加 30
+BigComments.java:33:// 777 のコメント追加 31
+BigComments.java:34:// 777 のコメント追加 32
+BigComments.java:35:// 777 のコメント追加 33
+BigComments.java:36:// 777 のコメント追加 34
+BigComments.java:37:// 777 のコメント追加 35
+BigComments.java:38:// 777 のコメント追加 36
+BigComments.java:39:// 777 のコメント追加 37
+BigComments.java:40:// 777 のコメント追加 38
+BigComments.java:41:// 777 のコメント追加 39
+BigComments.java:42:// 777 のコメント追加 40
+BigComments.java:43:// 777 のコメント追加 41
+BigComments.java:44:// 777 のコメント追加 42
+BigComments.java:45:// 777 のコメント追加 43
+BigComments.java:46:// 777 のコメント追加 44
+BigComments.java:47:// 777 のコメント追加 45
+BigComments.java:48:// 777 のコメント追加 46
+BigComments.java:49:// 777 のコメント追加 47
+BigComments.java:50:// 777 のコメント追加 48
+BigComments.java:51:// 777 のコメント追加 49
+BigComments.java:52:// 777 のコメント追加 50
+BigComments.java:54:    // クラス内のメソッドにも 777 を含むコメントを混ぜる
+BigComments.java:56:        // 777 の inline コメント
+BigService.java:9:        if (input.equals("777")) {
+BigService.java:16:        if (input.equals("777")) {
+BigService.java:23:        if (input.equals("777")) {
+BigService.java:30:        if (input.equals("777")) {
+BigService.java:37:        if (input.equals("777")) {
+BigService.java:44:        if (input.equals("777")) {
+BigService.java:51:        if (input.equals("777")) {
+BigService.java:58:        if (input.equals("777")) {
+BigService.java:65:        if (input.equals("777")) {
+BigService.java:72:        if (input.equals("777")) {
+BigService.java:79:        if (input.equals("777")) {
+BigService.java:86:        if (input.equals("777")) {
+BigService.java:93:        if (input.equals("777")) {
+BigService.java:100:        if (input.equals("777")) {
+BigService.java:107:        if (input.equals("777")) {
+BigService.java:114:        if (input.equals("777")) {
+BigService.java:121:        if (input.equals("777")) {
+BigService.java:128:        if (input.equals("777")) {
+BigService.java:135:        if (input.equals("777")) {
+BigService.java:142:        if (input.equals("777")) {
+BigService.java:149:        if (input.equals("777")) {
+BigService.java:156:        if (input.equals("777")) {
+BigService.java:163:        if (input.equals("777")) {
+BigService.java:170:        if (input.equals("777")) {
+BigService.java:177:        if (input.equals("777")) {
+BigService.java:184:        if (input.equals("777")) {
+BigService.java:191:        if (input.equals("777")) {
+BigService.java:198:        if (input.equals("777")) {
+BigService.java:205:        if (input.equals("777")) {
+BigService.java:212:        if (input.equals("777")) {
+BigService.java:219:        if (input.equals("777")) {
+BigService.java:226:        if (input.equals("777")) {
+BigService.java:233:        if (input.equals("777")) {
+BigService.java:240:        if (input.equals("777")) {
+BigService.java:247:        if (input.equals("777")) {
+BigService.java:254:        if (input.equals("777")) {
+BigService.java:261:        if (input.equals("777")) {
+BigService.java:268:        if (input.equals("777")) {
+BigService.java:275:        if (input.equals("777")) {
+BigService.java:282:        if (input.equals("777")) {
+BigService.java:289:        if (input.equals("777")) {
+BigService.java:296:        if (input.equals("777")) {
+BigService.java:303:        if (input.equals("777")) {
+BigService.java:310:        if (input.equals("777")) {
+BigService.java:317:        if (input.equals("777")) {
+BigService.java:324:        if (input.equals("777")) {
+BigService.java:331:        if (input.equals("777")) {
+BigService.java:338:        if (input.equals("777")) {
+BigService.java:345:        if (input.equals("777")) {
+BigService.java:352:        if (input.equals("777")) {
+Setter.java:9:        String a = "777";
+Setter.java:14:        String b = "777";
+Setter.java:19:        String c = "777";
+Setter.java:24:        String d = "777";
+Setter.java:29:        String e = "777";
+Setter.java:34:        String f = "777";
+Setter.java:39:        String g = "777";
+Setter.java:44:        String h = "777";
+Setter.java:49:        String i = "777";
+Setter.java:54:        String j = "777";
+Setter.java:59:        String k = "777";
+Setter.java:64:        String l = "777";
+BigAnnotated.java:8:    @Annotated.Tag("777")
+BigAnnotated.java:12:    @Annotated.Tag("777")
+BigAnnotated.java:16:    @Annotated.Tag("777")
+BigAnnotated.java:20:    @Annotated.Tag("777")
+BigAnnotated.java:24:    @Annotated.Tag("777")
+BigAnnotated.java:28:    @Annotated.Tag("777")
+BigAnnotated.java:32:    @Annotated.Tag("777")
+BigAnnotated.java:36:    @Annotated.Tag("777")
+BigAnnotated.java:40:    @Annotated.Tag("777")
+BigAnnotated.java:44:    @Annotated.Tag("777")
+BigAnnotated.java:48:    @Annotated.Tag("777")
+BigAnnotated.java:52:    @Annotated.Tag("777")
+BigAnnotated.java:56:    @Annotated.Tag("777")
+BigAnnotated.java:60:    @Annotated.Tag("777")
+BigAnnotated.java:64:    @Annotated.Tag("777")
+BigAnnotated.java:68:    @Annotated.Tag("777")
+BigAnnotated.java:72:    @Annotated.Tag("777")
+BigAnnotated.java:76:    @Annotated.Tag("777")
+BigAnnotated.java:80:    @Annotated.Tag("777")
+BigAnnotated.java:84:    @Annotated.Tag("777")
+BigAnnotated.java:88:    @Annotated.Tag("777")
+BigAnnotated.java:92:    @Annotated.Tag("777")
+BigAnnotated.java:96:    @Annotated.Tag("777")
+BigAnnotated.java:100:    @Annotated.Tag("777")
+BigAnnotated.java:104:    @Annotated.Tag("777")
+BigAnnotated.java:108:    @Annotated.Tag("777")
+BigAnnotated.java:112:    @Annotated.Tag("777")
+BigAnnotated.java:116:    @Annotated.Tag("777")
+BigAnnotated.java:120:    @Annotated.Tag("777")
+BigAnnotated.java:124:    @Annotated.Tag("777")
+BigAnnotated.java:128:    @Annotated.Tag("777")
+BigAnnotated.java:132:    @Annotated.Tag("777")
+BigAnnotated.java:136:    @Annotated.Tag("777")
+BigAnnotated.java:140:    @Annotated.Tag("777")
+BigAnnotated.java:144:    @Annotated.Tag("777")
+BigAnnotated.java:148:    @Annotated.Tag("777")
+BigAnnotated.java:152:    @Annotated.Tag("777")
+BigAnnotated.java:156:    @Annotated.Tag("777")
+BigAnnotated.java:160:    @Annotated.Tag("777")
+BigAnnotated.java:164:    @Annotated.Tag("777")
+BigAnnotated.java:168:    @Annotated.Tag("777")
+BigAnnotated.java:172:    @Annotated.Tag("777")
+BigAnnotated.java:176:    @Annotated.Tag("777")
+BigAnnotated.java:180:    @Annotated.Tag("777")
+BigAnnotated.java:184:    @Annotated.Tag("777")
+BigAnnotated.java:188:    @Annotated.Tag("777")
+BigAnnotated.java:192:    @Annotated.Tag("777")
+BigAnnotated.java:196:    @Annotated.Tag("777")
+BigAnnotated.java:200:    @Annotated.Tag("777")
+BigAnnotated.java:204:    @Annotated.Tag("777")
+BigSetter.java:9:        String x1 = "777";
+BigSetter.java:14:        String x2 = "777";
+BigSetter.java:19:        String x3 = "777";
+BigSetter.java:24:        String x4 = "777";
+BigSetter.java:29:        String x5 = "777";
+BigSetter.java:34:        String x6 = "777";
+BigSetter.java:39:        String x7 = "777";
+BigSetter.java:44:        String x8 = "777";
+BigSetter.java:49:        String x9 = "777";
+BigSetter.java:54:        String x10 = "777";
+BigSetter.java:59:        String x11 = "777";
+BigSetter.java:64:        String x12 = "777";
+BigSetter.java:69:        String x13 = "777";
+BigSetter.java:74:        String x14 = "777";
+BigSetter.java:79:        String x15 = "777";
+BigSetter.java:84:        String x16 = "777";
+BigSetter.java:89:        String x17 = "777";
+BigSetter.java:94:        String x18 = "777";
+BigSetter.java:99:        String x19 = "777";
+BigSetter.java:104:        String x20 = "777";
+BigSetter.java:109:        String x21 = "777";
+BigSetter.java:114:        String x22 = "777";
+BigSetter.java:119:        String x23 = "777";
+BigSetter.java:124:        String x24 = "777";
+BigSetter.java:129:        String x25 = "777";
+BigSetter.java:134:        String x26 = "777";
+BigSetter.java:139:        String x27 = "777";
+BigSetter.java:144:        String x28 = "777";
+BigSetter.java:149:        String x29 = "777";
+BigSetter.java:154:        String x30 = "777";
+BigSetter.java:159:        String x31 = "777";
+BigSetter.java:164:        String x32 = "777";
+BigSetter.java:169:        String x33 = "777";
+BigSetter.java:174:        String x34 = "777";
+BigSetter.java:179:        String x35 = "777";
+BigSetter.java:184:        String x36 = "777";
+BigSetter.java:189:        String x37 = "777";
+BigSetter.java:194:        String x38 = "777";
+BigSetter.java:199:        String x39 = "777";
+BigSetter.java:204:        String x40 = "777";
+BigSetter.java:209:        String x41 = "777";
+BigSetter.java:214:        String x42 = "777";
+BigSetter.java:219:        String x43 = "777";
+BigSetter.java:224:        String x44 = "777";
+BigSetter.java:229:        String x45 = "777";
+BigSetter.java:234:        String x46 = "777";
+BigSetter.java:239:        String x47 = "777";
+BigSetter.java:244:        String x48 = "777";
+BigSetter.java:249:        String x49 = "777";
+BigSetter.java:254:        String x50 = "777";
+Validator.java:9:        return "777";
+Validator.java:13:        return "777";
+Validator.java:17:        return "777";
+Validator.java:21:        return "777";
+Validator.java:25:        return "777";
+Validator.java:30:        return "777";
+Validator.java:35:        return "777";
+Validator.java:40:        return "777";
+Validator.java:45:        return "777";
+Validator.java:50:        return "777";
+Validator.java:55:        return "777";
+Validator.java:60:        return "777";
+Constants.java:5: * ここでは "777" を含む定数を10件以上定義し、間接参照（定数経由）の起点となる。
+Constants.java:9:    public static final String CODE = "777";
+Constants.java:10:    public static final String CODE_ALT = "777";
+Constants.java:11:    public static final String STATUS_OK = "777";
+Constants.java:12:    public static final String STATUS_NG = "777";
+Constants.java:13:    public static final String DEFAULT_VALUE = "777";
+Constants.java:14:    public static final String FALLBACK = "777";
+Constants.java:15:    public static final String LEGACY = "777";
+Constants.java:16:    public static final String MAGIC = "777";
+Constants.java:17:    public static final String SENTINEL = "777";
+Constants.java:18:    public static final String MARKER = "777";
+Constants.java:19:    public static final String GUARD = "777";
+Constants.java:20:    public static final String TOKEN = "777";
+MoreCallers.java:9:        new StringBuilder("777");
+MoreCallers.java:13:        new StringBuilder("777");
+MoreCallers.java:17:        new StringBuilder("777");
+MoreCallers.java:21:        new StringBuilder("777");
+MoreCallers.java:25:        new StringBuilder("777");
+BigValidator.java:8:    public String big1() { return "777"; }
+BigValidator.java:9:    public String big2() { return "777"; }
+BigValidator.java:10:    public String big3() { return "777"; }
+BigValidator.java:11:    public String big4() { return "777"; }
+BigValidator.java:12:    public String big5() { return "777"; }
+BigValidator.java:13:    public String big6() { return "777"; }
+BigValidator.java:14:    public String big7() { return "777"; }
+BigValidator.java:15:    public String big8() { return "777"; }
+BigValidator.java:16:    public String big9() { return "777"; }
+BigValidator.java:17:    public String big10() { return "777"; }
+BigValidator.java:18:    public String big11() { return "777"; }
+BigValidator.java:19:    public String big12() { return "777"; }
+BigValidator.java:20:    public String big13() { return "777"; }
+BigValidator.java:21:    public String big14() { return "777"; }
+BigValidator.java:22:    public String big15() { return "777"; }
+BigValidator.java:23:    public String big16() { return "777"; }
+BigValidator.java:24:    public String big17() { return "777"; }
+BigValidator.java:25:    public String big18() { return "777"; }
+BigValidator.java:26:    public String big19() { return "777"; }
+BigValidator.java:27:    public String big20() { return "777"; }
+BigValidator.java:28:    public String big21() { return "777"; }
+BigValidator.java:29:    public String big22() { return "777"; }
+BigValidator.java:30:    public String big23() { return "777"; }
+BigValidator.java:31:    public String big24() { return "777"; }
+BigValidator.java:32:    public String big25() { return "777"; }
+BigValidator.java:33:    public String big26() { return "777"; }
+BigValidator.java:34:    public String big27() { return "777"; }
+BigValidator.java:35:    public String big28() { return "777"; }
+BigValidator.java:36:    public String big29() { return "777"; }
+BigValidator.java:37:    public String big30() { return "777"; }
+BigValidator.java:38:    public String big31() { return "777"; }
+BigValidator.java:39:    public String big32() { return "777"; }
+BigValidator.java:40:    public String big33() { return "777"; }
+BigValidator.java:41:    public String big34() { return "777"; }
+BigValidator.java:42:    public String big35() { return "777"; }
+BigValidator.java:43:    public String big36() { return "777"; }
+BigValidator.java:44:    public String big37() { return "777"; }
+BigValidator.java:45:    public String big38() { return "777"; }
+BigValidator.java:46:    public String big39() { return "777"; }
+BigValidator.java:47:    public String big40() { return "777"; }
+BigValidator.java:48:    public String big41() { return "777"; }
+BigValidator.java:49:    public String big42() { return "777"; }
+BigValidator.java:50:    public String big43() { return "777"; }
+BigValidator.java:51:    public String big44() { return "777"; }
+BigValidator.java:52:    public String big45() { return "777"; }
+BigValidator.java:53:    public String big46() { return "777"; }
+BigValidator.java:54:    public String big47() { return "777"; }
+BigValidator.java:55:    public String big48() { return "777"; }
+BigValidator.java:56:    public String big49() { return "777"; }
+BigValidator.java:57:    public String big50() { return "777"; }
+Service.java:10:        if (input.equals("777")) {
+Service.java:17:        if ("777".equals(input)) {
+Service.java:24:        while (input.equals("777")) {
+Service.java:31:        if (input == "777") {
+Service.java:38:        if (!input.equals("777")) {
+Service.java:45:        if (input != null && input.equals("777")) {
+Service.java:66:        while (!input.equals("777") && input.length() > 0) {
+Service.java:73:        if (input.equalsIgnoreCase("777")) {
+Service.java:80:        if (input.startsWith("777")) {
+Service.java:87:        if ("777" == input) {

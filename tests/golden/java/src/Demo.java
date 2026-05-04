@@ -1,7 +1,7 @@
 package demo;
 
 public class Demo {
-    public static final String CODE = "777";
+    public static final String DEMO_CODE = "777";
 
     @Deprecated
     public String process(String input) {

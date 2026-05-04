@@ -1,0 +1,6 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+CODE	直接	定数定義	Constants.java	9	"public static final String CODE = ""777"";"			
+CODE	直接	定数定義	Constants.java	10	"public static final String CODE_ALT = ""777"";"			
+CODE	直接	定数定義	Demo.java	4	"public static final String DEMO_CODE = ""777"";"			
+CODE	間接	条件判定	Service.java	52	if (input.equals(Constants.CODE)) {	CODE	Constants.java	9
+CODE	間接	条件判定	Service.java	59	if (Constants.CODE.equals(input)) {	CODE	Constants.java	9
