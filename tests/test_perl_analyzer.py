@@ -223,6 +223,30 @@ class TestBatchTrackIndirectPerl(unittest.TestCase):
             filepaths = [r.filepath for r in results]
             self.assertTrue(any("Service.pm" in fp for fp in filepaths))
 
+    def test_our_scalar変数のbatch経由参照を間接レコードに記録する(self):
+        """scalar batch 経路の回帰テスト: bare names + $ post-filter で
+        `print $FOO;` のような行も正しく拾えること（過去 build_batch_scanner に
+        `$FOO` を直接渡すと regex 境界の都合で取り逃していた）。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "Sample.pm").write_text('package Sample;\nour $FOO = "777";\n1;\n')
+            (src / "Service.pm").write_text('print $FOO;\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="変数代入",
+                    filepath=str(src / "Sample.pm"),
+                    lineno="2",
+                    code='our $FOO = "777";',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_perl(records, src, None, workers=1)
+            filepaths = [r.filepath for r in results]
+            self.assertTrue(any("Service.pm" in fp for fp in filepaths))
+            self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
+
     def test_my宣言は起点にならない(self):
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)

@@ -118,16 +118,12 @@ def _scan_files_for_perl_constant(
 ) -> list[GrepRecord]:
     """ProcessPool worker: Perl 定数 / our scalar を一括スキャン。
 
-    build_batch_scanner で多名前検索（bareword 文字列マッチ）。
-    scalar の場合は $ プレフィックスを付けたスキャナで検索する。
+    両 kind とも bare な名前で build_batch_scanner を使い、scalar の場合は
+    マッチ位置の直前文字が `$` であることを後置フィルタで確認する。
+    `$` プレフィックスをそのままスキャナに渡すと regex 経路で `\\b\\$NAME\\b`
+    となり `print $FOO` のように `$` の左が単語境界でない箇所を取り逃す。
     """
-    if kind == "scalar":
-        prefixed_names = [f"${n}" for n in names]
-        scanner = build_batch_scanner(prefixed_names)
-        name_map = {f"${n}": n for n in names}
-    else:
-        scanner = build_batch_scanner(names)
-        name_map = {n: n for n in names}
+    scanner = build_batch_scanner(names)
 
     results: list[GrepRecord] = []
     for src_file in files:
@@ -139,11 +135,11 @@ def _scan_files_for_perl_constant(
         lines = cached_file_lines(src_file, detect_encoding(src_file, encoding))
         for i, line in enumerate(lines, 1):
             code = line.strip()
-            for _pos, found in scanner.findall(line):
-                base_name = name_map.get(found)
-                if base_name is None:
-                    continue
-                for origin, def_resolved, def_lineno in tasks_ext[base_name]:
+            for _pos, name in scanner.findall(line):
+                if kind == "scalar":
+                    if _pos == 0 or line[_pos - 1] != '$':
+                        continue
+                for origin, def_resolved, def_lineno in tasks_ext[name]:
                     if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                         continue
                     results.append(GrepRecord(
@@ -153,7 +149,7 @@ def _scan_files_for_perl_constant(
                         filepath=filepath_str,
                         lineno=str(i),
                         code=code,
-                        src_var=base_name,
+                        src_var=name,
                         src_file=origin.filepath,
                         src_lineno=origin.lineno,
                     ))
