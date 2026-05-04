@@ -1,0 +1,7 @@
+sample.ts:1:const STATUS_CODE = "777";
+sample.ts:3:@Component("777")
+sample.ts:6:        let localCode = "777";
+sample.ts:7:        if (input === "777") {
+sample.ts:10:        logValue("777");
+sample.ts:15:        return "777";
+sample.ts:18:    // "777" のコメント — その他に分類されることを期待

@@ -1,0 +1,8 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+777	直接	const定数定義	sample.ts	1	"const STATUS_CODE = ""777"";"			
+777	直接	デコレータ	sample.ts	3	"@Component(""777"")"			
+777	直接	変数代入(let/var)	sample.ts	6	"let localCode = ""777"";"			
+777	直接	条件判定	sample.ts	7	"if (input === ""777"") {"			
+777	直接	関数引数	sample.ts	10	"logValue(""777"");"			
+777	直接	return文	sample.ts	15	"return ""777"";"			
+777	直接	その他	sample.ts	18	"// ""777"" のコメント — その他に分類されることを期待"			
