@@ -333,5 +333,48 @@ class TestRunCliEndToEndJava(unittest.TestCase):
                          f"missing_rows={result.missing_rows}")
 
 
+import shutil
+
+
+class TestRunAllSemantics(unittest.TestCase):
+    """--lang all の失敗時規約: 続行 / 最終 exit code は max / _summary は常に出力。"""
+
+    def test_lang_allで存在する言語は処理され_summaryが出る(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exit_code = measure_kpi.run([
+                "--lang", "all",
+                "--samples-dir", "tests/golden",
+                "--output-dir", tmp,
+                "--quiet",
+            ])
+            # ゴールデンセットが揃っていれば 0、未整備言語があれば 1
+            self.assertIn(exit_code, (0, 1))
+            summary = list(Path(tmp).glob("_summary-*.md"))
+            self.assertEqual(len(summary), 1, "_summary は常に出力される")
+
+    def test_lang_allで未整備言語があっても他言語の処理は継続する(self):
+        # 一時的に samples-dir を別の場所にして部分的な状態を作る
+        with tempfile.TemporaryDirectory() as samples_tmp, \
+             tempfile.TemporaryDirectory() as out_tmp:
+            samples_path = Path(samples_tmp)
+            # java だけコピー、他言語は欠損状態
+            shutil.copytree("tests/golden/java", samples_path / "java")
+            exit_code = measure_kpi.run([
+                "--lang", "all",
+                "--samples-dir", str(samples_path),
+                "--output-dir", out_tmp,
+                "--quiet",
+            ])
+            # java は OK だが他11言語は未整備 → exit 1
+            self.assertEqual(exit_code, 1)
+            # summary は出ている
+            summary_files = list(Path(out_tmp).glob("_summary-*.md"))
+            self.assertEqual(len(summary_files), 1)
+            summary_text = summary_files[0].read_text(encoding="utf-8")
+            self.assertIn("java", summary_text)
+            # 他言語も「未整備」として記録されている
+            self.assertIn("c", summary_text)
+
+
 if __name__ == "__main__":
     unittest.main()

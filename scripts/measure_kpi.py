@@ -491,8 +491,39 @@ def _run_single(lang: str, samples_dir: Path, output_dir: Path, *, quiet: bool) 
 
 
 def _run_all(samples_dir: Path, output_dir: Path, *, quiet: bool) -> int:
-    """全言語ループ（Task 20 で実装）。"""
-    raise NotImplementedError("--lang all は Task 20 で実装")
+    """全12言語ぶん順次実行。失敗時は続行、最終 exit code は max(0, 1, 2)。"""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    summary_lines: list[str] = [f"# KPI 計測サマリ — {timestamp}", ""]
+    summary_lines.append("| 言語 | 状態 | 備考 |")
+    summary_lines.append("|---|---|---|")
+    final_code = 0
+
+    for lang in LANG_SPECS.keys():
+        try:
+            code = _run_single(lang, samples_dir, output_dir, quiet=quiet)
+            if code == 0:
+                summary_lines.append(f"| {lang} | 成功 | (詳細レポート: {lang}-{timestamp}*.md) |")
+            else:
+                summary_lines.append(f"| {lang} | エラー (exit {code}) | - |")
+                final_code = max(final_code, code)
+        except FileNotFoundError as e:
+            summary_lines.append(f"| {lang} | 未整備 | {e} |")
+            if not quiet:
+                print(f"[{lang}] 未整備: {e}", file=sys.stderr)
+            final_code = max(final_code, 1)
+        except Exception as e:
+            summary_lines.append(f"| {lang} | 例外 | {type(e).__name__}: {e} |")
+            if not quiet:
+                print(f"[{lang}] 例外: {type(e).__name__}: {e}", file=sys.stderr)
+            final_code = max(final_code, 2)
+
+    summary_path = output_dir / f"_summary-{timestamp}.md"
+    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    if not quiet:
+        print(f"\nサマリレポート: {summary_path}")
+
+    return final_code
 
 
 if __name__ == "__main__":
