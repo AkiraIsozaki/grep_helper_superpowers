@@ -1,0 +1,11 @@
+Helper.vb:2:    Public Const VB_STATUS_CODE As String = "777"
+Helper.vb:5:        If input = "777" Then
+Helper.vb:12:' "777" のコメント — その他に分類されることを期待
+Sample.cs:3:    [Obsolete("777")]
+Sample.cs:6:        public const string STATUS_CODE = "777";
+Sample.cs:7:        public static readonly string DEFAULT_CODE = "777";
+Sample.cs:11:            var localCode = "777";
+Sample.cs:12:            if (input == "777")
+Sample.cs:24:            LogValue("777");
+Sample.cs:30:            return "777";
+Sample.cs:33:        // "777" のコメント — その他に分類されることを期待

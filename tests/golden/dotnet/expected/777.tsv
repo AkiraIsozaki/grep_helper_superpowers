@@ -1,0 +1,14 @@
+﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
+777	直接	定数定義(Const/readonly)	Helper.vb	2	"Public Const VB_STATUS_CODE As String = ""777"""			
+777	直接	条件判定	Helper.vb	5	"If input = ""777"" Then"			
+777	直接	その他	Helper.vb	12	"' ""777"" のコメント — その他に分類されることを期待"			
+777	直接	属性(Attribute)	Sample.cs	3	"[Obsolete(""777"")]"			
+777	直接	定数定義(Const/readonly)	Sample.cs	6	"public const string STATUS_CODE = ""777"";"			
+777	直接	定数定義(Const/readonly)	Sample.cs	7	"public static readonly string DEFAULT_CODE = ""777"";"			
+777	直接	変数代入	Sample.cs	11	"var localCode = ""777"";"			
+777	直接	条件判定	Sample.cs	12	"if (input == ""777"")"			
+777	間接	条件判定	Sample.cs	16	if (input == STATUS_CODE)	STATUS_CODE	Sample.cs	6
+777	間接	条件判定	Sample.cs	20	if (input == DEFAULT_CODE)	DEFAULT_CODE	Sample.cs	7
+777	直接	メソッド引数	Sample.cs	24	"LogValue(""777"");"			
+777	直接	return文	Sample.cs	30	"return ""777"";"			
+777	直接	その他	Sample.cs	33	"// ""777"" のコメント — その他に分類されることを期待"			
