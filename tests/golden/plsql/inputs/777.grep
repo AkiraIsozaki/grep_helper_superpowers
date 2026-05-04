@@ -1,0 +1,8 @@
+sample.pkb:2:    c_default_code CONSTANT VARCHAR2(8) := '777';
+sample.pkb:3:    CURSOR cur_codes IS SELECT code FROM master WHERE code = '777';
+sample.pkb:6:        IF p_input = '777' THEN
+sample.pkb:7:            INSERT INTO log_table (code) VALUES ('777');
+sample.pkb:8:            SELECT code FROM master WHERE id = '777';
+sample.pkb:12:            v_msg := '777 not found';
+sample.pkb:13:            RAISE error_777;
+sample.pkb:16:    -- '777' のコメント — その他に分類されることを期待
