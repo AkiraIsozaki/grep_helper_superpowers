@@ -418,10 +418,10 @@ sequenceDiagram
 | Oracle SQL | `analyze_sql.py` | `grep_helper.languages.sql` | ✅ 正規表現 | ✅ 定数・変数定義（同一ファイル内） | — | — |
 | Shell | `analyze_sh.py` | `grep_helper.languages.sh` | ✅ 正規表現 | ✅ 変数代入・環境変数エクスポート（同一ファイル内） | — | — |
 | Kotlin | `analyze_kotlin.py` | `grep_helper.languages.kotlin` | ✅ 正規表現 | ✅ const val 定数 | — | — |
-| PL/SQL | `analyze_plsql.py` | `grep_helper.languages.plsql` | ✅ 正規表現 | — | — | — |
-| TypeScript / JS | `analyze_ts.py` | `grep_helper.languages.ts` | ✅ 正規表現 | — | — | — |
-| Python | `analyze_python.py` | `grep_helper.languages.python` | ✅ 正規表現 | — | — | — |
-| Perl | `analyze_perl.py` | `grep_helper.languages.perl` | ✅ 正規表現 | — | — | — |
+| PL/SQL | `analyze_plsql.py` | `grep_helper.languages.plsql` | ✅ 正規表現 | ✅ CONSTANT 定数（case-insensitive） | — | — |
+| TypeScript / JS | `analyze_ts.py` | `grep_helper.languages.ts` | ✅ 正規表現 | ✅ const 定数 | — | — |
+| Python | `analyze_python.py` | `grep_helper.languages.python` | ✅ 正規表現 | ✅ ALL_CAPS モジュール定数 | — | — |
+| Perl | `analyze_perl.py` | `grep_helper.languages.perl` | ✅ 正規表現 | ✅ use constant / our \$ | — | — |
 | C# / VB.NET | `analyze_dotnet.py` | `grep_helper.languages.dotnet` | ✅ 正規表現 | ✅ const / static readonly | — | — |
 | Groovy | `analyze_groovy.py` | `grep_helper.languages.groovy` | ✅ 正規表現 | ✅ static final + フィールド | ✅ 正規表現 | ✅ 正規表現 |
 
@@ -482,6 +482,9 @@ grep結果に複数言語のファイルが混在する場合に使用する。1
 - Groovy: プロジェクト全体の static final 定数 + フィールド + getter/setter経由
 - Shell: 同一ファイル内の変数代入追跡（$VAR / ${VAR}）
 - SQL: 同一ファイル内の定数・変数定義追跡
-- TypeScript/JavaScript/Python/Perl/PL/SQL: 直接参照のみ
+- PL/SQL: プロジェクト全体の CONSTANT 定数追跡（case-insensitive）
+- TypeScript/JavaScript: プロジェクト全体の const 定数追跡
+- Python: プロジェクト全体の ALL_CAPS モジュール定数追跡（小文字シングルトンは除外）
+- Perl: プロジェクト全体の use constant / our \$ 追跡（my レキシカルは除外）
 
 シバン判定対応インタープリタ: perl / sh / bash / csh / tcsh / ksh / ksh93

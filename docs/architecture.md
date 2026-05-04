@@ -39,7 +39,7 @@
 
 | シンボル | 型 | 説明 |
 |---------|-----|------|
-| `batch_track_indirect` | `(direct_records, src_dir, encoding, *, workers=1) -> list[GrepRecord]` | 直接参照レコードを受け取り、間接参照レコードを返す。Java / C / Pro*C / Kotlin / C#・VB.NET / Groovy / Shell / SQL が実装する。PL/SQL / TypeScript / Python / Perl は省略 |
+| `batch_track_indirect` | `(direct_records, src_dir, encoding, *, workers=1) -> list[GrepRecord]` | 直接参照レコードを受け取り、間接参照レコードを返す。Java / C / Pro*C / Kotlin / C#・VB.NET / Groovy / Shell / SQL / PL/SQL / TypeScript / Python / Perl が実装する |
 | `SHEBANGS` | `tuple[str, ...]` | 拡張子なしファイルのシバン行によるハンドラ判定に使用。`sh` と `perl` のみ実装する |
 
 ---
@@ -217,9 +217,9 @@ proc.py（公開 API）
 ├─────────────────────────┤
 │   分析レイヤー           │ ← 言語ハンドラ（languages/*.py）
 │   (言語別分類・追跡)    │   Java/Groovy: 4段階（直接→間接→getter経由→setter経由）
-│                         │   C/Pro*C/Kotlin/C#・VB.NET: 2段階（直接 + 定数・変数経由）
+│                         │   C/Pro*C/Kotlin/C#・VB.NET/PL/SQL/TypeScript・JS/Python/Perl:
+│                         │     2段階（直接 + 定数経由のクロスファイル間接参照）
 │                         │   Shell/SQL: 2段階（直接 + 同一ファイル内変数代入）
-│                         │   PL/SQL/TypeScript・JS/Python/Perl: 1段階（直接のみ）
 ├─────────────────────────┤
 │   出力レイヤー           │ ← write_tsv（tsv_output.py）
 │   (TSV出力・レポート)   │   結果をTSVに書き出しレポート表示

@@ -6,7 +6,7 @@
 **grep_analyzer** - grep結果 自動分類・使用箇所洗い出しツール（Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Perl / C#・VB.NET / Groovy 対応）
 
 ### プロダクトコンセプト
-- **網羅的な使用箇所洗い出し**: grepでヒットした文言の直接参照だけでなく、定数/変数/getter/setter経由の間接参照まで追跡し、1件の見落としもなく全件洗い出す（Java/Groovy: 4段階（直接 + 間接 + getter/setter経由）、C/Pro*C/Kotlin/C#・VB.NET: 直接参照 + 定数・変数経由の間接参照、Shell/SQL: 直接参照 + 同一ファイル内変数代入の間接参照、PL/SQL/TypeScript・JS/Python/Perl: 直接参照のみ）
+- **網羅的な使用箇所洗い出し**: grepでヒットした文言の直接参照だけでなく、定数/変数/getter/setter経由の間接参照まで追跡し、1件の見落としもなく全件洗い出す（Java/Groovy: 4段階（直接 + 間接 + getter/setter経由）、C/Pro*C/Kotlin/C#・VB.NET/PL/SQL/TypeScript・JS/Python/Perl: 直接参照 + 定数経由のクロスファイル間接参照、Shell/SQL: 直接参照 + 同一ファイル内変数代入の間接参照）
 - **使われ方の自動分類**: 言語ごとの使用パターンを自動判定し、人間の目視確認コストを大幅に削減する（Javaは javalang AST解析 + 正規表現フォールバック、その他はすべて正規表現分類）
 - **どこでも即使える配布形式**: Python venv + zip配布により、解凍してすぐ使い始められる。実行環境の構築作業が不要
 
@@ -101,19 +101,19 @@ Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Pe
 
 **受け入れ条件（PL/SQL: `analyze_plsql.py`）**:
 - [ ] 正規表現で以下の7種を分類する: 定数/変数宣言・EXCEPTION処理・条件判定・カーソル定義・INSERT/UPDATE値・WHERE条件・その他
-- [ ] 直接参照のみ（間接追跡なし）
+- [ ] CONSTANT 宣言行から定数名を抽出し、`.pls`/`.pkb`/`.pks`/`.fnc`/`.trg`/`.prc`/`.pck` ファイルを対象にプロジェクト全体を追跡する（間接参照、case-insensitive）
 
 **受け入れ条件（TypeScript/JavaScript: `analyze_ts.py`）**:
 - [ ] 正規表現で以下の7種を分類する: const定数定義・変数代入(let/var)・条件判定・return文・デコレータ・関数引数・その他
-- [ ] 直接参照のみ（間接追跡なし）
+- [ ] `const` 定義行から定数名を抽出し、`.ts`/`.tsx`/`.js`/`.jsx` ファイルを対象にプロジェクト全体を追跡する（間接参照）
 
 **受け入れ条件（Python: `analyze_python.py`）**:
 - [ ] 正規表現で以下の6種を分類する: 変数代入・条件判定・return文・デコレータ・関数引数・その他
-- [ ] 直接参照のみ（間接追跡なし）
+- [ ] ALL_CAPS 命名のモジュール定数定義行から定数名を抽出し、`.py` ファイルを対象にプロジェクト全体を追跡する（間接参照、小文字シングルトンは除外）
 
 **受け入れ条件（Perl: `analyze_perl.py`）**:
 - [ ] 正規表現で以下の6種を分類する: use constant定義・変数代入・条件判定・print/say出力・関数引数・その他
-- [ ] 直接参照のみ（間接追跡なし）
+- [ ] `use constant` および `our $` 定義行から名前を抽出し、`.pl`/`.pm` ファイルを対象にプロジェクト全体を追跡する（間接参照、`my` レキシカル変数は除外）
 
 **受け入れ条件（C#/VB.NET: `analyze_dotnet.py`）**:
 - [ ] 正規表現で以下の7種を分類する: 定数定義(Const/readonly)・変数代入・条件判定・return文・属性(Attribute)・メソッド引数・その他
@@ -224,10 +224,10 @@ Java / C / Pro*C / SQL / Shell / Kotlin / PL/SQL / TypeScript・JS / Python / Pe
 | Oracle SQL | `python analyze_sql.py` | SQL grep結果分類 |
 | Shell | `python analyze_sh.py` | Bash/CSH/TCSH grep結果分類 |
 | Kotlin | `python analyze_kotlin.py` | Kotlin grep結果分類（const val間接追跡あり） |
-| PL/SQL | `python analyze_plsql.py` | PL/SQL grep結果分類（直接参照のみ） |
-| TypeScript/JavaScript | `python analyze_ts.py` | TypeScript/JS grep結果分類（直接参照のみ） |
-| Python | `python analyze_python.py` | Python grep結果分類（直接参照のみ） |
-| Perl | `python analyze_perl.py` | Perl grep結果分類（直接参照のみ） |
+| PL/SQL | `python analyze_plsql.py` | PL/SQL grep結果分類（CONSTANT間接追跡あり、case-insensitive） |
+| TypeScript/JavaScript | `python analyze_ts.py` | TypeScript/JS grep結果分類（const間接追跡あり） |
+| Python | `python analyze_python.py` | Python grep結果分類（ALL_CAPSモジュール定数間接追跡あり） |
+| Perl | `python analyze_perl.py` | Perl grep結果分類（use constant / our $間接追跡あり） |
 | C#/VB.NET | `python analyze_dotnet.py` | C#/VB.NET grep結果分類（const/static readonly間接追跡あり） |
 | Groovy | `python analyze_groovy.py` | Groovy grep結果分類（static final間接追跡・setter追跡あり） |
 | 全言語（混在） | `python analyze_all.py` | 拡張子/シバンで言語を自動判定して各分類器に振り分け（全間接追跡対応） |

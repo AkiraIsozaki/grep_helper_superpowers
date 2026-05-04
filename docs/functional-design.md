@@ -42,7 +42,7 @@ graph TB
     CLI["CLIレイヤー / analyze_c.py など（shim → grep_helper.cli.run）"]
     Common["grep_helper.grep_input.parse_grep_line()"]
     Classifier["言語別分類関数\n(grep_helper.languages.<lang>.classify_usage)"]
-    Tracker["間接追跡（言語別）\nC/Pro*C: batch_track_indirect（#define追跡）\nShell: batch_track_indirect（変数追跡）\nSQL: batch_track_indirect（変数追跡）\nKotlin: batch_track_indirect（const val追跡）\n.NET: batch_track_indirect（const/readonly追跡）\nGroovy: batch_track_indirect（static final/getter/setter追跡）\n（PL/SQL / TS / Python / Perl は直接参照のみ）"]
+    Tracker["間接追跡（言語別）\nC/Pro*C: batch_track_indirect（#define追跡）\nShell: batch_track_indirect（変数追跡）\nSQL: batch_track_indirect（変数追跡）\nKotlin: batch_track_indirect（const val追跡）\n.NET: batch_track_indirect（const/readonly追跡）\nGroovy: batch_track_indirect（static final/getter/setter追跡）\nPL/SQL: batch_track_indirect（CONSTANT追跡）\nTS/JS: batch_track_indirect（const追跡）\nPython: batch_track_indirect（ALL_CAPS定数追跡）\nPerl: batch_track_indirect（use constant / our $追跡）"]
     Output["grep_helper.tsv_output.write_tsv()"]
     GrepFiles[("input/*.grep")]
     SrcFiles[("各言語のソースコード")]
