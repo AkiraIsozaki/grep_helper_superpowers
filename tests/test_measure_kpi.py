@@ -4,6 +4,7 @@
 日本語メソッド名・TDD）に従う。
 """
 import csv
+import importlib
 import sys
 import tempfile
 import unittest
@@ -374,6 +375,52 @@ class TestRunAllSemantics(unittest.TestCase):
             self.assertIn("java", summary_text)
             # 他言語も「未整備」として記録されている
             self.assertIn("c", summary_text)
+
+
+class TestRunCliEndToEndOtherLanguages(unittest.TestCase):
+    """E2E (他11言語): 各言語の run() がクラッシュせず coverage 1.0 を返す。"""
+
+    OTHER_LANGS = ["c", "proc", "sql", "sh", "kotlin", "plsql",
+                   "ts", "python", "perl", "dotnet", "groovy"]
+
+    def test_各言語のrunが例外なく完了する(self):
+        for lang in self.OTHER_LANGS:
+            with self.subTest(lang=lang):
+                with tempfile.TemporaryDirectory() as tmp:
+                    exit_code = measure_kpi.run([
+                        "--lang", lang,
+                        "--samples-dir", "tests/golden",
+                        "--output-dir", tmp,
+                        "--quiet",
+                    ])
+                    self.assertEqual(exit_code, 0, f"{lang} で exit_code != 0")
+                    reports = list(Path(tmp).glob(f"{lang}-*.md"))
+                    self.assertEqual(len(reports), 1)
+
+    def test_各言語の網羅率は1_0(self):
+        for lang in self.OTHER_LANGS:
+            with self.subTest(lang=lang):
+                spec = measure_kpi.LANG_SPECS[lang]
+                handler = importlib.import_module(spec["module"])
+                src_dir = Path(f"tests/golden/{lang}/src")
+                inputs_dir = Path(f"tests/golden/{lang}/inputs")
+                expected_dir = Path(f"tests/golden/{lang}/expected")
+                with tempfile.TemporaryDirectory() as tmp:
+                    from grep_helper.pipeline import run_full_pipeline
+                    tmp_path = Path(tmp)
+                    run_full_pipeline(
+                        source_dir=src_dir, input_dir=inputs_dir,
+                        output_dir=tmp_path, handler=handler, workers=1,
+                    )
+                    for grep_path in inputs_dir.glob("*.grep"):
+                        stem = grep_path.stem
+                        expected = measure_kpi.load_expected_tsv(expected_dir / f"{stem}.tsv")
+                        actual = measure_kpi.load_actual_tsv(tmp_path / f"{stem}.tsv")
+                        result = measure_kpi.compare(expected, actual)
+                        self.assertEqual(
+                            result.coverage_rate, 1.0,
+                            f"{lang}/{stem}: missing_rows={result.missing_rows}",
+                        )
 
 
 if __name__ == "__main__":

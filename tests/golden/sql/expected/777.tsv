@@ -3,22 +3,17 @@
 777	間接	定数・変数定義	sample.sql	2	v_status_code VARCHAR2(8) := '777';	v_status_code	sample.sql	12
 777	直接	定数・変数定義	sample.sql	3	c_default_code CONSTANT VARCHAR2(8) := '777';			
 777	間接	SELECT/INTO	sample.sql	5	SELECT code INTO v_status_code FROM master_table;	v_status_code	sample.sql	2
-777	間接	SELECT/INTO	sample.sql	5	SELECT code INTO v_status_code FROM master_table;	v_status_code	sample.sql	12
 777	直接	その他	sample.sql	6	IF v_status_code = '777' THEN			
 777	間接	その他	sample.sql	6	IF v_status_code = '777' THEN	v_status_code	sample.sql	2
-777	間接	その他	sample.sql	6	IF v_status_code = '777' THEN	v_status_code	sample.sql	12
 777	直接	INSERT/UPDATE値	sample.sql	7	INSERT INTO log_table (code, label) VALUES ('777', 'OK');			
 777	直接	INSERT/UPDATE値	sample.sql	8	UPDATE master SET code = '777';			
 777	直接	SELECT/INTO	sample.sql	9	SELECT '777' INTO v_status_code FROM dual;			
 777	間接	SELECT/INTO	sample.sql	9	SELECT '777' INTO v_status_code FROM dual;	v_status_code	sample.sql	2
-777	間接	SELECT/INTO	sample.sql	9	SELECT '777' INTO v_status_code FROM dual;	v_status_code	sample.sql	12
 777	直接	比較・DECODE	sample.sql	11	IF DECODE(v_status_code, '777', 'OK', 'NG') = 'OK' THEN			
 777	間接	比較・DECODE	sample.sql	11	IF DECODE(v_status_code, '777', 'OK', 'NG') = 'OK' THEN	v_status_code	sample.sql	2
-777	間接	比較・DECODE	sample.sql	11	IF DECODE(v_status_code, '777', 'OK', 'NG') = 'OK' THEN	v_status_code	sample.sql	12
 777	直接	定数・変数定義	sample.sql	12	v_status_code := '777';			
 777	間接	定数・変数定義	sample.sql	12	v_status_code := '777';	v_status_code	sample.sql	2
 777	直接	WHERE条件	sample.sql	14	SELECT count(*) INTO v_status_code FROM tab WHERE id = '777';			
 777	間接	WHERE条件	sample.sql	14	SELECT count(*) INTO v_status_code FROM tab WHERE id = '777';	v_status_code	sample.sql	2
-777	間接	WHERE条件	sample.sql	14	SELECT count(*) INTO v_status_code FROM tab WHERE id = '777';	v_status_code	sample.sql	12
 777	直接	例外・エラー処理	sample.sql	17	RAISE_APPLICATION_ERROR(-20001, '777 が見つかりません');			
 777	直接	その他	sample.sql	21	-- '777' のコメント — その他に分類されることを期待			
