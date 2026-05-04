@@ -92,6 +92,8 @@ def _scan_files_for_plsql_constant(
 
     case-insensitive 検索のため、build_batch_scanner ではなく re で個別に検索する。
     （build_batch_scanner は文字列リテラル一致前提で、case-insensitive 非対応のため）
+    finditer を使い、1行に同名定数が複数出現する場合は出現回数分のレコードを返す
+    （python/ts/perl/kotlin の scanner.findall と同じ multi-emit 挙動）。
     """
     name_patterns = [(n, re.compile(r'\b' + re.escape(n) + r'\b', re.IGNORECASE)) for n in names]
     results: list[GrepRecord] = []
@@ -105,7 +107,7 @@ def _scan_files_for_plsql_constant(
         for i, line in enumerate(lines, 1):
             code = line.strip()
             for name, pattern in name_patterns:
-                if pattern.search(line):
+                for _ in pattern.finditer(line):
                     for origin, def_resolved, def_lineno in tasks_ext[name]:
                         if def_resolved is not None and src_resolved == def_resolved and i == def_lineno:
                             continue

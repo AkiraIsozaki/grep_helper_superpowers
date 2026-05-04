@@ -188,6 +188,29 @@ class TestBatchTrackIndirectPlsql(unittest.TestCase):
             self.assertTrue(any("other.pkb" in fp for fp in filepaths))
             self.assertTrue(all(r.ref_type == RefType.INDIRECT.value for r in results))
 
+    def test_同一行に複数の参照がある場合は出現回数分のレコードを返す(self):
+        """multi-emit 一貫性の観察: 一行に c_x が2回現れる場合、間接レコードも
+        2件返す（python/ts/perl/kotlin と同じ挙動）。1行1emit にすると
+        言語間で出力件数の意味が揃わなくなる。"""
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d)
+            (src / "sample.pkb").write_text('  c_x CONSTANT NUMBER := 777;\n')
+            (src / "other.pkb").write_text('  IF c_x = 1 OR c_x = 2 THEN NULL; END IF;\n')
+            records = [
+                GrepRecord(
+                    keyword="777",
+                    ref_type=RefType.DIRECT.value,
+                    usage_type="定数/変数宣言",
+                    filepath=str(src / "sample.pkb"),
+                    lineno="1",
+                    code='  c_x CONSTANT NUMBER := 777;',
+                ),
+            ]
+            _file_lines_cache_clear()
+            results = batch_track_indirect_plsql(records, src, None, workers=1)
+            other_pkb_results = [r for r in results if "other.pkb" in r.filepath]
+            self.assertEqual(len(other_pkb_results), 2)
+
     def test_workers_2と1で同じレコード集合を返す(self):
         with tempfile.TemporaryDirectory() as d:
             src = Path(d)
