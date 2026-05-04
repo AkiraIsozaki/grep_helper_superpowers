@@ -5,7 +5,14 @@ int check(const char *input) {
     if (strcmp(input, "777") == 0) {
         return 1;
     }
-    return 0;
+    if (strcmp(input, CODE) == 0) {
+        return 0;
+    }
+    return -1;
+}
+
+const char *get_code(void) {
+    return "777";
 }
 
 void process(const char *value) {

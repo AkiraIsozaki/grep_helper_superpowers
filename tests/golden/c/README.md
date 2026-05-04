@@ -9,31 +9,32 @@
 | 使用タイプ | サンプル | 行 | 件数 |
 |---|---|---|---|
 | #define定数定義 | header.h | 3 | 1 |
-| 条件判定 | sample.c | 5 | 1 |
-| 変数代入 | sample.c | 12 | 1 |
-| 関数引数 | sample.c | 13 | 1 |
-| その他 | sample.c | 16 | 1 |
-| 合計 | 2 ファイル | | 5 |
+| 条件判定 | sample.c | 5, 8 | 2 |
+| return文 | sample.c | 15 | 1 |
+| 変数代入 | sample.c | 19 | 1 |
+| 関数引数 | sample.c | 20 | 1 |
+| その他 | sample.c | 23 | 1 |
+| 合計 | 2 ファイル | | 7 |
 
-注: `return 1;` / `return 0;` の行は文字列リテラル "777" を含まないため grep にヒットしない。
-return文 タイプは本スモークセットでは出現しない（`return "777"` のような形を意図しないシンプルな C コードのため）。
+注: `const char *get_code(void) { return "777"; }` を追加し、return文 タイプのカバレッジを実現。
+また `if (strcmp(input, CODE) == 0)` を追加し、#define 経由の間接参照シナリオを実現。
 
 ## 参照種別シナリオ
 | シナリオ | 件数 | 配置 |
 |---|---|---|
-| 直接 | 4 | header.h:3, sample.c:5/12/16 |
-| 間接（変数経由） | 1 | sample.c:13 で `local` を関数引数として渡す（sample.c:12 の代入を起点） |
-| 間接（#define経由） | 0 | サンプル内で `CODE` の参照箇所はないが、`CODE.grep` は `#define CODE "777"` 自体（直接の定数定義）を捕捉 |
+| 直接 | 5 | header.h:3, sample.c:5/15/19/23 |
+| 間接（変数経由） | 1 | sample.c:20 で `local` を関数引数として渡す（sample.c:19 の代入を起点） |
+| 間接（#define経由） | 1 | sample.c:8 で `CODE` マクロを if 条件に使用（header.h:3 の定義を起点） |
 
 ## grep ファイル一覧
 | ファイル | 文言 | 役割 |
 |---|---|---|
-| 777.grep | 777 | 使用タイプ網羅。全5件 |
-| CODE.grep | CODE | `#define CODE "777"` の定数名検索ケース。 #define 定数定義そのものを直接ヒット |
+| 777.grep | 777 | 使用タイプ網羅。全7件（直接5 + 間接2） |
+| CODE.grep | CODE | `#define CODE "777"` の定数名検索ケース。全3件（直接2 + 間接1） |
 
 ## ファイル一覧（src/ 配下、2 ファイル）
 - header.h — `#define CODE "777"` 1 件
-- sample.c — 条件判定・変数代入・関数引数（間接）・その他 各 1 件
+- sample.c — #define定数定義・条件判定(直接+#define経由)・return文・変数代入・関数引数(間接)・その他 各 1 件
 
 ## 期待TSV 手書きルール
 共通 spec を参照: `docs/superpowers/specs/2026-05-03-kpi-golden-set-design.md` §期待TSV の手書きルール

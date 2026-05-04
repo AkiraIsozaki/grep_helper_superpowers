@@ -1,4 +1,5 @@
-header.h:3:#define CODE "777"
 sample.c:5:    if (strcmp(input, "777") == 0) {
-sample.c:12:    char *local = "777";
-sample.c:16:/* "777" のコメント — その他に分類されることを期待 */
+sample.c:15:    return "777";
+sample.c:19:    char *local = "777";
+sample.c:23:/* "777" のコメント — その他に分類されることを期待 */
+header.h:3:#define CODE "777"

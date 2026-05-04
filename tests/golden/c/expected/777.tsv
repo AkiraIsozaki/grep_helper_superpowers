@@ -1,6 +1,8 @@
 ﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
 777	直接	#define定数定義	header.h	3	"#define CODE ""777"""			
 777	直接	条件判定	sample.c	5	"if (strcmp(input, ""777"") == 0) {"			
-777	直接	変数代入	sample.c	12	"char *local = ""777"";"			
-777	間接	関数引数	sample.c	13	log_value(local);	local	sample.c	12
-777	直接	その他	sample.c	16	"/* ""777"" のコメント — その他に分類されることを期待 */"			
+777	間接	条件判定	sample.c	8	if (strcmp(input, CODE) == 0) {	CODE	header.h	3
+777	直接	return文	sample.c	15	"return ""777"";"			
+777	直接	変数代入	sample.c	19	"char *local = ""777"";"			
+777	間接	関数引数	sample.c	20	log_value(local);	local	sample.c	19
+777	直接	その他	sample.c	23	"/* ""777"" のコメント — その他に分類されることを期待 */"			

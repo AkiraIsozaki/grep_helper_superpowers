@@ -1,2 +1,4 @@
 ﻿文言	参照種別	使用タイプ	ファイルパス	行番号	コード行	参照元変数名	参照元ファイル	参照元行番号
 CODE	直接	#define定数定義	header.h	3	"#define CODE ""777"""			
+CODE	直接	条件判定	sample.c	8	if (strcmp(input, CODE) == 0) {			
+CODE	間接	条件判定	sample.c	8	if (strcmp(input, CODE) == 0) {	CODE	header.h	3
