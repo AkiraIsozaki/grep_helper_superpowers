@@ -101,6 +101,8 @@ python analyze_kotlin.py --source-dir /path/to/kotlin/src
 
 ### 間接追跡
 
+> **注記 (2026-05-04)**: 本節は B-1 (`docs/superpowers/specs/2026-05-04-b1-indirect-tracking-design.md`) で更新済み。現在は `CONSTANT` キーワード付き宣言を起点にプロジェクト全体をクロスファイル追跡する（case-insensitive）。以下は B-1 以前のスナップショットとして残す。
+
 なし（直接参照のみ）。PL/SQLは変数スコープがブロック内に限定されるため、間接追跡の実用的価値が低い。
 
 ### 文字コード
