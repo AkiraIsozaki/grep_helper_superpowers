@@ -61,5 +61,55 @@ class TestReadBasedFind(unittest.TestCase):
             self.assertTrue(_read_based_find(p, [b"Y"], chunk_size=8))
 
 
+class TestGrepFilterFilesUseMmap(unittest.TestCase):
+    """use_mmap=True/False は同一の結果ファイルリストを返す。"""
+
+    def setUp(self):
+        from grep_helper.source_files import _source_files_cache_clear
+        _source_files_cache_clear()
+
+    def _make_src(self, tmp: Path) -> Path:
+        from grep_helper.source_files import _source_files_cache_clear
+        _source_files_cache_clear()
+        src = tmp / "src"
+        src.mkdir()
+        (src / "a.java").write_text("class A { String NAME = \"hit\"; }\n")
+        (src / "b.java").write_text("class B { /* nothing */ }\n")
+        (src / "c.java").write_text("public static final String FOO = \"hit\";\n")
+        return src
+
+    def test_use_mmap_TrueとFalseで結果ファイルリストが一致する(self):
+        from grep_helper.source_files import grep_filter_files
+        with tempfile.TemporaryDirectory() as tmp:
+            src = self._make_src(Path(tmp))
+            with_mmap = grep_filter_files(["NAME", "FOO"], src, [".java"], use_mmap=True)
+            from grep_helper.source_files import _source_files_cache_clear
+            _source_files_cache_clear()
+            without_mmap = grep_filter_files(["NAME", "FOO"], src, [".java"], use_mmap=False)
+            self.assertEqual(
+                [str(p) for p in with_mmap],
+                [str(p) for p in without_mmap],
+            )
+
+    def test_use_mmap_Falseでも空ファイルはスキップされる(self):
+        from grep_helper.source_files import grep_filter_files
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            (src / "empty.java").write_bytes(b"")
+            (src / "hit.java").write_text("FOO")
+            result = grep_filter_files(["FOO"], src, [".java"], use_mmap=False)
+            self.assertEqual([p.name for p in result], ["hit.java"])
+
+    def test_空patternsならcandidatesがそのまま返る(self):
+        from grep_helper.source_files import grep_filter_files
+        with tempfile.TemporaryDirectory() as tmp:
+            src = self._make_src(Path(tmp))
+            # 非 ASCII 名前のみだと patterns が空になる経路
+            result = grep_filter_files(["日本語識別子"], src, [".java"], use_mmap=True)
+            # ASCII でないので patterns は空 → candidates 全件
+            self.assertEqual(len(result), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

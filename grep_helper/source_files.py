@@ -67,11 +67,14 @@ def grep_filter_files(
     src_dir: Path,
     extensions: list[str],
     label: str = "",
+    *,
+    use_mmap: bool = True,
 ) -> list[Path]:
     """mmap によるバイト列検索でスキャン対象ファイルを絞り込む。
 
     iter_source_files で取得した (キャッシュ済み) ファイルリストに対し
-    mmap.find で names の含有を判定する。
+    mmap.find（または ``use_mmap=False`` 時 / mmap 失敗時は ``_read_based_find``）
+    で names の含有を判定する。
     エラー時は安全側（スキャン対象に含める）でフォールバック。
     """
     candidates = iter_source_files(src_dir, extensions)
@@ -84,11 +87,18 @@ def grep_filter_files(
         try:
             if f.stat().st_size == 0:
                 continue
-            with open(f, "rb") as fh, \
-                 mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                if any(mm.find(p) != -1 for p in patterns):
-                    result.append(f)
-        except (OSError, ValueError):
+            if use_mmap:
+                try:
+                    with open(f, "rb") as fh, \
+                         mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                        hit = any(mm.find(p) != -1 for p in patterns)
+                except (OSError, ValueError):
+                    hit = _read_based_find(f, patterns)
+            else:
+                hit = _read_based_find(f, patterns)
+            if hit:
+                result.append(f)
+        except OSError:
             result.append(f)
 
     if label:
