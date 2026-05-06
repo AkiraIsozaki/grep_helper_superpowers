@@ -68,15 +68,20 @@ def run_full_pipeline(
     *,
     encoding: str | None = None,
     workers: int = 1,
+    use_mmap: bool = True,
     stats: ProcessStats | None = None,
 ) -> list[str]:
     """input_dir/*.grep を処理し、output_dir/<stem>.tsv を書き出す（in-process 完全版）。
 
-    grep_helper.cli.run() の本体（argparse 抜き）と等価。
-    KPI 計測スクリプト・将来の cli.run() リファクタの両方から再利用される。
+    3 フェーズ:
+      1. 全 grep ファイルの直接分類を先に終わらせる
+      2. ハンドラの間接追跡を 1 回だけ呼ぶ
+      3. 戻り値を keyword で振り分けて TSV 出力
 
-    Returns: 処理した grep ファイル名のリスト。
+    Returns: 処理した grep ファイル名のリスト（出力 TSV を実際に書いたもののみ）。
     """
+    import sys as _sys  # noqa: PLC0415
+
     from grep_helper.tsv_output import write_tsv  # noqa: PLC0415
 
     if stats is None:
@@ -85,23 +90,48 @@ def run_full_pipeline(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     grep_files = sorted(input_dir.glob("*.grep"))
+    direct_by_keyword: dict[str, list[GrepRecord]] = {}
     processed_files: list[str] = []
 
+    # フェーズ 1: 直接分類（個別 grep の例外は他に巻き込まない）
     for grep_path in grep_files:
         keyword = grep_path.stem
-        direct_records = process_grep_file(
-            grep_path, source_dir, handler,
-            keyword=keyword, encoding=encoding, stats=stats,
-        )
-        indirect_fn = getattr(handler, "batch_track_indirect", None)
-        indirect_records: list = []
-        if indirect_fn is not None:
-            indirect_records = indirect_fn(
-                direct_records, source_dir, encoding, workers=workers,
+        try:
+            direct = process_grep_file(
+                grep_path, source_dir, handler,
+                keyword=keyword, encoding=encoding, stats=stats,
             )
+        except Exception as exc:
+            print(
+                f"  警告: {grep_path.name} の直接分類で例外 ({exc!r}) - スキップして継続",
+                file=_sys.stderr, flush=True,
+            )
+            continue
+        direct_by_keyword[keyword] = direct
+        processed_files.append(grep_path.name)
+
+    if not direct_by_keyword:
+        return processed_files
+
+    # フェーズ 2: 間接追跡を 1 回だけ
+    indirect_fn = getattr(handler, "batch_track_indirect", None)
+    indirect_by_keyword: dict[str, list[GrepRecord]] = {}
+    if indirect_fn is not None:
+        all_direct: list[GrepRecord] = []
+        for records in direct_by_keyword.values():
+            all_direct.extend(records)
+        indirect_all = indirect_fn(
+            all_direct, source_dir, encoding,
+            workers=workers, use_mmap=use_mmap,
+        )
+        for rec in indirect_all:
+            indirect_by_keyword.setdefault(rec.keyword, []).append(rec)
+
+    # フェーズ 3: keyword で振り分けて TSV 出力
+    for keyword, direct_records in direct_by_keyword.items():
+        indirect_records = indirect_by_keyword.get(keyword, [])
         all_records = list(direct_records) + list(indirect_records)
         output_path = output_dir / f"{keyword}.tsv"
         write_tsv(all_records, output_path)
-        processed_files.append(grep_path.name)
 
     return processed_files
