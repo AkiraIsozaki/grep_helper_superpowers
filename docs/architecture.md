@@ -6,21 +6,22 @@
 
 | 技術 | バージョン |
 |------|-----------|
-| Python | 3.12+ |
-| venv | Python標準（3.12+） |
+| Python（開発） | 3.12+ |
+| Python（実行 / Solaris 10） | 3.7+ |
+| venv | Python標準（3.12+ / Solaris 10 では 3.7+） |
 
 ### フレームワーク・ライブラリ
 
 | 技術 | バージョン | 用途 | 選定理由 |
 |------|-----------|------|----------|
 | javalang | >=0.13.0,<1.0.0 | Java AST解析（`grep_helper.languages.java` のみ） | Java 7以上のソースをPythonからAST解析できる唯一の実績あるライブラリ |
-| chardet | >=5.0.0,<6.0.0 | 文字コード自動検出（`grep_helper.encoding.detect_encoding`） | 全ハンドラ共通で利用。`requirements.txt` の必須依存（コード側は try/except でフォールバックあり：未インストール時は cp932） |
+| chardet | >=5.0.0,<6.0.0 | 文字コード自動検出（`grep_helper.encoding.detect_encoding`） | 全ハンドラ共通で利用。`requirements.txt` の必須依存（コード側は try/except でフォールバックあり：未インストール時は cp932）。`detect_encoding` の結果はパス単位でプロセス内キャッシュされ、同一パスへの chardet 呼び出しは 1 回のみ |
 | pyahocorasick | >=2.0.0,<3.0.0 | Aho-Corasick 多パターンスキャン（`grep_helper.scanner.build_batch_scanner`） | パターン数 ≥ 100 の場合に自動使用。`requirements.txt` の必須依存（コード側はフォールバックあり：未インストール時は同梱の `_aho_corasick.py` 純Python実装に切替） |
 | re | 標準ライブラリ | grep行パース・全言語の正規表現分類 | 外部依存不要 |
 | csv | 標準ライブラリ | UTF-8 BOM付きTSV出力（`grep_helper.tsv_output`） | `encoding='utf-8-sig'` でBOM付き出力をネイティブサポート |
 | heapq | 標準ライブラリ | 大規模TSVの外部マージソート（`grep_helper.tsv_output`） | 100万件超のレコードをメモリ効率よくソートするためにチャンク分割+ヒープマージを使用 |
 | argparse | 標準ライブラリ | CLIオプション解析（`grep_helper.cli`） | --source-dir等のオプション解析に十分 |
-| mmap | 標準ライブラリ | バッチスキャン前のファイル事前フィルタ（`grep_helper.source_files.grep_filter_files`） | OS のカーネルレベルでファイルをメモリマップし、バイト列検索で不要ファイルを除外。Solaris 10 含む全 OS で動作 |
+| mmap | 標準ライブラリ | バッチスキャン前のファイル事前フィルタ（`grep_helper.source_files.grep_filter_files`） | 既定の高速パス。Solaris 10 + NFS 環境ではハングする報告があるため、`use_mmap=False` または OSError 発生時に `_read_based_find`（1MB チャンク + 跨りオーバーラップの read ベース走査）へ自動フォールバックする。CLI `--no-mmap` / 環境変数 `GREP_HELPER_NO_MMAP=1` で全実行を read ベースに固定可能 |
 
 ---
 
@@ -39,7 +40,7 @@
 
 | シンボル | 型 | 説明 |
 |---------|-----|------|
-| `batch_track_indirect` | `(direct_records, src_dir, encoding, *, workers=1) -> list[GrepRecord]` | 直接参照レコードを受け取り、間接参照レコードを返す。Java / C / Pro*C / Kotlin / C#・VB.NET / Groovy / Shell / SQL / PL/SQL / TypeScript / Python / Perl が実装する |
+| `batch_track_indirect` | `(direct_records, src_dir, encoding, *, workers=1, use_mmap=True) -> list[GrepRecord]` | 直接参照レコードを受け取り、間接参照レコードを返す。Java / C / Pro*C / Kotlin / C#・VB.NET / Groovy / Shell / SQL / PL/SQL / TypeScript / Python / Perl が実装する |
 | `SHEBANGS` | `tuple[str, ...]` | 拡張子なしファイルのシバン行によるハンドラ判定に使用。`sh` と `perl` のみ実装する |
 
 ---
@@ -73,7 +74,7 @@
                           ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  I/O 共通インフラ層（grep_helper/ 直下）                          │
-│  encoding.py ─── detect_encoding                                  │
+│  encoding.py ─── detect_encoding（+ プロセス内 dict キャッシュ） │
 │  grep_input.py ── iter_grep_lines / parse_grep_line               │
 │  tsv_output.py ── write_tsv（外部ソート対応）                     │
 │  source_files.py ─ iter_source_files / grep_filter_files /        │
@@ -105,15 +106,12 @@
 
 ```
 cli.run(handler, description)
-    ↓  build_parser() でオプション解析（--source-dir / --input-dir / --output-dir / --encoding / --workers）
-    ↓  input_dir の .grep ファイルを glob
-    loop 各 .grep ファイル:
-        pipeline.process_grep_file(path, keyword, handler, src_dir, stats, encoding)
-            ↓  iter_grep_lines → parse_grep_line → handler.classify_usage → GrepRecord
-            → 直接参照レコード一覧を返す
-        (optional) handler.batch_track_indirect(direct_records, src_dir, encoding, workers=N)
-            → 間接参照レコード一覧を返す
-        tsv_output.write_tsv(all_records, output_path)
+    ↓  build_parser() でオプション解析（--source-dir / --input-dir / --output-dir / --encoding / --workers / --no-mmap）
+    ↓  input_dir の .grep ファイルを glob（`run_full_pipeline` は 3 フェーズ構成）
+    Phase 1: 全 .grep を順に process_grep_file で直接分類（grep ごとの例外はログ出力後スキップ）
+        ↓  iter_grep_lines → parse_grep_line → handler.classify_usage → GrepRecord
+    Phase 2: 集約した直接参照を 1 回だけ handler.batch_track_indirect(... workers=N, use_mmap=...) に渡す
+    Phase 3: 結果を keyword 単位にグルーピングして tsv_output.write_tsv(all_records, output_path)
     ↓  処理サマリを stdout に表示
 ```
 
@@ -123,18 +121,13 @@ cli.run(handler, description)
 
 ```
 dispatcher.main()
-    ↓  build_parser() でオプション解析
-    ↓  input_dir の .grep ファイルを glob
-    loop 各 .grep ファイル:
-        process_grep_lines_all(lines, keyword, src_dir, stats, encoding)
-            ↓  parse_grep_line → detect_handler(filepath, src_dir)
-                → handler.classify_usage(code, ctx=ClassifyContext(filepath=...))
-            → 直接参照レコード一覧（ハンドラ混在）を返す
-        apply_indirect_tracking(direct_records, src_dir, encoding, workers)
-            ↓  ハンドラ別にレコードを分類
-            ↓  各ハンドラの batch_track_indirect を順次呼び出す
-            → 間接参照レコード一覧を返す
-        tsv_output.write_tsv(all_records, output_path)
+    ↓  build_parser() でオプション解析（--no-mmap / GREP_HELPER_NO_MMAP=1 は _resolve_use_mmap で解決）
+    ↓  input_dir の .grep ファイルを glob（同じ 3 フェーズ構成）
+    Phase 1: 全 .grep を順に process_grep_lines_all → detect_handler → classify_usage で直接分類
+        （grep 単位の例外はログ出力後スキップ）
+    Phase 2: 集約した直接参照を apply_indirect_tracking(..., workers, use_mmap) に渡し、
+             ハンドラ別に分類してから各 batch_track_indirect を順次呼び出す
+    Phase 3: 結果を keyword 単位にグルーピングして tsv_output.write_tsv で出力
     ↓  処理サマリを stdout に表示
 ```
 
@@ -160,7 +153,7 @@ java_track.py
 java.py（公開 API）
   ├── EXTENSIONS = ('.java',)
   ├── classify_usage(code, *, ctx=None) → str
-  └── batch_track_indirect(direct_records, src_dir, encoding, *, workers=1) → list[GrepRecord]
+  └── batch_track_indirect(direct_records, src_dir, encoding, *, workers=1, use_mmap=True) → list[GrepRecord]
 ```
 
 ---
@@ -180,7 +173,7 @@ proc.py（公開 API）
   ├── EXTENSIONS = ('.pc', '.c', '.h')
   ├── classify_usage(code, *, ctx=None) → str
   │     ↓ ctx.filepath の拡張子が .c/.h なら c.classify_usage、.pc なら proc 用分類
-  └── batch_track_indirect(direct_records, src_dir, encoding, *, workers=1) → list[GrepRecord]
+  └── batch_track_indirect(direct_records, src_dir, encoding, *, workers=1, use_mmap=True) → list[GrepRecord]
 ```
 
 ---

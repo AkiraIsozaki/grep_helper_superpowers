@@ -24,7 +24,7 @@
 │   ├── cli.py                      # build_parser + run(handler)
 │   ├── pipeline.py                 # process_grep_file（handler.classify_usage を呼ぶ）
 │   ├── dispatcher.py               # 多言語一括フロー（旧 analyze_all.py 相当）
-│   ├── encoding.py                 # detect_encoding
+│   ├── encoding.py                 # detect_encoding（+ プロセス内 dict キャッシュ / `_encoding_cache_clear()`）
 │   ├── grep_input.py               # iter_grep_lines, parse_grep_line
 │   ├── tsv_output.py               # write_tsv（外部ソート対応）
 │   ├── source_files.py             # iter_source_files, grep_filter_files, resolve_file_cached
@@ -78,7 +78,8 @@
 │   ├── check_cache_identity_phase1.py   # _file_lines_cache / _source_files_cache 同一性チェック
 │   ├── check_cache_identity_phase4.py   # _define_map_cache (c) 同一性チェック
 │   ├── check_cache_identity_phase5.py   # _define_map_cache (proc) 同一性チェック
-│   └── check_cache_identity_phase6.py   # _ast_cache / _ast_line_index / _method_starts_cache 同一性チェック
+│   ├── check_cache_identity_phase6.py   # _ast_cache / _ast_line_index / _method_starts_cache 同一性チェック
+│   └── smoke_solaris.md                 # Solaris 10 + Python 3.7 build/install 手順（新規）
 │
 ├── docs/                           # プロジェクトドキュメント
 │   ├── product-requirements.md
@@ -94,6 +95,8 @@
 ├── input/                          # grep 結果ファイルの配置ディレクトリ（.gitkeep のみ）
 ├── output/                         # TSV 出力先ディレクトリ（.gitkeep のみ）
 ├── wheelhouse/                     # オフライン install 用 wheel（javalang / chardet / pyahocorasick / pytest 他）
+│   └── solaris/                    # Python 3.7 + Solaris 10 用 sdist 一式（chardet / javalang / six / pyahocorasick + `README.md`）
+├── pyproject.toml                  # ruff 設定（target-version=py37 / select=E,F,UP,FA / ignore=E501）— Python 3.7 互換ガード（新規）
 ├── requirements.txt                # 本番依存（javalang / chardet / pyahocorasick）
 ├── requirements-dev.txt            # 開発用依存（pytest）
 ├── README.md                       # 利用者向け手順書（日本語）
@@ -117,7 +120,7 @@
 | `cli.py` | `build_parser()` と `run(handler, description)` を提供する。`run()` は `input/*.grep` を glob して `pipeline.process_grep_file` を呼び、`handler.batch_track_indirect`（任意）を呼び、`write_tsv` で出力する汎用 CLI ループ |
 | `pipeline.py` | `process_grep_file(path, keyword, handler, src_dir, stats, *, encoding)` — grep ファイル全行を読み込み `handler.classify_usage` で分類して `GrepRecord` リストを返す第1段階処理 |
 | `dispatcher.py` | `main()` / `process_grep_lines_all()` / `apply_indirect_tracking()` — 多言語一括フロー。`detect_handler` でレコードごとに適切なハンドラを解決し、全ハンドラの `batch_track_indirect` を順次実行する |
-| `encoding.py` | `detect_encoding(path, encoding_override)` — ファイル先頭 4096 バイトを `chardet` で推定し、信頼度 < 0.6 の場合は `cp932` にフォールバックする |
+| `encoding.py` | `detect_encoding(path, encoding_override)` — ファイル先頭 4096 バイトを `chardet` で推定し、信頼度 < 0.6 の場合は `cp932` にフォールバックする。`override is None` のとき結果はモジュール内 `_encoding_cache: dict[str, str]` にキャッシュされ、同一パスの chardet 呼び出しは 1 回のみ。テスト用に `_encoding_cache_clear()` を提供 |
 | `grep_input.py` | `iter_grep_lines(path, encoding)` — grep ファイルを 1 行ずつ yield するストリーミングジェネレータ。`parse_grep_line(line)` — `filepath:lineno:code` 形式をパースして `dict` を返す |
 | `tsv_output.py` | `write_tsv(records, output_path)` — `GrepRecord` リストを UTF-8 BOM 付き TSV に出力。100 万件超は `heapq.merge` ベースの外部ソートに切り替える |
 | `source_files.py` | `iter_source_files(src_dir, extensions)` — rglob 結果をキャッシュして返す。`grep_filter_files(names, src_dir, extensions)` — mmap バイト列検索で事前フィルタ。`resolve_file_cached(filepath, src_dir)` — パス解決結果をキャッシュする |
@@ -133,7 +136,7 @@
 |---------|------|------|
 | `__init__.py` | — | `EXT_TO_HANDLER`（拡張子→ハンドラ辞書）/ `SHEBANG_TO_HANDLER`（シバン→ハンドラ辞書）/ `detect_handler(filepath, src_dir)` を定義・公開する |
 | `_none.py` | — | 言語不明用 no-op ハンドラ。`classify_usage` は常に `"その他"` を返す |
-| `java.py` | Java | `EXTENSIONS = ('.java',)` / `classify_usage(code, *, ctx)` / `batch_track_indirect(direct_records, src_dir, encoding, *, workers)` を公開する。内部は `java_ast` / `java_classify` / `java_track` の 3 サブモジュールに委譲する |
+| `java.py` | Java | `EXTENSIONS = ('.java',)` / `classify_usage(code, *, ctx)` / `batch_track_indirect(direct_records, src_dir, encoding, *, workers=1, use_mmap=True)` を公開する。内部は `java_ast` / `java_classify` / `java_track` の 3 サブモジュールに委譲する |
 | `java_ast.py` | Java | AST キャッシュ 3 辞書（`_ast_cache` / `_ast_line_index` / `_method_starts_cache`）を定義する。`get_ast` / `get_ast_line_info` / `get_method_starts` 等の キャッシュ付き AST アクセサを提供する |
 | `java_classify.py` | Java | `UsageType` Enum / `classify_usage_regex(code)` / スコープ判定などの純粋分類ロジックを提供する |
 | `java_track.py` | Java | `track_field` / `track_local` / `find_getter_names` / `find_setter_names` / `batch_track_combined` 等の追跡ロジックを提供する |
@@ -267,7 +270,7 @@ tests/
 |------------|--------|
 | 本番依存ライブラリ | `requirements.txt` |
 | 開発用依存ライブラリ | `requirements-dev.txt` |
-| Python 仮想環境 | `.venv/`（gitignore 対象） |
+| Python 仮想環境 | `.venv/`（gitignore 対象、開発は Python 3.12+。Solaris 10 では Python 3.7+ を OpenCSW 等で別途用意し、`wheelhouse/solaris/` の sdist で依存をオフライン install する。詳細は `scripts/smoke_solaris.md` 参照） |
 
 ---
 
