@@ -67,6 +67,7 @@ def apply_indirect_tracking(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """登録済み全ハンドラの batch_track_indirect を順次呼び出し、結果を結合する。"""
     results: list[GrepRecord] = []
@@ -74,7 +75,8 @@ def apply_indirect_tracking(
         fn = getattr(handler, "batch_track_indirect", None)
         if fn is None:
             continue
-        results.extend(fn(direct_records, src_dir, encoding, workers=workers))
+        results.extend(fn(direct_records, src_dir, encoding,
+                          workers=workers, use_mmap=use_mmap))
     return results
 
 
@@ -112,28 +114,54 @@ def main() -> int:
         print("エラー: grep結果ファイルがありません", file=sys.stderr)
         return 1
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     stats = ProcessStats()
+    direct_by_keyword: dict[str, list[GrepRecord]] = {}
     processed_files: list[str] = []
-    try:
-        for grep_path in grep_files:
-            keyword = grep_path.stem
+
+    # フェーズ 1: 直接分類（個別 grep 失敗は他に巻き込まない）
+    for grep_path in grep_files:
+        keyword = grep_path.stem
+        try:
             enc = detect_encoding(grep_path, args.encoding)
-            direct_records = process_grep_lines_all(
+            direct = process_grep_lines_all(
                 iter_grep_lines(grep_path, enc), keyword, source_dir, stats,
                 encoding=args.encoding,
             )
-            indirect_records = apply_indirect_tracking(
-                direct_records, source_dir, args.encoding, workers=args.workers,
+        except Exception as exc:
+            print(
+                f"  警告: {grep_path.name} の直接分類で例外 ({exc!r}) - スキップして継続",
+                file=sys.stderr, flush=True,
             )
-            all_records = list(direct_records) + list(indirect_records)
-            output_path = output_dir / f"{keyword}.tsv"
-            write_tsv(all_records, output_path)
-            processed_files.append(grep_path.name)
-            print(f"  {grep_path.name} → {output_path} "
-                  f"(直接: {len(direct_records)} 件, 間接: {len(indirect_records)} 件)")
-    except Exception as e:
-        print(f"予期しないエラー: {e}", file=sys.stderr)
-        return 2
+            continue
+        direct_by_keyword[keyword] = direct
+        processed_files.append(grep_path.name)
+
+    # フェーズ 2: 間接追跡を 1 回だけ
+    indirect_by_keyword: dict[str, list[GrepRecord]] = {}
+    if direct_by_keyword:
+        all_direct: list[GrepRecord] = []
+        for records in direct_by_keyword.values():
+            all_direct.extend(records)
+        try:
+            indirect_all = apply_indirect_tracking(
+                all_direct, source_dir, args.encoding, workers=args.workers,
+            )
+        except Exception as exc:
+            print(f"予期しないエラー（間接追跡フェーズ）: {exc}", file=sys.stderr)
+            return 2
+        for rec in indirect_all:
+            indirect_by_keyword.setdefault(rec.keyword, []).append(rec)
+
+    # フェーズ 3: keyword で振り分けて TSV 出力
+    for keyword, direct_records in direct_by_keyword.items():
+        indirect_records = indirect_by_keyword.get(keyword, [])
+        all_records = list(direct_records) + list(indirect_records)
+        output_path = output_dir / f"{keyword}.tsv"
+        write_tsv(all_records, output_path)
+        print(f"  {keyword}.grep → {output_path} "
+              f"(直接: {len(direct_records)} 件, 間接: {len(indirect_records)} 件)")
 
     print("\n--- 処理完了 ---")
     print(f"処理ファイル: {', '.join(processed_files)}")

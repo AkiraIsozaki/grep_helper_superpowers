@@ -456,6 +456,74 @@ class TestProcessGrepLinesAllIterable(unittest.TestCase):
         self.assertEqual(len(records), 1)
 
 
+class TestDispatcherAggregation(unittest.TestCase):
+    """dispatcher.main の集約処理 (E-2): 複数 grep を 1 回の間接追跡で
+    処理しても、grep ごとに 1 本ずつ処理した場合と完全一致の TSV が出る。
+    """
+
+    def test_複数grep集約でもTSVが完全一致する(self):
+        from grep_helper.grep_input import iter_grep_lines
+        from grep_helper.encoding import detect_encoding
+        from collections import defaultdict
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            src_dir = tmp_path / "src"
+            src_dir.mkdir()
+            (src_dir / "a.sql").write_text(
+                "SELECT * FROM t WHERE x = 'A';\n", encoding="utf-8",
+            )
+            (src_dir / "b.sql").write_text(
+                "SELECT * FROM t WHERE y = 'B';\n", encoding="utf-8",
+            )
+
+            # 集約: 同じ input dir に 2 grep
+            output_combined = tmp_path / "output_combined"
+            output_combined.mkdir()
+            stats = ProcessStats()
+            all_direct = []
+            for stem, line in [("A", "src/a.sql:1:SELECT * FROM t WHERE x = 'A';"),
+                               ("B", "src/b.sql:1:SELECT * FROM t WHERE y = 'B';")]:
+                grep_path = tmp_path / f"{stem}.grep"
+                grep_path.write_text(line + "\n", encoding="utf-8")
+                enc = detect_encoding(grep_path, None)
+                direct = process_grep_lines_all(
+                    iter_grep_lines(grep_path, enc), stem, src_dir, stats,
+                )
+                all_direct.extend(direct)
+            indirect = apply_indirect_tracking(all_direct, src_dir, None, workers=1)
+            indirect_by_kw = defaultdict(list)
+            for rec in indirect:
+                indirect_by_kw[rec.keyword].append(rec)
+            kw_to_direct = defaultdict(list)
+            for rec in all_direct:
+                kw_to_direct[rec.keyword].append(rec)
+            for kw, direct in kw_to_direct.items():
+                write_tsv(direct + indirect_by_kw[kw], output_combined / f"{kw}.tsv")
+
+            # 単独: 1 grep ずつ
+            output_solo = tmp_path / "output_solo"
+            output_solo.mkdir()
+            for stem, line in [("A", "src/a.sql:1:SELECT * FROM t WHERE x = 'A';"),
+                               ("B", "src/b.sql:1:SELECT * FROM t WHERE y = 'B';")]:
+                grep_path = tmp_path / f"{stem}.grep"
+                stats_solo = ProcessStats()
+                enc = detect_encoding(grep_path, None)
+                direct = process_grep_lines_all(
+                    iter_grep_lines(grep_path, enc), stem, src_dir, stats_solo,
+                )
+                indirect = apply_indirect_tracking(direct, src_dir, None, workers=1)
+                write_tsv(direct + indirect, output_solo / f"{stem}.tsv")
+
+            for keyword in ("A", "B"):
+                combined = (output_combined / f"{keyword}.tsv").read_bytes()
+                solo = (output_solo / f"{keyword}.tsv").read_bytes()
+                self.assertEqual(
+                    combined, solo,
+                    f"{keyword}.tsv が dispatcher の集約/単独で一致しない",
+                )
+
+
 class TestMainStreamingWhitebox(unittest.TestCase):
     """TestMainStreamingWhitebox: dispatcher.main のストリーミング実装を観察するテスト。
     inspect.getsource でソース文字列を覗き、read_text().splitlines() を使わず
