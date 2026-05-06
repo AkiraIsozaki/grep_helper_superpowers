@@ -61,7 +61,7 @@ def write_tsv(records: list[GrepRecord], output_path: Path) -> None:
                     ])
             del chunk
         del records
-        handles = [open(p, "r", encoding="utf-8", newline="") for p in tmp_paths]
+        handles = [open(p, encoding="utf-8", newline="") for p in tmp_paths]
         readers = [csv.reader(h, delimiter="\t") for h in handles]
         try:
             with open(output_path, "w", encoding="utf-8-sig", newline="") as f:

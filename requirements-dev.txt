@@ -1,1 +1,2 @@
+# Python >= 3.9（pytest 9.x） — Solaris 10 ランタイム互換の対象外。dev container でのみ使用。
 pytest>=9.0.0,<10.0.0

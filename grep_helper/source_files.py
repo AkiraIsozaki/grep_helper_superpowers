@@ -55,7 +55,7 @@ def grep_filter_files(
                  mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 if any(mm.find(p) != -1 for p in patterns):
                     result.append(f)
-        except (OSError, ValueError, mmap.error):
+        except (OSError, ValueError):
             result.append(f)
 
     if label:

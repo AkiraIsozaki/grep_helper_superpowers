@@ -1,0 +1,10 @@
+[tool.ruff]
+target-version = "py37"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "FA"]
+ignore = ["E501"]
+# UP: pyupgrade — py37 ターゲットで walrus / pos-only / match/case 等を検出
+# FA: flake8-future-annotations — `from __future__ import annotations` を強制
+# E501 (line length) は本タスクのスコープ外として除外
