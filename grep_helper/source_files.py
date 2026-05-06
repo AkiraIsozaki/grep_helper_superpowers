@@ -7,6 +7,39 @@ from pathlib import Path
 
 _source_files_cache: dict[tuple[str, tuple[str, ...]], list[Path]] = {}
 
+_DEFAULT_READ_CHUNK = 1024 * 1024  # 1 MB
+
+
+def _read_based_find(
+    path: Path,
+    patterns: list[bytes],
+    *,
+    chunk_size: int = _DEFAULT_READ_CHUNK,
+) -> bool:
+    """1MB チャンク + prepend オーバーラップでバイト列を検索する。
+
+    mmap が使えない / 失敗するファイルに対する代替実装。
+    seek は使わず、前チャンク末尾の (max(len(p)) - 1) バイトを保持して
+    次チャンクの先頭に貼り付けてから find する。
+
+    API 契約: ``patterns`` は非空であること（呼び出し元 ``grep_filter_files``
+    で空 patterns は早期 return 済み）。
+    """
+    overlap = max(len(p) for p in patterns) - 1
+    if overlap < 0:
+        overlap = 0
+    tail = b""
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                return False
+            buf = tail + chunk
+            for pat in patterns:
+                if buf.find(pat) != -1:
+                    return True
+            tail = buf[-overlap:] if overlap > 0 else b""
+
 
 def _source_files_cache_clear() -> None:
     """テスト用: source_files キャッシュをクリア。"""
