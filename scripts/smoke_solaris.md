@@ -63,6 +63,10 @@ $ ulimit -n 4096
 
 ## 5. スモーク実行
 
+Solaris + NFS では **`analyze_all.py`** を使う（`--no-mmap` フラグはこの multi-language CLI のみが受け取る）。
+個別言語の `analyze_<lang>.py`（`analyze_c.py` 等）は開発用で、`--no-mmap` は未対応のため
+NFS ハング懸念がある環境では使わない。
+
 ```sh
 $ python analyze_all.py --source-dir <path> \
     --input-dir input --output-dir output --no-mmap
