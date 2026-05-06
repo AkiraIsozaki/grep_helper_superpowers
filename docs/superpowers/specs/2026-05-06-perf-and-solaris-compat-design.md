@@ -469,3 +469,41 @@ writing-plans 段階で以下の順序を提案する:
 - `os.cpu_count()` が zone 内で物理 CPU 数を返すケースがあるので、`--workers` のデフォルト値が無指定で過大にならないか（現実装は `default=1` で `os.cpu_count()` をヘルプ文言にしか使っていないので問題なし、と確認だけする）
 - NFS 上で `mmap` が初回失敗 → `_read_based_find` に落ちる経路が実機で実行されることのスモーク（`--no-mmap` 無しで動かして、ハングせず完了するか）
 - `analyze_*.py` の shebang が `#!/usr/bin/env python3` で venv 内 python3 が PATH に通っている前提で動くか（直接 `python analyze_all.py` で起動するなら shebang は無関係）
+
+---
+
+## クロージングノート（2026-05-06 計測）
+
+### TSV / KPI 同等性
+
+- `diff -r` の `.tsv` 比較（12 言語の golden set 全 16 ファイル）: **完全一致**（0 differences, before/after 各 16 TSV）
+- `diff /tmp/kpi_before.txt /tmp/kpi_after.txt`: **メトリクスは完全一致**。差分は (1) レポート出力先のタイムスタンプ部分（`123928` vs `123904`）と (2) 間接追跡フェーズのログ行のみ。網羅率・分類精度の数値（`網羅率: N/N (100.0%) [OK]` 行）は `diff` で 0 件。ログ差は Task 5 の `batch_track_indirect` 集約で per-file ループ → バッチ呼び出しに切り替わったための表示変化（C / Pro*C / Kotlin で「参照 1 件発見 × 2 回」が「参照 2 件発見 × 1 回」になった等）であり、TSV が完全一致であることから網羅率に対しては no-op。
+
+要件 §2 「網羅率維持」と §V-1 「`diff -r` 完全一致」のクロージング条件を **満たす**。
+
+### 速度比較（dev container, Python 3.12, tests/golden/）
+
+| 言語 | before (real) | after (real) |
+|---|---|---|
+| java | 0m0.762s | 0m0.506s |
+| c | 0m0.251s | 0m0.252s |
+| proc | 0m0.277s | 0m0.243s |
+| sql | 0m0.259s | 0m0.238s |
+| sh | 0m0.250s | 0m0.238s |
+| kotlin | 0m0.239s | 0m0.236s |
+| plsql | 0m0.235s | 0m0.243s |
+| ts | 0m0.245s | 0m0.244s |
+| python | 0m0.236s | 0m0.233s |
+| perl | 0m0.246s | 0m0.248s |
+| dotnet | 0m0.320s | 0m0.239s |
+| groovy | 0m0.353s | 0m0.251s |
+
+合計 wall clock: before 3.673s / after 3.171s（-13.7%、-0.502s）。java / dotnet / groovy では実測で改善が確認でき、他言語は ±数 ms の測定ノイズ範囲。
+
+dev container 上の golden set は規模が小さく、改造の効果（encoding cache hit、間接追跡集約による N→1 圧縮）はほぼ可視化されない。本タスクの主目的「網羅率を落とさず重複作業を削った」は TSV/KPI 完全一致で達成されている。**真のスループット改善は出荷先の 60GB 級ソースで再計測する別タスク**で扱う（KPI 設計書 §E-性能・スケール 4 項目目「60GB 級ソースでのプロファイリング」と整合）。
+
+### 残課題
+
+- Solaris 10 実機でのスモークは出荷前に `scripts/smoke_solaris.md` の手順で実施。
+- 60GB 級ソースでの本番計測 / 第 1 段階並列化 / 増分処理 / AST キャッシュ永続化 は別 spec で扱う。
+- `tests/test_all_analyzer.py` には `tests/` ディレクトリ全体をスコープから外したことに伴う pre-existing ruff 警告（E401/F401/FA102/E741）が残っている。Task 1 の C-1 ガードは `grep_helper/ analyze_*.py` のみが対象なのでブロッカーではないが、テスト側の追従は別タスクで。
