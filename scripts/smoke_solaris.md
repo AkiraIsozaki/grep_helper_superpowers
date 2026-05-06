@@ -35,17 +35,23 @@ $ source $HOME/grep_helper_venv/bin/activate
 $ pip install --upgrade pip   # SSL が通れば成功
 ```
 
-## 3. 依存インストール
+## 3. 依存インストール（オフライン）
 
-cp312 wheel は Solaris で使えないため source build。
+Solaris 10 ターゲットの sdist 一式を `wheelhouse/solaris/` に同梱している
+（chardet / javalang / six / pyahocorasick）。詳細は `wheelhouse/solaris/README.md`。
 
 ```sh
-$ pip install --no-binary=:all: chardet javalang
+$ pip install --no-index --find-links /path/to/wheelhouse/solaris/ \
+              chardet javalang
 # pyahocorasick の C 拡張は Solaris 10 の libc で通らない場合がある。
 # 失敗しても run-time には grep_helper/_aho_corasick.py の pure Python
 # フォールバックがあるので、|| true で無視して構わない。
-$ pip install --no-binary=:all: pyahocorasick || true
+$ pip install --no-index --find-links /path/to/wheelhouse/solaris/ \
+              pyahocorasick || true
 ```
+
+ネットワーク接続のある環境で構築する場合は `--no-index --find-links` を外して
+通常の `pip install --no-binary=:all: chardet javalang pyahocorasick` で良い。
 
 ## 4. ulimit 引き上げ
 
