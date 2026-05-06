@@ -538,5 +538,44 @@ class TestMainStreamingWhitebox(unittest.TestCase):
         self.assertIn("iter_grep_lines", src)
 
 
+class TestNoMmapFlag(unittest.TestCase):
+    """--no-mmap フラグ + GREP_HELPER_NO_MMAP 環境変数の解決ロジック。"""
+
+    def test_未指定環境変数なしならuse_mmap_True(self):
+        from grep_helper.dispatcher import _resolve_use_mmap
+        self.assertTrue(_resolve_use_mmap(no_mmap_arg=False, env={}))
+
+    def test_フラグ明示でuse_mmap_False(self):
+        from grep_helper.dispatcher import _resolve_use_mmap
+        self.assertFalse(_resolve_use_mmap(no_mmap_arg=True, env={}))
+
+    def test_環境変数で1ならuse_mmap_False(self):
+        from grep_helper.dispatcher import _resolve_use_mmap
+        self.assertFalse(_resolve_use_mmap(
+            no_mmap_arg=False, env={"GREP_HELPER_NO_MMAP": "1"},
+        ))
+
+    def test_環境変数で0ならuse_mmap_True(self):
+        from grep_helper.dispatcher import _resolve_use_mmap
+        self.assertTrue(_resolve_use_mmap(
+            no_mmap_arg=False, env={"GREP_HELPER_NO_MMAP": "0"},
+        ))
+
+    def test_フラグ優先(self):
+        from grep_helper.dispatcher import _resolve_use_mmap
+        self.assertFalse(_resolve_use_mmap(
+            no_mmap_arg=True, env={"GREP_HELPER_NO_MMAP": "0"},
+        ))
+
+    def test_argparseで_no_mmapフラグが解釈される(self):
+        from grep_helper.dispatcher import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["--source-dir", "/tmp", "--no-mmap"])
+        self.assertTrue(getattr(args, "no_mmap", False))
+
+        args2 = parser.parse_args(["--source-dir", "/tmp"])
+        self.assertFalse(getattr(args2, "no_mmap", False))
+
+
 if __name__ == "__main__":
     unittest.main()

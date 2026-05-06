@@ -92,7 +92,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--workers", type=int, default=1,
         help=f"並列ワーカー数（デフォルト: 1, 推奨: {os.cpu_count() or 4}）",
     )
+    parser.add_argument(
+        "--no-mmap", action="store_true",
+        help="mmap 経由のファイル絞り込みを使わず read 経由にする（Solaris+NFS で推奨）",
+    )
     return parser
+
+
+def _resolve_use_mmap(no_mmap_arg: bool, env: dict | None = None) -> bool:
+    """CLI フラグと環境変数から use_mmap の値を決定する。
+
+    優先順:
+      - CLI で --no-mmap 明示 (no_mmap_arg=True) なら use_mmap=False
+      - 未指定なら GREP_HELPER_NO_MMAP=1 のとき use_mmap=False
+      - それ以外は use_mmap=True
+    """
+    if no_mmap_arg:
+        return False
+    if env is None:
+        env = os.environ
+    if env.get("GREP_HELPER_NO_MMAP") == "1":
+        return False
+    return True
 
 
 def main() -> int:
@@ -146,7 +167,9 @@ def main() -> int:
             all_direct.extend(records)
         try:
             indirect_all = apply_indirect_tracking(
-                all_direct, source_dir, args.encoding, workers=args.workers,
+                all_direct, source_dir, args.encoding,
+                workers=args.workers,
+                use_mmap=_resolve_use_mmap(args.no_mmap),
             )
         except Exception as exc:
             print(f"予期しないエラー（間接追跡フェーズ）: {exc}", file=sys.stderr)
