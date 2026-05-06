@@ -1,18 +1,29 @@
 # パフォーマンス改善 + Solaris 10 互換 設計書
 
 **日付**: 2026-05-06
-**対象ファイル**:
+**対象ファイル**（テスト追加分も含む完全リスト）:
+
+本体:
 
 - `grep_helper/encoding.py`（変更）
 - `grep_helper/source_files.py`（変更）
 - `grep_helper/dispatcher.py`（変更）
 - `grep_helper/pipeline.py`（変更）
-- `grep_helper/languages/*.py`（12 ハンドラ全体: `batch_track_indirect` のキーワード引数追加）
+- `grep_helper/languages/*.py`（対象ハンドラ全体: `batch_track_indirect` のキーワード引数追加）
 - `analyze_all.py`（CLI フラグ `--no-mmap` 追加）
+
+設定:
+
 - `pyproject.toml`（新規 / ruff 設定）
-- `requirements.txt`（コメント追記）
-- `requirements-dev.txt`（コメント追記）
+- `requirements.txt`（Python バージョンコメント追記）
+- `requirements-dev.txt`（Python バージョンコメント追記）
+
+ドキュメント:
+
 - `scripts/smoke_solaris.md`（新規）
+
+テスト（§テスト戦略 で詳述）:
+
 - `tests/test_encoding.py`（新規）
 - `tests/test_source_files.py`（新規）
 - `tests/test_pipeline_run.py`（追記）
@@ -63,7 +74,7 @@ E 課題のうち本タスクが扱うのは「重複作業を削る」軽量な
    - 第 1 段階（直接分類）の並列化
    - 60GB 級ソースでの本番プロファイリング
    - AST キャッシュのディスク永続化
-   - Solaris 用 Python 3.7 build / `pyahocorasick` cp37 wheel の作成（`scripts/smoke_solaris.md` に手順は書くが、ビルド成果物は本リポジトリには持たない）
+   - Solaris 用 Python 3.7 build / `pyahocorasick` cp37 wheel 等の**ビルド成果物**を本リポジトリに持つこと（手順は §C-2 `scripts/smoke_solaris.md` に書くが、artifact は持ち込まない）
    - `grep_filter_files` の非 ASCII 識別子対応
 
 ---
@@ -83,7 +94,7 @@ detect_encoding(path, override) の動作:
 
 設計判断:
 
-- キャッシュキーは `str(path)` のみ。`override` は早期 return 済みなのでキーから除外する。
+- キャッシュキーは `str(path)` のみ。`override` は早期 return 済みなのでキーから除外する。`Path.resolve()` 等での正規化はしない（NFS で `realpath` 解決のコストが効くため）。同一ファイルへ相対パス・絶対パスで届く経路があると 2 エントリ持つことになるが、実害はキャッシュヒット率が下がるだけで、`source_files._resolve_file_cache` も同じ流儀。
 - chardet が None / 低 confidence を返した既存の `cp932` フォールバック結果も**キャッシュする**（同じパスで毎回 chardet を起動しないため）。
 - `OSError` で読めなかった場合の `cp932` もキャッシュする（同じパスで再度 stat しないため）。
 - LRU 上限は導入しない。`iter_source_files` でスキャンされるファイル数（数千〜数万）のオーダー、1 エントリ ~80B、合計数 MB の見込みで、LRU の複雑度に見合わない。
@@ -116,12 +127,22 @@ detect_encoding(path, override) の動作:
 
 設計判断:
 
-- ハンドラ層 `batch_track_indirect` のシグネチャは維持。既存実装は `direct_records` 内の各 `record.keyword` を間接追跡レコードに引き継いでいるため、複数 keyword 分の direct を 1 回で渡しても元の 1 keyword ずつ呼んだ場合と同じ結果集合が返る。
+- ハンドラ層 `batch_track_indirect` のシグネチャは維持。既存実装は `direct_records` 内の各 `record.keyword` を間接追跡レコードに引き継いでいるため、複数 keyword 分の direct を 1 回で渡しても元の 1 keyword ずつ呼んだ場合と**同じ結果リスト**（要素・順序）が keyword 毎に得られる。
 - 振り分けは戻り値の `record.keyword` で行う。`keyword` が未設定の record は仕様外として捨てる（現コードでは発生しないが防御的に）。
 - 進捗ログ:
   - フェーズ 1: 既存通り「処理中: foo.grep」を grep ファイル毎に出す。
   - フェーズ 2: 既存の `_batch_track_combined` 内の「Java 追跡(統合): N ファイル中 M 完了」相当を全体 1 系列で残す。
-- `ProcessStats` は全 keyword で 1 個共有（フェーズ 1 で `total_lines` `valid_lines` `skipped_lines` が積算され、フェーズ 2 で `encoding_errors` `fallback_files` が積算される）。`print_report` はプロセス終端で 1 回。
+- `ProcessStats` は全 keyword で 1 個共有（フェーズ 1 で `total_lines` `valid_lines` `skipped_lines` が積算され、フェーズ 2 で `encoding_errors` `fallback_files` が積算される）。プロセス終端で 1 回サマリ出力。`grep_helper/dispatcher.main` の現行終端出力（`print(f"処理ファイル: ...")` 等の単純 print）は既存維持。`grep_helper/languages/java.print_report` 形式の詳細レポートを呼ぶ責務は本タスクで dispatcher 側には持ち込まない。
+- 集約キーは `grep_path.stem`。`run_full_pipeline` / `dispatcher.main` は単一 `input_dir` から `*.grep` を取るため stem 衝突は仕様上発生しない（複数 input dir をマージして渡すユースケースは要件外）。
+
+#### 順序保証の根拠（TSV バイト一致のため）
+
+要件 §2 の「行単位完全一致」を満たすには、新経路で生成される `<keyword>.tsv` の中身が旧経路と**バイト単位**で同じである必要がある。直接フェーズの順序は無変更なので、間接フェーズの per-keyword 順序が維持されることを以下 4 点で示す:
+
+1. **ファイル走査順序**: `grep_helper/source_files.iter_source_files` は `sorted(...)` で結果を返す。新旧で同じ source_dir に対し同じ順序のファイルリストが得られる。
+2. **行内マッチ順序**: `grep_helper/scanner._BatchScanner.findall` は regex バックエンドで `re.finditer`、Aho-Corasick バックエンドで `iter` の position 順に yield。どちらも左→右で決定的。
+3. **同名 var の origins ループ**: `_batch_track_combined` 内 `for origin in origins` の順序は、旧では 1 keyword 分の direct から構築された `tasks[name]` のみで origins が単一だった。新では複数 keyword 分の direct から構築されるため `origins = [keyword_A_origin, keyword_B_origin, ...]` と並ぶ。各 origin から生成される record は `record.keyword = origin.keyword` で振り分けられるため、後段の per-keyword リストには **同じ位置に同じ record** が入る（origin の挿入順は keyword 内では旧と同じ）。
+4. **同 var が複数 keyword の direct から登場するケース**: 同一 const を 2 つの grep が拾った場合、旧では keyword A 単独・B 単独でそれぞれ「ソース全件を走査して該当行を発見」していた。新ではソース全件を 1 回走査し、各該当行から keyword A 用・B 用の record を 2 つ生成する。生成順は origins ループ順だが、後段の振り分けで A.tsv には keyword A の record だけが旧と同じ順序で並ぶ。
 
 シグネチャ変更（追加のみ）:
 
@@ -177,15 +198,25 @@ def grep_filter_files(names, src_dir, extensions, label="", *, use_mmap=True):
 
 `_read_based_find(path, patterns)` の挙動:
 
-- ファイルを 1 MB チャンクで `read()` しつつ `bytes.find` で検索
-- 各チャンク末尾 `max(len(p) for p in patterns) - 1` バイトを次チャンクへ前送り（境界またぎ防止）
-- メモリ上限はチャンク 1 MB + オーバーラップで O(1)
+- API 契約: `patterns` は**非空**を前提（呼び出し元 `grep_filter_files` で空 patterns は早期 return 済み）。空 patterns で呼ばれた場合の挙動は未定義（`max(len(p) for p in patterns)` で `ValueError`）。ユニットテストもこの契約に従う。
+- ファイルを 1 MB チャンクで `read()` しつつ `bytes.find` で検索。
+- **prepend 方式**で境界またぎを防止する: 前チャンク末尾 `max(len(p) for p in patterns) - 1` バイトを保持し、次チャンクの先頭に貼り付けてから `find` を実行する。`seek` は使わない（NFS の `seek + read` でキャッシュ整合が崩れる事例があるため）。
+- パターン長 1 の場合 overlap=0 となるが、1 バイトパターンは「境界またぎ」自体が概念上発生しないので結果は正しい。
+- メモリ上限はチャンク 1 MB + オーバーラップで O(1)。
 
 CLI 側:
 
-- `grep_helper/dispatcher.build_parser` に `--no-mmap` を追加
+- `grep_helper/dispatcher.build_parser` に `--no-mmap` を追加（`store_true`、デフォルト False）
 - 環境変数 `GREP_HELPER_NO_MMAP=1` でも有効化（運用ラッパーから設定しやすくする）
-- 優先順: CLI フラグ > 環境変数 > デフォルト True
+- 優先順: CLI フラグ明示時はそれを採用、CLI 未指定（=デフォルト False）時のみ環境変数を参照、両方無ければデフォルト `use_mmap=True`
+
+```python
+# dispatcher.main の擬似コード
+no_mmap = args.no_mmap or os.environ.get("GREP_HELPER_NO_MMAP") == "1"
+use_mmap = not no_mmap
+```
+
+`store_true` は CLI で True/False を区別できないので、「明示的に `--use-mmap` で env を上書きする」要件が将来出たら再設計する（本タスクでは不要）。
 
 `use_mmap` は以下のパスで dispatch される:
 
@@ -206,8 +237,22 @@ target-version = "py37"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "UP"]
+select = ["E", "F", "UP", "FA"]
+# UP: pyupgrade — py37 ターゲットで walrus / pos-only / match/case 等を検出
+# FA: flake8-future-annotations — `from __future__ import annotations` を強制
 ```
+
+#### ruff py37 ガードの守備範囲
+
+`target-version = "py37"` で確実に検出できるのは以下:
+
+- 構文レベル: walrus `:=`, pos-only `/`, `match/case`, `*` 単独引数（3.8+）
+- ランタイム呼び出し: `functools.cache`（3.9+）等の API 利用箇所
+
+検出**できない**もの（注意点）:
+
+- `from __future__ import annotations` 配下の PEP 604 (`X | None`) / PEP 585 (`dict[...]`) は string annotation として扱われるため、ruff py37 ターゲットでも基本的にスルーされる。実害は新規ファイルで `from __future__ import annotations` を入れ忘れたときに発生する（モジュールトップレベルの型注釈が即時評価されて 3.7 で `TypeError`）。これを守るため `FA` ルール（flake8-future-annotations）を併用し、PEP 604/585 を含むファイルでの import 強制を担保する。
+- `typing.get_type_hints()` のように annotation を文字列→オブジェクトに評価する API を新たに使い始めた場合は ruff では検出できない。この種のリスクは導入時に手動レビューで弾く。
 
 `ruff check grep_helper/ analyze_*.py` を実装計画のチェックリストに入れる。CI 自動化は本タスク範囲外（手動運用）。
 
@@ -224,30 +269,59 @@ pyahocorasick>=2.0.0,<3.0.0   # Solaris では _aho_corasick.py の pure Python 
 
 ### C-2: Solaris スモーク手順
 
-`scripts/smoke_solaris.md`（新規）に運用側向けの手順を記録する。
+`scripts/smoke_solaris.md`（新規）に運用側向けの手順を記録する。コピペで動くレベルにするため、Solaris 10 同梱の Studio cc では Python 3.7 のビルドが通りにくい点・OpenSSL/zlib/libffi が不在だと `pip install` が即死する点を前提に書く。
 
 ```
+0. 前提パッケージ（OpenCSW から導入）
+   $ /opt/csw/bin/pkgutil -y -i gcc4core gcc4g++ libssl_dev zlib_dev libffi_dev \
+                                gnumake coreutils
+
 1. Python 3.7.17 ビルド
-   $ tar xzf Python-3.7.17.tgz
-   $ cd Python-3.7.17 && ./configure --prefix=$HOME/py37 --enable-shared
-   $ make -j4 && make install
+   - Solaris 10 同梱の cc (Studio) は Python 3.7 setup.py の前提から外れるため、
+     OpenCSW の gcc を使う
+   - --with-openssl で OpenCSW の OpenSSL を指定しないと ssl module が無効化され、
+     pip の TLS 接続が失敗する
+   $ tar xzf Python-3.7.17.tgz && cd Python-3.7.17
+   $ CC=/opt/csw/bin/gcc \
+     CFLAGS="-I/opt/csw/include" \
+     LDFLAGS="-L/opt/csw/lib -R/opt/csw/lib" \
+     ./configure --prefix=$HOME/py37 --enable-shared \
+                 --with-openssl=/opt/csw \
+                 --with-system-ffi
+   $ gmake -j4 && gmake install
 
 2. venv 作成
    $ $HOME/py37/bin/python3 -m venv $HOME/grep_helper_venv
    $ source $HOME/grep_helper_venv/bin/activate
+   $ pip install --upgrade pip   # SSL が通れば成功
 
 3. 依存インストール（cp312 wheel は Solaris で使えないため source build）
    $ pip install --no-binary=:all: chardet javalang
-   # pyahocorasick はビルド失敗する可能性あり。失敗時はインストールせず、
-   # _aho_corasick.py の pure Python フォールバックに任せる
+   # pyahocorasick の C 拡張は Solaris 10 の libc で通らない場合がある。
+   # 失敗しても run-time には grep_helper/_aho_corasick.py の pure Python
+   # フォールバックがあるので、|| true で無視して構わない。
+   $ pip install --no-binary=:all: pyahocorasick || true
 
-4. スモーク実行
+4. ulimit 引き上げ（--workers >= 2 を使う場合）
+   $ ulimit -n 1024     # ユーザ shell の soft limit
+   # それ以上必要なら hard limit (デフォルト 65536) まで上げられる:
+   $ ulimit -n 4096
+   # zone 内で hard limit が 256 のままに見える場合は projmod / /etc/system の
+   #   set rlim_fd_cur = 4096
+   # で root 側調整が必要
+
+5. スモーク実行
    $ python analyze_all.py --source-dir <path> \
        --input-dir input --output-dir output --no-mmap
 
-5. 既知の制約
+6. 既知の制約・確認ポイント
    - Solaris + NFS では --no-mmap または GREP_HELPER_NO_MMAP=1 を推奨
-   - --workers >= 2 を使う場合は ulimit -n を 1024 以上に上げてから起動
+     （NFS の stat キャッシュ古値で `mmap` 後に EOF を超えるエラーが出る事例あり）
+   - 実機の zone 内では os.cpu_count() が物理 CPU を返し psrinfo の制限を無視する
+     ので、--workers は明示指定する
+   - シンボリックリンクループ（/proc 参照や NFS 自己参照）を踏むと
+     Python 3.7 の pathlib.rglob は RecursionError を出す。
+     iter_source_files の入力 source_dir に怪しいリンクが無いことを事前に確認
 ```
 
 ---
@@ -305,9 +379,7 @@ E-2 の組み替えを既存関数の責務にマップする:
 - `def test_複数grepを集約処理しても旧経路と同じTSVが出力される`: 2 つ以上の `.grep` を含む input dir。新 `run_full_pipeline` で出力した TSV 群と、旧経路（grep 単独で 1 本ずつ処理）で出した TSV 群を行単位で完全一致比較（要件 §2 / §V-1 に整合）
 - `def test_1つのgrepが壊れていても他のgrepのTSVは出力される`: 1 つの grep を不正フォーマットに → 残りの TSV ファイルは存在し中身が正しい
 
-ホワイトボックス補完（中核性能改善の観察、許容範囲内）:
-
-- `def test_間接追跡はハンドラ毎に1回しか呼ばれない`: ダミーハンドラを差し込み、`batch_track_indirect` の呼び出し回数を観察。grep ファイル数 N に関わらず呼び出しがハンドラ数（テストでは 1）であることを確認
+性能改善の中核（「間接追跡が grep 数 N ではなくハンドラ数に比例する」）はテストでは直接観察せず、要件 §2 の TSV 完全一致 + §V-1 の wall clock 計測で実質保証する。「内部関数 X が何回呼ばれた」式のテストは `feedback_test_style.md` の方針上書かない。
 
 ### E-3: mmap フォールバック
 
@@ -323,7 +395,7 @@ E-2 の組み替えを既存関数の責務にマップする:
 
 積分（`grep_filter_files`）:
 
-- `def test_use_mmap_TrueとFalseで結果ファイル集合が一致する`
+- `def test_use_mmap_TrueとFalseで結果ファイルリストが一致する`: `grep_filter_files` は順序保証つき関数なので、リスト（順序込み）で比較する
 - `def test_no_mmapフラグはCLI環境変数経由で有効化できる`: dispatcher の引数解析だけ観察
 
 ### C-1: ruff py37 ガード
@@ -368,6 +440,7 @@ $ time python analyze_all.py --source-dir tests/golden/<lang> \
 
 - ハンドラ層 `classify_usage` は無変更
 - ハンドラ層 `batch_track_indirect` は新キーワード引数 `use_mmap=True` の追加のみ。既存呼び出しコード（`scripts/measure_kpi.py` 含む）はキーワード引数を渡さなければ旧挙動と等価
+- `dispatcher.apply_indirect_tracking` も `*, use_mmap=True` のキーワード専用引数追加のみで互換。既存テスト（`tests/test_all_analyzer.py` 内のラッパ経由呼び出し含む）はそのまま動く
 - `pipeline.run_full_pipeline` の戻り値型・出力 TSV の中身は完全互換
 - `dispatcher.main` の終了コード仕様は維持（直接フェーズの個別 grep 失敗は警告に降格、間接フェーズ失敗は引き続き中断）
 
@@ -385,3 +458,14 @@ writing-plans 段階で以下の順序を提案する:
 6. CLI フラグ + 環境変数（`analyze_all.py` の引数追加）
 7. C-2 `scripts/smoke_solaris.md` 作成
 8. V-1 KPI before/after 計測 + spec 末尾に数値追記
+
+### Solaris 実機で実装前に確認すべき項目（writing-plans のリスク欄に転記）
+
+本タスクの開発は dev container (Linux + Python 3.12) で進めるが、出荷前に以下を Solaris 10 + Python 3.7 実機で確認する:
+
+- `scripts/smoke_solaris.md` の Python ビルド手順を実機で 1 回流す（OpenSSL/libffi/zlib リンクが通るか、`pip install` が SSL で詰まらないか）
+- `pyahocorasick` の C 拡張ビルドが失敗しても `_aho_corasick.py` の pure Python フォールバックが正しく `import` されるか（`grep_helper/scanner.py` の try/except 経路）
+- `iter_source_files` の入力に **シンボリックリンクループ** を含めても `pathlib.rglob` で `RecursionError` が出ないか（出るなら Python 3.7 では `os.walk(followlinks=False)` ベースに切り替えるか、入力前に確認をかける運用にする）
+- `os.cpu_count()` が zone 内で物理 CPU 数を返すケースがあるので、`--workers` のデフォルト値が無指定で過大にならないか（現実装は `default=1` で `os.cpu_count()` をヘルプ文言にしか使っていないので問題なし、と確認だけする）
+- NFS 上で `mmap` が初回失敗 → `_read_based_find` に落ちる経路が実機で実行されることのスモーク（`--no-mmap` 無しで動かして、ハングせず完了するか）
+- `analyze_*.py` の shebang が `#!/usr/bin/env python3` で venv 内 python3 が PATH に通っている前提で動くか（直接 `python analyze_all.py` で起動するなら shebang は無関係）
