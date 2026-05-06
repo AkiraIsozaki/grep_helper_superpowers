@@ -125,6 +125,7 @@ def _batch_track_kotlin_const(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Kotlin const val をプロジェクト全体に対して1パスでバッチスキャンする。
 
@@ -133,7 +134,7 @@ def _batch_track_kotlin_const(
     if not tasks:
         return []
     names = list(tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".kt", ".kts"], label="Kotlin定数追跡")
+    src_files = grep_filter_files(names, src_dir, [".kt", ".kts"], label="Kotlin定数追跡", use_mmap=use_mmap)
     if not src_files:
         return []
     total = len(src_files)
@@ -202,6 +203,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Kotlin の間接参照（const val 経由）をバッチ追跡する。
 
@@ -223,4 +225,4 @@ def batch_track_indirect(
     if not tasks:
         return []
     stats = ProcessStats()
-    return _batch_track_kotlin_const(tasks, src_dir, stats, encoding, workers=workers)
+    return _batch_track_kotlin_const(tasks, src_dir, stats, encoding, workers=workers, use_mmap=use_mmap)

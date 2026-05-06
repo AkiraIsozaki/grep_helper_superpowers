@@ -126,12 +126,13 @@ def _batch_track_ts_const(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """TS const をプロジェクト全体に対して 1 パスでバッチスキャンする。"""
     if not tasks:
         return []
     names = list(tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".ts", ".tsx", ".js", ".jsx"], label="TS定数追跡")
+    src_files = grep_filter_files(names, src_dir, [".ts", ".tsx", ".js", ".jsx"], label="TS定数追跡", use_mmap=use_mmap)
     if not src_files:
         return []
     total = len(src_files)
@@ -198,6 +199,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """TS の間接参照（const 経由）をバッチ追跡する。"""
     from grep_helper.languages import detect_handler
@@ -215,4 +217,4 @@ def batch_track_indirect(
     if not tasks:
         return []
     stats = ProcessStats()
-    return _batch_track_ts_const(tasks, src_dir, stats, encoding, workers=workers)
+    return _batch_track_ts_const(tasks, src_dir, stats, encoding, workers=workers, use_mmap=use_mmap)

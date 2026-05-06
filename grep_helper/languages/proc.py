@@ -128,6 +128,7 @@ def _batch_track_define_proc_all(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Pro*C #define をエイリアス解決込みで1パスでバッチスキャンする。
 
@@ -161,7 +162,7 @@ def _batch_track_define_proc_all(
         return []
 
     names = list(scan_tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".pc", ".c", ".h"], label="Pro*C #define追跡")
+    src_files = grep_filter_files(names, src_dir, [".pc", ".c", ".h"], label="Pro*C #define追跡", use_mmap=use_mmap)
     if not src_files:
         return []
     total = len(src_files)
@@ -225,6 +226,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Pro*C の間接参照（#define + 変数代入）をバッチ追跡する。"""
     import sys as _sys  # noqa: PLC0415
@@ -254,5 +256,5 @@ def batch_track_indirect(
                         src_dir, record, stats, encoding,
                     ))
 
-    result.extend(_batch_track_define_proc_all(define_tasks, src_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_define_proc_all(define_tasks, src_dir, stats, encoding, workers=workers, use_mmap=use_mmap))
     return result

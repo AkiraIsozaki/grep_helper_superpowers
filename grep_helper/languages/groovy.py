@@ -278,6 +278,7 @@ def _batch_track_groovy_static_final(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Groovy static final 定数をプロジェクト全体に対して1パスでバッチスキャンする。
 
@@ -286,7 +287,7 @@ def _batch_track_groovy_static_final(
     if not tasks:
         return []
     names = list(tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".groovy", ".gvy"], label="Groovy定数追跡")
+    src_files = grep_filter_files(names, src_dir, [".groovy", ".gvy"], label="Groovy定数追跡", use_mmap=use_mmap)
     if not src_files:
         return []
     total = len(src_files)
@@ -355,6 +356,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Groovy の間接参照（static final + class field + getter/setter）をバッチ追跡する。"""
     from grep_helper.languages import detect_handler
@@ -394,7 +396,7 @@ def batch_track_indirect(
                         setter_tasks.setdefault(s, []).append(record)
 
     # static final batch
-    result.extend(_batch_track_groovy_static_final(sf_tasks, src_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_groovy_static_final(sf_tasks, src_dir, stats, encoding, workers=workers, use_mmap=use_mmap))
 
     # getter/setter batch
     result.extend(_batch_track_getter_setter_groovy(

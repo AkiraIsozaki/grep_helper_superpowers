@@ -58,6 +58,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Java の間接参照（field/local/constant/getter/setter）をバッチ追跡する。
 
@@ -134,6 +135,7 @@ def batch_track_indirect(
         ))
         java_candidates = grep_filter_files(
             all_names, src_dir, [".java"], label="Java追跡",
+            use_mmap=use_mmap,
         )
         result.extend(java_track._batch_track_combined(
             const_tasks=project_tasks,
@@ -142,6 +144,7 @@ def batch_track_indirect(
             source_dir=src_dir, stats=stats, file_list=java_candidates,
             encoding_override=encoding,
             workers=workers,
+            use_mmap=use_mmap,
         ))
 
     return result

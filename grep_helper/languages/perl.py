@@ -164,6 +164,7 @@ def _batch_track_perl_constant(
     *,
     kind: str = "bareword",
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Perl 定数 / our scalar をプロジェクト全体に対して 1 パスでバッチスキャンする。
 
@@ -172,7 +173,7 @@ def _batch_track_perl_constant(
     if not tasks:
         return []
     names = list(tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".pl", ".pm"], label=f"Perl{kind}追跡")
+    src_files = grep_filter_files(names, src_dir, [".pl", ".pm"], label=f"Perl{kind}追跡", use_mmap=use_mmap)
     if not src_files:
         return []
     total = len(src_files)
@@ -211,6 +212,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """Perl の間接参照（use constant / our $）をバッチ追跡する。
 
@@ -243,7 +245,7 @@ def batch_track_indirect(
     stats = ProcessStats()
     results: list[GrepRecord] = []
     if constant_tasks:
-        results.extend(_batch_track_perl_constant(constant_tasks, src_dir, stats, encoding, kind="bareword", workers=workers))
+        results.extend(_batch_track_perl_constant(constant_tasks, src_dir, stats, encoding, kind="bareword", workers=workers, use_mmap=use_mmap))
     if our_tasks:
-        results.extend(_batch_track_perl_constant(our_tasks, src_dir, stats, encoding, kind="scalar", workers=workers))
+        results.extend(_batch_track_perl_constant(our_tasks, src_dir, stats, encoding, kind="scalar", workers=workers, use_mmap=use_mmap))
     return results

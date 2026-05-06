@@ -89,6 +89,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,  # noqa: ARG001 - インターフェース統一のため受けるだけ
 ) -> list[GrepRecord]:
     """直接参照レコードから sh 変数代入・エクスポートを追跡して間接参照を返す。"""
     from grep_helper.source_files import resolve_file_cached

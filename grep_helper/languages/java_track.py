@@ -613,6 +613,7 @@ def _batch_track_combined(
     *,
     encoding_override: str | None = None,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """定数 / getter / setter を 1 パスで一括追跡する。
 
@@ -629,6 +630,7 @@ def _batch_track_combined(
     ))
     java_files = file_list if file_list is not None else grep_filter_files(
         all_names, source_dir, [".java"], label="Java追跡(統合)",
+        use_mmap=use_mmap,
     )
     if not java_files:
         return []
@@ -715,6 +717,7 @@ def _batch_track_constants(
     file_list: list[Path] | None = None,
     *,
     encoding_override: str | None = None,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """複数の定数をプロジェクト全体で一括追跡する。
 
@@ -725,6 +728,7 @@ def _batch_track_constants(
 
     java_files = file_list if file_list is not None else grep_filter_files(
         list(tasks.keys()), source_dir, [".java"], label="Java定数追跡",
+        use_mmap=use_mmap,
     )
 
     if not java_files:
@@ -780,6 +784,7 @@ def _batch_track_getters(
     file_list: list[Path] | None = None,
     *,
     encoding_override: str | None = None,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """複数のgetterをプロジェクト全体で一括追跡する。
 
@@ -790,6 +795,7 @@ def _batch_track_getters(
 
     java_files = file_list if file_list is not None else grep_filter_files(
         list(tasks.keys()), source_dir, [".java"], label="Javaゲッター追跡",
+        use_mmap=use_mmap,
     )
 
     if not java_files:
@@ -846,6 +852,7 @@ def _batch_track_setters(
     file_list: list[Path] | None = None,
     *,
     encoding_override: str | None = None,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """複数のsetterをプロジェクト全体で一括追跡する。
 
@@ -856,6 +863,7 @@ def _batch_track_setters(
 
     java_files = file_list if file_list is not None else grep_filter_files(
         list(tasks.keys()), source_dir, [".java"], label="Javaセッター追跡",
+        use_mmap=use_mmap,
     )
 
     if not java_files:

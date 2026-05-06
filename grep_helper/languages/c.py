@@ -247,6 +247,7 @@ def _batch_track_define_c_all(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """C #define をエイリアス解決込みで1パスでバッチスキャンする。
 
@@ -278,7 +279,7 @@ def _batch_track_define_c_all(
         return []
 
     names = list(scan_tasks.keys())
-    src_files = grep_filter_files(names, src_dir, [".c", ".h", ".pc"], label="C #define追跡")
+    src_files = grep_filter_files(names, src_dir, [".c", ".h", ".pc"], label="C #define追跡", use_mmap=use_mmap)
     if not src_files:
         return []
     total = len(src_files)
@@ -339,6 +340,7 @@ def batch_track_indirect(
     encoding: str | None,
     *,
     workers: int = 1,
+    use_mmap: bool = True,
 ) -> list[GrepRecord]:
     """C の間接参照（#define + 変数代入）をバッチ追跡する。"""
     import sys as _sys
@@ -368,5 +370,5 @@ def batch_track_indirect(
                         src_dir, record, stats, encoding,
                     ))
 
-    result.extend(_batch_track_define_c_all(define_tasks, src_dir, stats, encoding, workers=workers))
+    result.extend(_batch_track_define_c_all(define_tasks, src_dir, stats, encoding, workers=workers, use_mmap=use_mmap))
     return result
