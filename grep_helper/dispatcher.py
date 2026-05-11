@@ -5,7 +5,9 @@ import argparse
 import os
 import sys
 from collections.abc import Iterable
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+from typing import Callable
 
 from grep_helper.encoding import detect_encoding
 from grep_helper.grep_input import iter_grep_lines, parse_grep_line
@@ -61,6 +63,33 @@ def process_grep_lines_all(
     return records
 
 
+def _run_one_handler(
+    handler_module_name: str,
+    direct_records: list[GrepRecord],
+    src_dir: Path,
+    encoding: str | None,
+    workers: int,
+    use_mmap: bool,
+) -> list[GrepRecord]:
+    """子プロセスで動的 import → batch_track_indirect 呼び出し。
+
+    handler_module_name はトップレベル import 可能な完全修飾名（例:
+    "grep_helper.languages.java"）。pickle 安全のためモジュールオブジェクト
+    そのものは渡さない。handler 識別は呼び出し側の future_to_name で行うため、
+    戻り値は records のみ。
+
+    子プロセス内の例外（ImportError, AttributeError, batch_track_indirect 内の
+    例外など）はそのまま親プロセスへ propagate する。親側の apply_indirect_tracking
+    が fut.result() を try/except で囲んで 1 handler スキップを実現する。
+    """
+    import importlib
+    mod = importlib.import_module(handler_module_name)
+    fn = getattr(mod, "batch_track_indirect", None)
+    if fn is None:
+        return []
+    return fn(direct_records, src_dir, encoding, workers=workers, use_mmap=use_mmap)
+
+
 def apply_indirect_tracking(
     direct_records: list[GrepRecord],
     src_dir: Path,
@@ -68,16 +97,72 @@ def apply_indirect_tracking(
     *,
     workers: int = 1,
     use_mmap: bool = True,
+    handler_workers: int = 1,
+    on_handler_complete: "Callable[[str, list[GrepRecord]], None] | None" = None,
 ) -> list[GrepRecord]:
-    """登録済み全ハンドラの batch_track_indirect を順次呼び出し、結果を結合する。"""
+    """登録済み全ハンドラの batch_track_indirect を呼び出し、結果を結合する。
+
+    handler_workers > 1 のとき ProcessPoolExecutor で handler 単位の並列実行。
+    1 handler の例外（子プロセス内 ImportError 等を含む）は stderr 警告のみで
+    他 handler に伝播しない。on_handler_complete は親プロセスのメインスレッドから
+    as_completed の同期ループ内で呼ばれる（thread-safe 前提）。
+    """
+    handler_modules = [
+        h.__name__ for h in _all_handlers()
+        if getattr(h, "batch_track_indirect", None) is not None
+    ]
     results: list[GrepRecord] = []
-    for handler in _all_handlers():
-        fn = getattr(handler, "batch_track_indirect", None)
-        if fn is None:
-            continue
-        results.extend(fn(direct_records, src_dir, encoding,
-                          workers=workers, use_mmap=use_mmap))
-    return results
+
+    def _safe_complete(hname: str, partial: list[GrepRecord]) -> None:
+        results.extend(partial)
+        if on_handler_complete is not None:
+            on_handler_complete(hname, partial)
+
+    def _run_serial() -> list[GrepRecord]:
+        for hname in handler_modules:
+            try:
+                partial = _run_one_handler(
+                    hname, direct_records, src_dir, encoding, workers, use_mmap,
+                )
+            except Exception as exc:
+                print(
+                    f"  警告: handler {hname} の間接追跡で例外 ({exc!r}) - "
+                    f"この handler の indirect は欠落、他 handler は継続",
+                    file=sys.stderr, flush=True,
+                )
+                continue
+            _safe_complete(hname, partial)
+        return results
+
+    if handler_workers <= 1:
+        return _run_serial()
+
+    try:
+        with ProcessPoolExecutor(max_workers=handler_workers) as ex:
+            future_to_name = {
+                ex.submit(_run_one_handler, hname, direct_records, src_dir,
+                          encoding, workers, use_mmap): hname
+                for hname in handler_modules
+            }
+            for fut in as_completed(future_to_name):
+                hname = future_to_name[fut]
+                try:
+                    partial = fut.result()
+                except Exception as exc:
+                    print(
+                        f"  警告: handler {hname} の間接追跡で例外 ({exc!r}) - "
+                        f"この handler の indirect は欠落、他 handler は継続",
+                        file=sys.stderr, flush=True,
+                    )
+                    continue
+                _safe_complete(hname, partial)
+        return results
+    except OSError as exc:
+        print(
+            f"  警告: ProcessPool 起動に失敗 ({exc!r}) - handler_workers=1 で直列実行に切替",
+            file=sys.stderr, flush=True,
+        )
+        return _run_serial()
 
 
 def build_parser() -> argparse.ArgumentParser:
