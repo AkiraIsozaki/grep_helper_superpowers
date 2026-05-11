@@ -181,6 +181,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-mmap", action="store_true",
         help="mmap 経由のファイル絞り込みを使わず read 経由にする（Solaris+NFS で推奨）",
     )
+    parser.add_argument(
+        "--handler-workers", type=int, default=2,
+        help="ハンドラ間並列度（デフォルト: 2、I/O が許せば 3〜4 まで）",
+    )
     return parser
 
 
@@ -244,32 +248,68 @@ def main() -> int:
         direct_by_keyword[keyword] = direct
         processed_files.append(grep_path.name)
 
-    # フェーズ 2: 間接追跡を 1 回だけ
-    indirect_by_keyword: dict[str, list[GrepRecord]] = {}
-    if direct_by_keyword:
-        all_direct: list[GrepRecord] = []
-        for records in direct_by_keyword.values():
-            all_direct.extend(records)
-        try:
-            indirect_all = apply_indirect_tracking(
-                all_direct, source_dir, args.encoding,
-                workers=args.workers,
-                use_mmap=_resolve_use_mmap(args.no_mmap),
-            )
-        except Exception as exc:
-            print(f"予期しないエラー（間接追跡フェーズ）: {exc}", file=sys.stderr)
-            return 2
-        for rec in indirect_all:
-            indirect_by_keyword.setdefault(rec.keyword, []).append(rec)
+    # フェーズ 2 + インクリメンタル書き出し
+    handler_names = [
+        h.__name__ for h in _all_handlers()
+        if getattr(h, "batch_track_indirect", None) is not None
+    ]
+    indirect_by_keyword: dict[str, list[GrepRecord]] = {
+        kw: [] for kw in direct_by_keyword
+    }
+    pending: dict[str, set[str]] = {
+        kw: set(handler_names) for kw in direct_by_keyword
+    }
+    written: set[str] = set()
 
-    # フェーズ 3: keyword で振り分けて TSV 出力
-    for keyword, direct_records in direct_by_keyword.items():
-        indirect_records = indirect_by_keyword.get(keyword, [])
-        all_records = list(direct_records) + list(indirect_records)
-        output_path = output_dir / f"{keyword}.tsv"
+    def _write_kw_tsv(kw: str) -> None:
+        from grep_helper.tsv_output import write_tsv  # noqa: PLC0415
+        output_path = output_dir / f"{kw}.tsv"
+        all_records = list(direct_by_keyword[kw]) + indirect_by_keyword.get(kw, [])
         write_tsv(all_records, output_path)
-        print(f"  {keyword}.grep → {output_path} "
-              f"(直接: {len(direct_records)} 件, 間接: {len(indirect_records)} 件)")
+        written.add(kw)
+        direct_count = len(direct_by_keyword[kw])
+        indirect_count = len(indirect_by_keyword.get(kw, []))
+        print(
+            f"  {kw}.grep → {output_path} "
+            f"(直接: {direct_count} 件, 間接: {indirect_count} 件)",
+            flush=True,
+        )
+
+    def on_complete(hname: str, partial: list[GrepRecord]) -> None:
+        for rec in partial:
+            if rec.keyword in indirect_by_keyword:
+                indirect_by_keyword[rec.keyword].append(rec)
+        for kw in list(pending.keys()):
+            pending[kw].discard(hname)
+            if not pending[kw] and kw not in written:
+                _write_kw_tsv(kw)
+
+    if direct_by_keyword:
+        if not handler_names:
+            # 縁ケース: 全 handler が batch_track_indirect を持たない
+            # → indirect なしで直接 TSV を書き出す
+            for kw in direct_by_keyword:
+                _write_kw_tsv(kw)
+        else:
+            all_direct: list[GrepRecord] = []
+            for records in direct_by_keyword.values():
+                all_direct.extend(records)
+            try:
+                apply_indirect_tracking(
+                    all_direct, source_dir, args.encoding,
+                    workers=args.workers,
+                    use_mmap=_resolve_use_mmap(args.no_mmap),
+                    handler_workers=args.handler_workers,
+                    on_handler_complete=on_complete,
+                )
+            except Exception as exc:
+                print(f"予期しないエラー（間接追跡フェーズ）: {exc}", file=sys.stderr)
+                return 2
+
+            # ドレイン: 1 handler 全失敗等で pending が残った keyword をフォールバック書き出し
+            for kw in direct_by_keyword:
+                if kw not in written:
+                    _write_kw_tsv(kw)
 
     print("\n--- 処理完了 ---")
     print(f"処理ファイル: {', '.join(processed_files)}")
