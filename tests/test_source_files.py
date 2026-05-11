@@ -170,6 +170,47 @@ class TestFilterByteCache(unittest.TestCase):
             second = grep_filter_files(["FOO"], src, [".java"], use_mmap=True)
             self.assertEqual([p.name for p in second], [])
 
+    def test_transient_OSError後の再問い合わせで実際のhitmiss結果が反映される(self):
+        """spec §B2' に従い OSError 時はセーフ側 True を返すが、その結果は
+        cache してはならない。NFS hiccup などで transient な stat エラーが
+        起きた次の問い合わせで、実際のファイル内容に基づく結果（ここでは miss）
+        が返ることを観察する。
+        """
+        from grep_helper.source_files import grep_filter_files
+        import grep_helper.source_files as sf
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            f = src / "a.java"
+            # ファイル内容は "FOO" を含まない（本来 miss するはず）
+            f.write_text("class A { /* empty */ }\n")
+
+            # 1 回目: stat を transient に失敗させる
+            original_stat = Path.stat
+            calls = {"n": 0}
+
+            def flaky_stat(self_path, *a, **kw):
+                # 対象ファイルへの最初の stat だけ OSError、以降は通常動作
+                if str(self_path) == str(f) and calls["n"] == 0:
+                    calls["n"] += 1
+                    raise OSError("transient NFS hiccup")
+                return original_stat(self_path, *a, **kw)
+
+            try:
+                Path.stat = flaky_stat  # type: ignore[assignment]
+                first = grep_filter_files(["FOO"], src, [".java"], use_mmap=True)
+            finally:
+                Path.stat = original_stat  # type: ignore[assignment]
+            # safe-side: OSError 時は対象に含める
+            self.assertEqual([p.name for p in first], ["a.java"])
+
+            # 2 回目: stat 正常。stale cache（True）が残っていれば誤って hit となり
+            # "a.java" が含まれてしまう。正しく cache 抑止されていれば実スキャン
+            # の結果（miss）が反映され、結果は空。
+            sf._source_files_cache_clear()
+            second = grep_filter_files(["FOO"], src, [".java"], use_mmap=True)
+            self.assertEqual([p.name for p in second], [])
+
 
 if __name__ == "__main__":
     unittest.main()

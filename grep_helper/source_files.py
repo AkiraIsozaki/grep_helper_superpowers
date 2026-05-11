@@ -4,6 +4,7 @@ from __future__ import annotations
 import mmap
 import sys
 from pathlib import Path
+from typing import Iterator
 
 _source_files_cache: dict[tuple[str, tuple[str, ...]], list[Path]] = {}
 
@@ -20,6 +21,32 @@ def _filter_byte_cache_clear() -> None:
 _DEFAULT_READ_CHUNK = 1024 * 1024  # 1 MB
 
 
+def _iter_read_with_overlap(
+    path: Path,
+    overlap: int,
+    *,
+    chunk_size: int = _DEFAULT_READ_CHUNK,
+) -> Iterator[bytes]:
+    """1 チャンクずつ読み、前チャンク末尾を ``overlap`` バイトだけ prepend して
+    境界をまたぐパターンも検出可能な連結バッファ列を yield するジェネレータ。
+
+    seek を使わない（NFS / 一部の特殊 fs で seek が高コストな場合の保険）。
+    ``overlap`` は呼び出し側が ``max(len(p)) - 1`` 等から計算する。
+    EOF まで読み切ったら通常通り iteration を終了する。
+    """
+    if overlap < 0:
+        overlap = 0
+    tail = b""
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                return
+            buf = tail + chunk
+            yield buf
+            tail = buf[-overlap:] if overlap > 0 else b""
+
+
 def _read_based_find(
     path: Path,
     patterns: list[bytes],
@@ -29,26 +56,17 @@ def _read_based_find(
     """1MB チャンク + prepend オーバーラップでバイト列を検索する。
 
     mmap が使えない / 失敗するファイルに対する代替実装。
-    seek は使わず、前チャンク末尾の (max(len(p)) - 1) バイトを保持して
-    次チャンクの先頭に貼り付けてから find する。
+    ``_iter_read_with_overlap`` を共有ヘルパーとして使う。
 
     API 契約: ``patterns`` は非空であること（呼び出し元 ``grep_filter_files``
     で空 patterns は早期 return 済み）。
     """
     overlap = max(len(p) for p in patterns) - 1
-    if overlap < 0:
-        overlap = 0
-    tail = b""
-    with open(path, "rb") as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                return False
-            buf = tail + chunk
-            for pat in patterns:
-                if buf.find(pat) != -1:
-                    return True
-            tail = buf[-overlap:] if overlap > 0 else b""
+    for buf in _iter_read_with_overlap(path, overlap, chunk_size=chunk_size):
+        for pat in patterns:
+            if buf.find(pat) != -1:
+                return True
+    return False
 
 
 def _find_any_with_per_pattern_result(
@@ -56,7 +74,7 @@ def _find_any_with_per_pattern_result(
     patterns: list[bytes],
     *,
     use_mmap: bool,
-) -> dict[bytes, bool]:
+) -> tuple[dict[bytes, bool], bool]:
     """1 回の I/O で各 pattern の hit/miss を判定して返す（mmap 優先）。
 
     Args:
@@ -65,14 +83,19 @@ def _find_any_with_per_pattern_result(
         use_mmap: mmap 経路を試すか
 
     Returns:
-        各 pattern → True/False の dict。OSError 時はセーフ側で全て True。
+        ``(hits, cacheable)`` の 2-tuple。``hits`` は各 pattern → True/False。
+        spec §B2' に従い、stat() で OSError が起きた場合はセーフ側として
+        全 pattern を True としつつ ``cacheable=False`` を返す
+        （NFS hiccup などの transient エラーで永続的に hit を誤判定するのを防ぐ）。
+        正常終了時は ``cacheable=True``。
     """
     result = {p: False for p in patterns}
     try:
         if path.stat().st_size == 0:
-            return result
+            return result, True
     except OSError:
-        return {p: True for p in patterns}
+        # spec §B2': セーフ側で全 True を返すが、これは cache してはならない
+        return {p: True for p in patterns}, False
     if use_mmap:
         try:
             with open(path, "rb") as fh, \
@@ -80,25 +103,17 @@ def _find_any_with_per_pattern_result(
                 for p in patterns:
                     if mm.find(p) != -1:
                         result[p] = True
-            return result
+            return result, True
         except (OSError, ValueError):
             pass
     overlap = max(len(p) for p in patterns) - 1 if patterns else 0
-    if overlap < 0:
-        overlap = 0
-    tail = b""
-    with open(path, "rb") as f:
-        while True:
-            chunk = f.read(_DEFAULT_READ_CHUNK)
-            if not chunk:
-                return result
-            buf = tail + chunk
-            for p in patterns:
-                if not result[p] and buf.find(p) != -1:
-                    result[p] = True
-            if all(result.values()):
-                return result
-            tail = buf[-overlap:] if overlap > 0 else b""
+    for buf in _iter_read_with_overlap(path, overlap):
+        for p in patterns:
+            if not result[p] and buf.find(p) != -1:
+                result[p] = True
+        if all(result.values()):
+            return result, True
+    return result, True
 
 
 def _scan_file_for_patterns(
@@ -111,6 +126,8 @@ def _scan_file_for_patterns(
 
     各 (path, pattern) の組について cache する。cache 済みなら I/O ゼロ。
     未 cache の pattern だけまとめて 1 回の mmap / read で判定する。
+    ``_find_any_with_per_pattern_result`` が ``cacheable=False`` を返した場合
+    （= stat OSError のセーフ側フォールバック）は cache に書き込まない。
     """
     key_path = str(path)
     unknown: list[bytes] = []
@@ -122,9 +139,12 @@ def _scan_file_for_patterns(
             unknown.append(pat)
     if not unknown:
         return False
-    hits = _find_any_with_per_pattern_result(path, unknown, use_mmap=use_mmap)
-    for pat, hit in hits.items():
-        _filter_byte_cache[(key_path, pat)] = hit
+    hits, cacheable = _find_any_with_per_pattern_result(
+        path, unknown, use_mmap=use_mmap,
+    )
+    if cacheable:
+        for pat, hit in hits.items():
+            _filter_byte_cache[(key_path, pat)] = hit
     return any(hits.values())
 
 
