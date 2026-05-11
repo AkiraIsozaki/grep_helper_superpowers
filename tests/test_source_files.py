@@ -111,5 +111,65 @@ class TestGrepFilterFilesUseMmap(unittest.TestCase):
             self.assertEqual(len(result), 3)
 
 
+class TestFilterByteCache(unittest.TestCase):
+    """grep_filter_files が file-level byte hit cache を持つ。
+    同じ (path, pattern) の 2 回目以降の問い合わせは I/O を伴わず、
+    cache 済みの結果を返す。
+    """
+
+    def setUp(self):
+        from grep_helper.source_files import _source_files_cache_clear, _filter_byte_cache_clear
+        _source_files_cache_clear()
+        _filter_byte_cache_clear()
+
+    def test_同じパターンを2回問い合わせるとファイル削除後も結果が変わらない(self):
+        """cache 効果の観察可能事実: 1 回目で hit/miss を確定 → ファイル変更後の
+        2 回目でも同じ結果が返る。clear するまで cache される。
+        """
+        from grep_helper.source_files import grep_filter_files
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            f = src / "a.java"
+            f.write_text("class A { String FOO = \"hit\"; }\n")
+            first = grep_filter_files(["FOO"], src, [".java"], use_mmap=True)
+            self.assertEqual([p.name for p in first], ["a.java"])
+            f.write_text("class A { /* empty */ }\n")
+            second = grep_filter_files(["FOO"], src, [".java"], use_mmap=True)
+            self.assertEqual([p.name for p in second], ["a.java"])
+
+    def test_異なるパターン集合の2回目は差分パターンだけ新規スキャンされる(self):
+        from grep_helper.source_files import grep_filter_files
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            f = src / "a.java"
+            f.write_text("A B\n")
+            first = grep_filter_files(["A", "B"], src, [".java"], use_mmap=True)
+            self.assertEqual([p.name for p in first], ["a.java"])
+            f.write_text("B C\n")
+            second = grep_filter_files(["B", "C"], src, [".java"], use_mmap=True)
+            self.assertEqual([p.name for p in second], ["a.java"])
+
+    def test_filter_byte_cache_clearでcacheが空になる(self):
+        from grep_helper.source_files import (
+            grep_filter_files,
+            _filter_byte_cache_clear,
+            _source_files_cache_clear,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "src"
+            src.mkdir()
+            f = src / "a.java"
+            f.write_text("FOO\n")
+            first = grep_filter_files(["FOO"], src, [".java"], use_mmap=True)
+            self.assertEqual([p.name for p in first], ["a.java"])
+            f.write_text("(empty)\n")
+            _filter_byte_cache_clear()
+            _source_files_cache_clear()
+            second = grep_filter_files(["FOO"], src, [".java"], use_mmap=True)
+            self.assertEqual([p.name for p in second], [])
+
+
 if __name__ == "__main__":
     unittest.main()

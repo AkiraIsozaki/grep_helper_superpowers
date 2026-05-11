@@ -7,6 +7,16 @@ from pathlib import Path
 
 _source_files_cache: dict[tuple[str, tuple[str, ...]], list[Path]] = {}
 
+# モジュールグローバル: ファイル単位の byte hit 結果
+# キー = (str(path), bytes_pattern)、値 = bool（hit / miss）
+_filter_byte_cache: dict[tuple[str, bytes], bool] = {}
+
+
+def _filter_byte_cache_clear() -> None:
+    """テスト用: byte hit cache をクリア。"""
+    _filter_byte_cache.clear()
+
+
 _DEFAULT_READ_CHUNK = 1024 * 1024  # 1 MB
 
 
@@ -41,6 +51,83 @@ def _read_based_find(
             tail = buf[-overlap:] if overlap > 0 else b""
 
 
+def _find_any_with_per_pattern_result(
+    path: Path,
+    patterns: list[bytes],
+    *,
+    use_mmap: bool,
+) -> dict[bytes, bool]:
+    """1 回の I/O で各 pattern の hit/miss を判定して返す（mmap 優先）。
+
+    Args:
+        path:     対象ファイル
+        patterns: バイトパターンのリスト（非空であること）
+        use_mmap: mmap 経路を試すか
+
+    Returns:
+        各 pattern → True/False の dict。OSError 時はセーフ側で全て True。
+    """
+    result = {p: False for p in patterns}
+    try:
+        if path.stat().st_size == 0:
+            return result
+    except OSError:
+        return {p: True for p in patterns}
+    if use_mmap:
+        try:
+            with open(path, "rb") as fh, \
+                 mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                for p in patterns:
+                    if mm.find(p) != -1:
+                        result[p] = True
+            return result
+        except (OSError, ValueError):
+            pass
+    overlap = max(len(p) for p in patterns) - 1 if patterns else 0
+    if overlap < 0:
+        overlap = 0
+    tail = b""
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(_DEFAULT_READ_CHUNK)
+            if not chunk:
+                return result
+            buf = tail + chunk
+            for p in patterns:
+                if not result[p] and buf.find(p) != -1:
+                    result[p] = True
+            if all(result.values()):
+                return result
+            tail = buf[-overlap:] if overlap > 0 else b""
+
+
+def _scan_file_for_patterns(
+    path: Path,
+    patterns: list[bytes],
+    *,
+    use_mmap: bool = True,
+) -> bool:
+    """ファイルが patterns のいずれかを含むかを返す。
+
+    各 (path, pattern) の組について cache する。cache 済みなら I/O ゼロ。
+    未 cache の pattern だけまとめて 1 回の mmap / read で判定する。
+    """
+    key_path = str(path)
+    unknown: list[bytes] = []
+    for pat in patterns:
+        cached = _filter_byte_cache.get((key_path, pat))
+        if cached is True:
+            return True
+        if cached is None:
+            unknown.append(pat)
+    if not unknown:
+        return False
+    hits = _find_any_with_per_pattern_result(path, unknown, use_mmap=use_mmap)
+    for pat, hit in hits.items():
+        _filter_byte_cache[(key_path, pat)] = hit
+    return any(hits.values())
+
+
 def _source_files_cache_clear() -> None:
     """テスト用: source_files キャッシュをクリア。"""
     _source_files_cache.clear()
@@ -73,9 +160,10 @@ def grep_filter_files(
     """mmap によるバイト列検索でスキャン対象ファイルを絞り込む。
 
     iter_source_files で取得した (キャッシュ済み) ファイルリストに対し
-    mmap.find（または ``use_mmap=False`` 時 / mmap 失敗時は ``_read_based_find``）
-    で names の含有を判定する。
+    _scan_file_for_patterns でパターン含有を判定する。
     エラー時は安全側（スキャン対象に含める）でフォールバック。
+    file-level byte hit cache が効くため、同一プロセス内で同じ (path, pattern)
+    の 2 回目以降の問い合わせは I/O を伴わない。
     """
     candidates = iter_source_files(src_dir, extensions)
     patterns = [n.encode("ascii") for n in names if n.isascii()]
@@ -85,18 +173,7 @@ def grep_filter_files(
     result: list[Path] = []
     for f in candidates:
         try:
-            if f.stat().st_size == 0:
-                continue
-            if use_mmap:
-                try:
-                    with open(f, "rb") as fh, \
-                         mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                        hit = any(mm.find(p) != -1 for p in patterns)
-                except (OSError, ValueError):
-                    hit = _read_based_find(f, patterns)
-            else:
-                hit = _read_based_find(f, patterns)
-            if hit:
+            if _scan_file_for_patterns(f, patterns, use_mmap=use_mmap):
                 result.append(f)
         except OSError:
             result.append(f)
