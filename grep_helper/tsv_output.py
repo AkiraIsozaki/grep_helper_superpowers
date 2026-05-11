@@ -21,12 +21,15 @@ def write_tsv(records: list[GrepRecord], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _sort_key(r: GrepRecord) -> tuple:
+        """GrepRecord を決定的に並べるためのキー。tie を避けるため 5 タプル。"""
         lineno_int = int(r.lineno) if r.lineno.isdigit() else 0
-        return (r.keyword, r.filepath, lineno_int)
+        return (r.keyword, r.filepath, lineno_int, r.ref_type, r.usage_type)
 
     def _row_sort_key(row: list[str]) -> tuple:
+        """外部マージソート用の行キー。_sort_key と同じ並び。"""
         lineno_int = int(row[4]) if row[4].isdigit() else 0
-        return (row[0], row[3], lineno_int)
+        # 列順: 0=keyword, 1=ref_type, 2=usage_type, 3=filepath, 4=lineno
+        return (row[0], row[3], lineno_int, row[1], row[2])
 
     if len(records) < _EXTERNAL_SORT_THRESHOLD:
         records.sort(key=_sort_key)
