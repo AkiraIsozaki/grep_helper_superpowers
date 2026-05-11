@@ -262,7 +262,6 @@ def main() -> int:
     written: set[str] = set()
 
     def _write_kw_tsv(kw: str) -> None:
-        from grep_helper.tsv_output import write_tsv  # noqa: PLC0415
         output_path = output_dir / f"{kw}.tsv"
         all_records = list(direct_by_keyword[kw]) + indirect_by_keyword.get(kw, [])
         write_tsv(all_records, output_path)
