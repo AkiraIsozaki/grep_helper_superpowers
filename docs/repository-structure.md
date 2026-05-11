@@ -119,11 +119,11 @@
 | `model.py` | `GrepRecord`（NamedTuple）/ `ProcessStats`（dataclass）/ `RefType`（Enum）/ `ClassifyContext`（dataclass）を定義する。全モジュールのデータモデル基盤 |
 | `cli.py` | `build_parser()` と `run(handler, description)` を提供する。`run()` は `input/*.grep` を glob して `pipeline.process_grep_file` を呼び、`handler.batch_track_indirect`（任意）を呼び、`write_tsv` で出力する汎用 CLI ループ |
 | `pipeline.py` | `process_grep_file(path, keyword, handler, src_dir, stats, *, encoding)` — grep ファイル全行を読み込み `handler.classify_usage` で分類して `GrepRecord` リストを返す第1段階処理 |
-| `dispatcher.py` | `main()` / `process_grep_lines_all()` / `apply_indirect_tracking()` — 多言語一括フロー。`detect_handler` でレコードごとに適切なハンドラを解決し、全ハンドラの `batch_track_indirect` を順次実行する |
+| `dispatcher.py` | `main()` / `process_grep_lines_all()` / `apply_indirect_tracking()` / `_run_one_handler()` — 多言語一括フロー。`detect_handler` でレコードごとに適切なハンドラを解決する。Phase 2 はハンドラ単位を `ProcessPoolExecutor` で並列実行（`--handler-workers N`、既定 2、`handler_workers=1` で直列フォールバック、ProcessPool 構築失敗時の OSError でも直列フォールバック）、`on_handler_complete` コールバックで keyword 単位の TSV をインクリメンタル書き出しする（旧 Phase 3 のまとめ書き出しは廃止）。1 handler の例外は `fut.result()` の try/except で局所化、他 handler は継続 |
 | `encoding.py` | `detect_encoding(path, encoding_override)` — ファイル先頭 4096 バイトを `chardet` で推定し、信頼度 < 0.6 の場合は `cp932` にフォールバックする。`override is None` のとき結果はモジュール内 `_encoding_cache: dict[str, str]` にキャッシュされ、同一パスの chardet 呼び出しは 1 回のみ。テスト用に `_encoding_cache_clear()` を提供 |
 | `grep_input.py` | `iter_grep_lines(path, encoding)` — grep ファイルを 1 行ずつ yield するストリーミングジェネレータ。`parse_grep_line(line)` — `filepath:lineno:code` 形式をパースして `dict` を返す |
-| `tsv_output.py` | `write_tsv(records, output_path)` — `GrepRecord` リストを UTF-8 BOM 付き TSV に出力。100 万件超は `heapq.merge` ベースの外部ソートに切り替える |
-| `source_files.py` | `iter_source_files(src_dir, extensions)` — rglob 結果をキャッシュして返す。`grep_filter_files(names, src_dir, extensions)` — mmap バイト列検索で事前フィルタ。`resolve_file_cached(filepath, src_dir)` — パス解決結果をキャッシュする |
+| `tsv_output.py` | `write_tsv(records, output_path)` — `GrepRecord` リストを UTF-8 BOM 付き TSV に出力。100 万件超は `heapq.merge` ベースの外部ソートに切り替える。ソートキーは決定的 5 タプル `(keyword, filepath, lineno, ref_type, usage_type)` で tie 部分の挿入順依存を消し、handler 並列実行でも完全に同じバイト列を出力する |
+| `source_files.py` | `iter_source_files(src_dir, extensions)` — rglob 結果をキャッシュして返す。`grep_filter_files(names, src_dir, extensions, *, use_mmap=True)` — mmap バイト列検索で事前フィルタ。**ファイル単位 byte hit cache** (`_filter_byte_cache: dict[(str(path), bytes), bool]`) により同一プロセス内で同じ (path, pattern) の 2 回目以降は I/O ゼロで結果を返す。OSError 発生時のみ safe-side True を返すが cache には書かない（transient エラーの誤永続化を防ぐ）。`_iter_read_with_overlap` は `_read_based_find` / `_find_any_with_per_pattern_result` 双方が使う 1MB チャンク + overlap の共通読み出しヘルパー。`resolve_file_cached(filepath, src_dir)` — パス解決結果をキャッシュする。テスト用に `_source_files_cache_clear()` / `_filter_byte_cache_clear()` / `_resolve_file_cache_clear()` を提供 |
 | `file_cache.py` | `cached_file_lines(path, encoding, stats)` — サイズベース LRU（デフォルト 256MB）によるファイル行キャッシュ。`set_file_lines_cache_limit(n_bytes)` — 上限を変更する |
 | `scanner.py` | `build_batch_scanner(patterns)` — パターン数 ≥ 100 で `pyahocorasick` を自動選択、< 100 では combined regex を使用する多パターンスキャナを返す |
 | `_aho_corasick.py` | Pure Python 実装の Aho-Corasick オートマトン。`pyahocorasick` が未インストールの場合に `scanner.py` からフォールバック利用される |
@@ -197,6 +197,9 @@ if __name__ == "__main__":
 | `test_perl_analyzer.py` | `grep_helper.languages.perl` のユニットテスト・E2E 統合テスト |
 | `test_dotnet_analyzer.py` | `grep_helper.languages.dotnet` のユニットテスト・E2E 統合テスト |
 | `test_groovy_analyzer.py` | `grep_helper.languages.groovy` のユニットテスト・E2E 統合テスト |
+| `test_tsv_output.py` | `grep_helper.tsv_output._sort_key` / `_row_sort_key` の 5 タプル決定的ソート検証（tie 解消・挿入順非依存・バイト一致） |
+| `test_dispatcher_parallel.py` | `apply_indirect_tracking` の handler 並列実行検証（直列/並列の結果集合一致・`on_handler_complete` 呼び出し回数・1 handler 例外の局所化） |
+| `test_dispatcher_incremental.py` | `dispatcher.main` のインクリメンタル TSV 書き出し検証（全 keyword 出揃い・`handler_names` 空の縁ケース・並列順序非依存のバイト一致） |
 
 **フィクスチャ構成**:
 ```
